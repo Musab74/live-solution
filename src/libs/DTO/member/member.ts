@@ -1,4 +1,4 @@
-export class MemberDto {
+export class Member {
     id!: string;
     email!: string;
     displayName!: string;
