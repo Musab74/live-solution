@@ -1,12 +1,137 @@
-import { IsEnum, IsOptional } from 'class-validator';
-import { PaginationQueryDto } from '../common/pagination.query';
-import { MeetingStatus } from 'src/libs/enums/enums';
+import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { MeetingStatus } from '../../enums/enums';
 
-export class MeetingListQuery extends PaginationQueryDto {
-  @IsOptional() @IsEnum(MeetingStatus)
-  status?: MeetingStatus; // 시작/예약/종료 탭 필터
+@ObjectType()
+export class HostInfo {
+  @Field(() => ID)
+  _id: string;
+
+  @Field()
+  email: string;
+
+  @Field()
+  displayName: string;
+
+  @Field({ nullable: true })
+  avatarUrl?: string;
+
+  @Field({ nullable: true })
+  organization?: string;
+
+  @Field({ nullable: true })
+  department?: string;
 }
 
-export class AttendanceExportInput {
-  meetingId!: string; // 단순 식별자 전달
+@ObjectType()
+export class MeetingWithHost {
+  @Field(() => ID)
+  _id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  status: string;
+
+  @Field(() => ID)
+  hostId: string;
+
+  @Field()
+  inviteCode: string;
+
+  @Field({ nullable: true })
+  isPrivate?: boolean;
+
+  @Field({ nullable: true })
+  scheduledStartAt?: Date;
+
+  @Field({ nullable: true })
+  actualStartAt?: Date;
+
+  @Field({ nullable: true })
+  endedAt?: Date;
+
+  @Field({ nullable: true })
+  durationMin?: number;
+
+  @Field({ nullable: true })
+  notes?: string;
+
+  @Field()
+  participantCount: number;
+
+  @Field()
+  createdAt: Date;
+
+  @Field()
+  updatedAt: Date;
+
+  @Field(() => HostInfo)
+  host: HostInfo;
+}
+
+@ObjectType()
+export class MeetingStats {
+  @Field()
+  totalMeetings: number;
+
+  @Field()
+  activeMeetings: number;
+
+  @Field()
+  scheduledMeetings: number;
+
+  @Field()
+  completedMeetings: number;
+
+  @Field()
+  totalParticipants: number;
+
+  @Field()
+  averageMeetingDuration: number;
+}
+
+@ObjectType()
+export class MeetingListResponse {
+  @Field(() => [MeetingWithHost])
+  meetings: MeetingWithHost[];
+
+  @Field()
+  total: number;
+
+  @Field()
+  limit: number;
+
+  @Field()
+  offset: number;
+
+  @Field()
+  hasMore: boolean;
+}
+
+@ObjectType()
+export class InviteCodeResponse {
+  @Field()
+  inviteCode: string;
+
+  @Field()
+  message: string;
+}
+
+@ObjectType()
+export class MeetingJoinResponse {
+  @Field(() => ID)
+  meetingId: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  status: string;
+
+  @Field()
+  inviteCode: string;
+
+  @Field()
+  message: string;
 }

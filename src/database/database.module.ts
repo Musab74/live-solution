@@ -1,26 +1,27 @@
+// database.module.ts
 import { Module } from '@nestjs/common';
-import {InjectConnection, MongooseModule} from "@nestjs/mongoose"
+import { MongooseModule } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
+import { InjectConnection } from '@nestjs/mongoose';
 import { Connection } from 'mongoose';
 
 @Module({
-    imports: [
-        MongooseModule.forRootAsync({
-            useFactory: () => ({
-                uri:process.env.NODE_ENV === "production" ? process.env.MONGODB_PROD
-                 : process.env.MONGODB,
-            })
-        })
-    ],
-    exports: [MongooseModule],
+  imports: [
+    MongooseModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (cfg: ConfigService) => {
+        const isProd = cfg.get('NODE_ENV') === 'production';
+        const uri = isProd ? cfg.get<string>('MONGODB_PROD') : cfg.get<string>('MONGODB');
+        if (!uri) throw new Error('MONGO URI missing. Set MONGODB/MONGODB_PROD in .env');
+        return { uri, autoIndex: true };
+      },
+    }),
+  ],
+  exports: [MongooseModule],
 })
 export class DatabaseModule {
-    constructor(@InjectConnection() private readonly connection: Connection) {
-      if (connection.readyState === 1) {
-        console.log(`MONGODB is connected into ${process.env.NODE_ENV === "production" ? 'production' : 'devDB' }`);
-        
-      } else {
-        console.log("DB is not connected");
-        
-      }
-    }
+  constructor(@InjectConnection() conn: Connection) {
+    conn.on('connected', () => console.log('Mongo connected'));
+    conn.on('error', (e) => console.error('Mongo error:', e.message));
+  }
 }

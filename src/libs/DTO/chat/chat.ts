@@ -1,10 +1,28 @@
+import { ObjectType, Field, ID } from '@nestjs/graphql';
+
+@ObjectType()
 export class ChatMessageDto {
-    id!: string;
-    meetingId!: string;
-    userId!: string;
-    displayName!: string;
-    text!: string;
-    createdAt!: string; // ISO
-    replyToMessageId?: string;
-  }
-  
+  @Field(() => ID)
+  id!: string;
+
+  @Field(() => ID)
+  meetingId!: string;
+
+  @Field(() => ID, { nullable: true })
+  userId?: string;
+
+  @Field()
+  displayName!: string;
+
+  @Field()
+  text!: string;
+
+  @Field(() => ID, { nullable: true })
+  replyToMessageId?: string;
+
+  @Field()
+  createdAt!: Date;
+
+  @Field()
+  updatedAt!: Date;
+}

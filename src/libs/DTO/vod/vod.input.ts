@@ -1,14 +1,112 @@
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { VodSourceType } from 'src/libs/enums/enums';
+import { IsOptional, IsString, IsEnum, IsUrl, IsInt, Min, MaxLength } from 'class-validator';
+import { Field, InputType } from '@nestjs/graphql';
+import { VodSourceType } from '../../enums/enums';
 
-export class VodUploadInput {
-  @IsEnum(VodSourceType) source!: VodSourceType; // FILE | URL
-  @IsString() title!: string;                    // VOD 제목
-  @IsOptional() @IsString() notes?: string;      // 비고
-  @IsOptional() @IsString() url?: string;        // URL 등록 시
+@InputType()
+export class CreateVodFileInput {
+  @Field()
+  @IsString()
+  @MaxLength(200)
+  title!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  meetingId?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  durationSec?: number;
 }
 
-export class RecordingLinkInput {
-  @IsString() meetingId!: string;
-  @IsString() recordingId!: string; // 스토리지/플랫폼의 ID
+@InputType()
+export class CreateVodUrlInput {
+  @Field()
+  @IsString()
+  @MaxLength(200)
+  title!: string;
+
+  @Field()
+  @IsUrl()
+  url!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  meetingId?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  durationSec?: number;
+}
+
+@InputType()
+export class UpdateVodInput {
+  @Field()
+  @IsString()
+  vodId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  title?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  notes?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  durationSec?: number;
+}
+
+@InputType()
+export class VodQueryInput {
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  q?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsEnum(VodSourceType)
+  source?: VodSourceType;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  meetingId?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }

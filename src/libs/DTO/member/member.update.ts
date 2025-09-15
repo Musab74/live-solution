@@ -1,10 +1,35 @@
 import { IsOptional, IsString } from 'class-validator';
+import { Field, InputType } from '@nestjs/graphql';
 
+@InputType()
 export class UpdateMemberInput {
-  @IsOptional() @IsString() displayName?: string;
-  @IsOptional() @IsString() avatarUrl?: string;
-  @IsOptional() @IsString() department?: string;
-  @IsOptional() @IsString() phone?: string;
-  @IsOptional() @IsString() language?: string;
-  @IsOptional() @IsString() timezone?: string;
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  displayName?: string;
+  
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  avatarUrl?: string;
+  
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  department?: string;
+  
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  phone?: string;
+  
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  language?: string;
+  
+  @Field({ nullable: true })
+  @IsOptional() 
+  @IsString() 
+  timezone?: string;
 }

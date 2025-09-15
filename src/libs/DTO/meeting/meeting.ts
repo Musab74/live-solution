@@ -1,18 +1,47 @@
-import { MeetingStatus } from "src/libs/enums/enums";
+import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { MeetingStatus } from '../../enums/enums';
 
+@ObjectType()
 export class MeetingDto {
+  @Field(() => ID)
   id!: string;
+
+  @Field()
   title!: string;
+
+  @Field()
   status!: MeetingStatus;
-  inviteCode!: string;          // 초대코드
-  passcode?: string;
+
+  @Field(() => ID)
   hostId!: string;
-  scheduledStartAt?: string;    // ISO (예약된 회의)
-  actualStartAt?: string;       // ISO (시작된 회의)
-  endedAt?: string;             // ISO (종료된 회의)
+
+  @Field()
+  inviteCode!: string;
+
+  @Field({ nullable: true })
+  isPrivate?: boolean;
+
+  @Field({ nullable: true })
+  scheduledStartAt?: Date;
+
+  @Field({ nullable: true })
+  actualStartAt?: Date;
+
+  @Field({ nullable: true })
+  endedAt?: Date;
+
+  @Field({ nullable: true })
   durationMin?: number;
+
+  @Field({ nullable: true })
   notes?: string;
-  participantCount?: number;
-  createdAt!: string;
-  updatedAt!: string;
+
+  @Field()
+  participantCount!: number;
+
+  @Field()
+  createdAt!: Date;
+
+  @Field()
+  updatedAt!: Date;
 }
