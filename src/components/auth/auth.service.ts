@@ -13,7 +13,7 @@ export class AuthService {
     const salt = await bcrypt.genSalt();
     return bcrypt.hash(raw, salt);
   }
-  comparePassword(raw: string, hash: string) {
+  async comparePassword(raw: string, hash: string) {
     return bcrypt.compare(raw, hash);
   }
 
