@@ -1,0 +1,56 @@
+version: '3.8'
+
+services:
+  # Your NestJS Application
+  app:
+    build: .
+    ports:
+      - "3007:3007"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongo:27017/live-solution
+      - JWT_SECRET=your-super-secret-jwt-key-change-this
+      - LIVEKIT_URL=https://your-livekit-server.com
+      - LIVEKIT_API_KEY=your-livekit-api-key
+      - LIVEKIT_API_SECRET=your-livekit-api-secret
+    depends_on:
+      - mongo
+    restart: unless-stopped
+    networks:
+      - live-solution
+
+  # MongoDB Database
+  mongo:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=live-solution
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+    networks:
+      - live-solution
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.simple.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+    restart: unless-stopped
+    networks:
+      - live-solution
+
+volumes:
+  mongo_data:
+
+networks:
+  live-solution:
+    driver: bridge
