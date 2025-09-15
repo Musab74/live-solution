@@ -1,165 +1,87 @@
-import { Injectable, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AccessToken } from 'livekit-server-sdk';
-import { SystemRole } from '../../libs/enums/enums';
+import {
+  AccessToken,
+  RoomServiceClient,
+  EgressClient,
+} from 'livekit-server-sdk';
 
 @Injectable()
 export class LivekitService {
-  private apiKey: string;
-  private apiSecret: string;
-  private wsUrl: string;
+  private readonly apiKey: string;
+  private readonly apiSecret: string;
+  private readonly httpUrl: string;
+  private readonly wsUrl: string;
+  private readonly rooms: RoomServiceClient;
+  private readonly egress: EgressClient;
 
-  constructor(private configService: ConfigService) {
-    this.apiKey = this.configService.get<string>('LIVEKIT_API_KEY') || 'devkey';
-    this.apiSecret = this.configService.get<string>('LIVEKIT_API_SECRET') || 'secret';
-    this.wsUrl = this.configService.get<string>('LIVEKIT_WS_URL') || 'ws://localhost:7880';
+  constructor(config: ConfigService) {
+    this.apiKey = config.get<string>('LIVEKIT_API_KEY')!;
+    this.apiSecret = config.get<string>('LIVEKIT_API_SECRET')!;
+    const base = config.get<string>('LIVEKIT_URL')!;      // https://...
+    this.httpUrl = base.replace(/\/$/, '');
+    this.wsUrl   = this.httpUrl.replace('http', 'ws');    // wss://...
+    this.rooms = new RoomServiceClient(this.httpUrl, this.apiKey, this.apiSecret);
+    this.egress = new EgressClient(this.httpUrl, this.apiKey, this.apiSecret);
   }
 
-  async generateAccessToken(
-    roomName: string,
-    participantName: string,
-    participantId: string,
-    userRole: SystemRole,
-    meetingHostId: string,
-    canPublish: boolean = true,
-    canSubscribe: boolean = true,
-    canPublishData: boolean = true,
-  ): Promise<string> {
+  getWsUrl() { return this.wsUrl; }
+
+  generateAccessToken(opts: {
+    room: string;
+    identity: string;
+    name: string;
+    meetingRole: 'HOST'|'CO_HOST'|'PRESENTER'|'PARTICIPANT'|'VIEWER';
+  }) {
     const at = new AccessToken(this.apiKey, this.apiSecret, {
-      identity: participantId,
-      name: participantName,
+      identity: opts.identity,
+      name: opts.name,
+      metadata: JSON.stringify({ meetingRole: opts.meetingRole }),
     });
 
-    // Grant permissions based on role
-    const permissions = this.getPermissionsForRole(userRole, meetingHostId, participantId);
-    
+    const canPublish = opts.meetingRole !== 'VIEWER';
     at.addGrant({
-      room: roomName,
       roomJoin: true,
+      room: opts.room,
       canPublish,
-      canSubscribe,
-      canPublishData,
+      canSubscribe: true,
+      canPublishData: true,
       canUpdateOwnMetadata: true,
-      hidden: false,
-      recorder: userRole === SystemRole.ADMIN || (userRole === SystemRole.MEMBER && meetingHostId === participantId),
-      ...permissions,
+      roomAdmin: ['HOST','CO_HOST'].includes(opts.meetingRole),
+      roomCreate: ['HOST','CO_HOST'].includes(opts.meetingRole),
+      roomList:   ['HOST','CO_HOST'].includes(opts.meetingRole),
     });
 
     return at.toJwt();
   }
 
-  private getPermissionsForRole(userRole: SystemRole, meetingHostId: string, participantId: string) {
-    const isHost = meetingHostId === participantId;
-    
-    switch (userRole) {
-      case SystemRole.ADMIN:
-        return {
-          roomAdmin: true,
-          roomCreate: true,
-          roomList: true,
-          roomRecord: true,
-          roomUpdate: true,
-          roomDelete: true,
-        };
-      
-      case SystemRole.MEMBER:
-        if (isHost) {
-          return {
-            roomAdmin: true,
-            roomRecord: true,
-            roomUpdate: true,
-          };
-        }
-        return {};
-      
-      default:
-        return {};
-    }
+  // Admin ops
+  createRoom(name: string, maxParticipants = 50) {
+    return this.rooms.createRoom({ name, maxParticipants, emptyTimeout: 600 });
+  }
+  deleteRoom(name: string) { return this.rooms.deleteRoom(name); }
+  getRoom(name: string) { return this.rooms.listRooms().then(rooms => rooms.find(r => r.name === name)); }
+  listParticipants(room: string) { return this.rooms.listParticipants(room); }
+  removeParticipant(room: string, identity: string) { return this.rooms.removeParticipant(room, identity); }
+  muteTrack(room: string, identity: string, trackSid: string, muted: boolean) {
+    return this.rooms.mutePublishedTrack(room, identity, trackSid, muted);
+  }
+  updateParticipantMetadata(room: string, identity: string, metadata: string) {
+    return this.rooms.updateParticipant(room, identity, { metadata });
   }
 
-  // Simplified LiveKit integration - most operations handled by LiveKit client
-  async createRoom(roomName: string, maxParticipants: number = 50): Promise<any> {
-    // LiveKit rooms are created automatically when first participant joins
-    return {
-      name: roomName,
-      maxParticipants,
-      emptyTimeout: 10 * 60,
-      creationTime: Date.now(),
-    };
+  // Recording (egress) — configure outputs in livekit.yaml for S3/FS first
+  async startRecording(room: string, filepath: string) {
+    // Simplified implementation - in production, configure proper egress outputs
+    console.log(`Starting recording for room ${room} to ${filepath}`);
+    return `rec_${Date.now()}`;
   }
-
-  async deleteRoom(roomName: string): Promise<void> {
-    // LiveKit rooms are cleaned up automatically
-    console.log(`Room ${roomName} will be cleaned up automatically`);
+  stopRecording(egressId: string) { 
+    console.log(`Stopping recording ${egressId}`);
+    return Promise.resolve();
   }
-
-  async getRoomInfo(roomName: string): Promise<any> {
-    // This would typically query LiveKit's REST API
-    return {
-      name: roomName,
-      numParticipants: 0,
-      maxParticipants: 50,
-      creationTime: Date.now(),
-      emptyTimeout: 600,
-    };
+  getRecording(egressId: string) { 
+    return this.egress.listEgress({ egressId }).then(list => list?.[0]);
   }
-
-  async getRoomParticipants(roomName: string): Promise<any[]> {
-    // This would typically query LiveKit's REST API
-    return [];
-  }
-
-  async muteParticipant(roomName: string, participantId: string, trackSid: string, muted: boolean): Promise<void> {
-    // This would typically use LiveKit's REST API
-    console.log(`Muting participant ${participantId} in room ${roomName}: ${muted}`);
-  }
-
-  async kickParticipant(roomName: string, participantId: string, reason?: string): Promise<void> {
-    // This would typically use LiveKit's REST API
-    console.log(`Kicking participant ${participantId} from room ${roomName}: ${reason}`);
-  }
-
-  async updateParticipantMetadata(roomName: string, participantId: string, metadata: string): Promise<void> {
-    // This would typically use LiveKit's REST API
-    console.log(`Updating metadata for participant ${participantId} in room ${roomName}`);
-  }
-
-  async startRecording(roomName: string, outputPath?: string): Promise<string> {
-    // This would typically use LiveKit's Egress API
-    const recordingId = `rec_${Date.now()}`;
-    console.log(`Starting recording for room ${roomName}: ${recordingId}`);
-    return recordingId;
-  }
-
-  async stopRecording(recordingSid: string): Promise<void> {
-    // This would typically use LiveKit's Egress API
-    console.log(`Stopping recording: ${recordingSid}`);
-  }
-
-  async getRecordingInfo(recordingSid: string): Promise<any> {
-    // This would typically query LiveKit's Egress API
-    return {
-      sid: recordingSid,
-      status: 'completed',
-      startTime: Date.now() - 60000,
-      endTime: Date.now(),
-      duration: 60000,
-    };
-  }
-
-  async listRecordings(roomName?: string): Promise<any[]> {
-    // This would typically query LiveKit's Egress API
-    return [];
-  }
-
-  async getRoomStats(roomName: string): Promise<any> {
-    return {
-      roomName,
-      participantCount: 0,
-      isActive: false,
-      createdAt: Date.now(),
-      duration: 0,
-      participants: [],
-    };
-  }
+  listRecordings(room?: string) { return this.egress.listEgress({ roomName: room }); }
 }

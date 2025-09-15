@@ -691,7 +691,7 @@ export class ParticipantService {
       deviceType,
       isWorking: result.isWorking,
       deviceName: result.deviceName,
-      volumeLevel: result.volumeLevel,
+      volumeLevel: 'volumeLevel' in result ? result.volumeLevel : undefined,
       errorMessage: result.errorMessage,
     };
   }

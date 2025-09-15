@@ -7,6 +7,7 @@ import { ParticipantModule } from './components/participants/participant.module'
 import { VodModule } from './components/vod/vod.module';
 import { ChatModule } from './components/chat/chat.module';
 import { SignalingModule } from './components/signaling/signaling.module';
+import { HealthModule } from './components/health/health.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -36,6 +37,7 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     VodModule,
     ChatModule,
     SignalingModule,
+    HealthModule,
     MongooseModule.forFeature([
       { name: Member.name, schema: MemberSchema },
       { name: Meeting.name, schema: MeetingSchema },

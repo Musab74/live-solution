@@ -4,8 +4,6 @@ import { ValidationPipe } from '@nestjs/common';
 import { LoggingInterceptor } from './libs/interceptors/login.interceptor';
 import * as express from 'express';
 import { IoAdapter } from '@nestjs/platform-socket.io';
-import { ApolloServer } from '@apollo/server';
-import { startStandaloneServer } from '@apollo/server/standalone';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -40,8 +38,20 @@ async function bootstrap() {
   // WebSocket adapter
   app.useWebSocketAdapter(new IoAdapter(app));
 
-  await app.listen(process.env.PORT ?? 3000);
-  console.log(`Application is running on: http://localhost:${process.env.PORT ?? 3000}`);
-  console.log(`GraphQL endpoint: http://localhost:${process.env.PORT ?? 3000}/graphql`);
+  // Health check endpoint using Express instance
+  const expressApp = app.getHttpAdapter().getInstance();
+  expressApp.get('/health', (req, res) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage(),
+      version: process.version
+    });
+  });
+
+  await app.listen(process.env.PORT ?? 3007);
+  console.log(`Application is running on: http://localhost:${process.env.PORT ?? 3007}`);
+  console.log(`GraphQL endpoint: http://localhost:${process.env.PORT ?? 3007}/graphql`);
 }
 bootstrap();

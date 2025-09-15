@@ -174,56 +174,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     console.log(`User ${client.user.displayName} left room ${roomName}`);
   }
 
-  @SubscribeMessage('RTC_OFFER')
-  async handleRtcOffer(
-    @MessageBody() data: { toPeerId: string; sdp: string; roomName: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) return;
-
-    const { toPeerId, sdp, roomName } = data;
-    
-    // Forward offer to specific peer
-    client.to(toPeerId).emit('RTC_OFFER', {
-      fromPeerId: client.id,
-      fromUserId: client.user._id,
-      sdp,
-    });
-  }
-
-  @SubscribeMessage('RTC_ANSWER')
-  async handleRtcAnswer(
-    @MessageBody() data: { toPeerId: string; sdp: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) return;
-
-    const { toPeerId, sdp } = data;
-    
-    // Forward answer to specific peer
-    client.to(toPeerId).emit('RTC_ANSWER', {
-      fromPeerId: client.id,
-      fromUserId: client.user._id,
-      sdp,
-    });
-  }
-
-  @SubscribeMessage('ICE_CANDIDATE')
-  async handleIceCandidate(
-    @MessageBody() data: { toPeerId: string; candidate: any },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) return;
-
-    const { toPeerId, candidate } = data;
-    
-    // Forward ICE candidate to specific peer
-    client.to(toPeerId).emit('ICE_CANDIDATE', {
-      fromPeerId: client.id,
-      fromUserId: client.user._id,
-      candidate,
-    });
-  }
+  // WebRTC events removed - LiveKit handles media signaling
 
   @SubscribeMessage('CHAT_SEND')
   async handleChatSend(
@@ -366,5 +317,179 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
         } : null;
       })
       .filter(Boolean);
+  }
+
+  // ===== WAITING ROOM EVENTS =====
+
+  @SubscribeMessage('JOIN_WAITING_ROOM')
+  async handleJoinWaitingRoom(
+    @MessageBody() data: { meetingId: string; participantId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      if (!client.user) {
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId, participantId } = data;
+      
+      // Join the waiting room
+      await client.join(`waiting_${meetingId}`);
+      
+      // Store participant info
+      client.data = { ...client.data, meetingId, participantId };
+      
+      // Notify host about new participant in waiting room
+      client.to(`host_${meetingId}`).emit('PARTICIPANT_WAITING', {
+        participantId,
+        displayName: client.user.displayName,
+        joinedAt: new Date(),
+      });
+
+      client.emit('WAITING_ROOM_JOINED', {
+        message: 'Successfully joined waiting room',
+        meetingId,
+        participantId,
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to join waiting room' });
+    }
+  }
+
+  @SubscribeMessage('LEAVE_WAITING_ROOM')
+  async handleLeaveWaitingRoom(
+    @MessageBody() data: { meetingId: string; participantId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      const { meetingId, participantId } = data;
+      
+      // Leave the waiting room
+      await client.leave(`waiting_${meetingId}`);
+      
+      // Notify host about participant leaving waiting room
+      client.to(`host_${meetingId}`).emit('PARTICIPANT_LEFT_WAITING', {
+        participantId,
+        displayName: client.user?.displayName,
+      });
+
+      client.emit('WAITING_ROOM_LEFT', {
+        message: 'Left waiting room',
+        meetingId,
+        participantId,
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to leave waiting room' });
+    }
+  }
+
+  @SubscribeMessage('HOST_JOIN_MEETING')
+  async handleHostJoinMeeting(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      if (!client.user) {
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId } = data;
+      
+      // Join host room
+      await client.join(`host_${meetingId}`);
+      
+      // Notify all waiting participants that host has joined
+      client.to(`waiting_${meetingId}`).emit('HOST_JOINED', {
+        message: 'Host has joined the meeting',
+        meetingId,
+      });
+
+      client.emit('HOST_MEETING_JOINED', {
+        message: 'Successfully joined as host',
+        meetingId,
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to join as host' });
+    }
+  }
+
+  @SubscribeMessage('PARTICIPANT_APPROVED')
+  async handleParticipantApproved(
+    @MessageBody() data: { meetingId: string; participantId: string; message?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      const { meetingId, participantId, message } = data;
+      
+      // Notify the specific participant
+      client.to(`waiting_${meetingId}`).emit('PARTICIPANT_APPROVED', {
+        participantId,
+        message: message || 'You have been approved to join the meeting',
+        meetingId,
+      });
+
+      // Notify other participants in waiting room
+      client.to(`waiting_${meetingId}`).emit('WAITING_ROOM_UPDATE', {
+        type: 'PARTICIPANT_APPROVED',
+        participantId,
+        message: 'A participant has been approved',
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to approve participant' });
+    }
+  }
+
+  @SubscribeMessage('PARTICIPANT_REJECTED')
+  async handleParticipantRejected(
+    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      const { meetingId, participantId, reason } = data;
+      
+      // Notify the specific participant
+      client.to(`waiting_${meetingId}`).emit('PARTICIPANT_REJECTED', {
+        participantId,
+        reason: reason || 'You have been rejected from joining the meeting',
+        meetingId,
+      });
+
+      // Notify other participants in waiting room
+      client.to(`waiting_${meetingId}`).emit('WAITING_ROOM_UPDATE', {
+        type: 'PARTICIPANT_REJECTED',
+        participantId,
+        message: 'A participant has been rejected',
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to reject participant' });
+    }
+  }
+
+  @SubscribeMessage('PARTICIPANT_ADMITTED')
+  async handleParticipantAdmitted(
+    @MessageBody() data: { meetingId: string; participantId: string; message?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      const { meetingId, participantId, message } = data;
+      
+      // Notify the specific participant
+      client.to(`waiting_${meetingId}`).emit('PARTICIPANT_ADMITTED', {
+        participantId,
+        message: message || 'You have been admitted to the meeting',
+        meetingId,
+      });
+
+      // Notify other participants in waiting room
+      client.to(`waiting_${meetingId}`).emit('WAITING_ROOM_UPDATE', {
+        type: 'PARTICIPANT_ADMITTED',
+        participantId,
+        message: 'A participant has been admitted to the meeting',
+      });
+    } catch (error) {
+      client.emit('ERROR', { message: 'Failed to admit participant' });
+    }
   }
 }
