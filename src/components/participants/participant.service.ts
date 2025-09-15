@@ -4,8 +4,9 @@ import { Model, Types } from 'mongoose';
 import { Participant, ParticipantDocument } from '../../schemas/Participant.model';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { CreateParticipantInput, UpdateParticipantInput, JoinMeetingInput, LeaveMeetingInput, UpdateSessionInput } from '../../libs/DTO/participant/participant.mutation';
-import { Role, MediaState } from '../../libs/enums/enums';
+import { CreateParticipantInput, UpdateParticipantInput, JoinMeetingInput, LeaveMeetingInput, UpdateSessionInput, ForceMediaInput } from '../../libs/DTO/participant/participant.mutation';
+import { PreMeetingSetupInput, ApproveParticipantInput, RejectParticipantInput, AdmitParticipantInput, DeviceTestInput } from '../../libs/DTO/participant/waiting-room.input';
+import { Role, MediaState, ParticipantStatus } from '../../libs/enums/enums';
 
 @Injectable()
 export class ParticipantService {
@@ -369,5 +370,329 @@ export class ParticipantService {
     await participant.save();
 
     return { message: `Successfully ${action}ed the meeting` };
+  }
+
+  async forceMuteParticipant(forceInput: ForceMediaInput, hostId: string) {
+    const { participantId, reason } = forceInput;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(participant.meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can force mute participants');
+    }
+
+    // Update participant's mic state to OFF
+    participant.micState = MediaState.OFF;
+    await participant.save();
+
+    return { 
+      message: `Participant ${participant.displayName} has been force muted${reason ? `: ${reason}` : ''}`,
+      success: true 
+    };
+  }
+
+  async forceVideoOffParticipant(forceInput: ForceMediaInput, hostId: string) {
+    const { participantId, reason } = forceInput;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(participant.meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can force video off participants');
+    }
+
+    // Update participant's camera state to OFF
+    participant.cameraState = MediaState.OFF;
+    await participant.save();
+
+    return { 
+      message: `Participant ${participant.displayName} has been force video off${reason ? `: ${reason}` : ''}`,
+      success: true 
+    };
+  }
+
+  // ===== WAITING ROOM FUNCTIONALITY =====
+
+  async preMeetingSetup(setupInput: PreMeetingSetupInput, userId?: string) {
+    const { meetingId, displayName, inviteCode, joinWithCameraOff, joinWithMicOff, joinWithSpeakerOff } = setupInput;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Check invite code if provided
+    if (inviteCode && meeting.inviteCode !== inviteCode) {
+      throw new ForbiddenException('Invalid invite code');
+    }
+
+    // Create participant in WAITING status
+    const participant = new this.participantModel({
+      meetingId,
+      userId: userId ? new Types.ObjectId(userId) : undefined,
+      displayName,
+      role: Role.PARTICIPANT,
+      status: ParticipantStatus.WAITING,
+      micState: joinWithMicOff ? MediaState.OFF : MediaState.OFF,
+      cameraState: joinWithCameraOff ? MediaState.OFF : MediaState.OFF,
+    });
+
+    await participant.save();
+
+    return {
+      message: 'Successfully joined waiting room',
+      participant: {
+        _id: participant._id.toString(),
+        displayName: participant.displayName,
+        status: participant.status,
+        joinedAt: participant.createdAt,
+        micState: participant.micState,
+        cameraState: participant.cameraState,
+      }
+    };
+  }
+
+  async getWaitingParticipants(meetingId: string, hostId: string) {
+    // Verify the meeting exists and the user is the host
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can view waiting participants');
+    }
+
+    // Get all participants in WAITING status
+    const participants = await this.participantModel
+      .find({ meetingId, status: ParticipantStatus.WAITING })
+      .populate('userId', 'email displayName avatarUrl')
+      .sort({ createdAt: 1 })
+      .lean();
+
+    return participants.map(participant => ({
+      _id: participant._id.toString(),
+      displayName: participant.displayName,
+      status: participant.status,
+      joinedAt: participant.createdAt,
+      email: participant.userId && typeof participant.userId === 'object' ? (participant.userId as any).email : undefined,
+      avatarUrl: participant.userId && typeof participant.userId === 'object' ? (participant.userId as any).avatarUrl : undefined,
+      micState: participant.micState,
+      cameraState: participant.cameraState,
+      socketId: participant.socketId,
+    }));
+  }
+
+  async approveParticipant(approveInput: ApproveParticipantInput, hostId: string) {
+    const { participantId, message } = approveInput;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(participant.meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can approve participants');
+    }
+
+    // Update participant status to APPROVED
+    participant.status = ParticipantStatus.APPROVED;
+    await participant.save();
+
+    return {
+      message: `Participant ${participant.displayName} has been approved${message ? `: ${message}` : ''}`,
+      success: true,
+      participant: {
+        _id: participant._id.toString(),
+        displayName: participant.displayName,
+        status: participant.status,
+        joinedAt: participant.createdAt,
+        micState: participant.micState,
+        cameraState: participant.cameraState,
+      }
+    };
+  }
+
+  async rejectParticipant(rejectInput: RejectParticipantInput, hostId: string) {
+    const { participantId, reason } = rejectInput;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(participant.meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can reject participants');
+    }
+
+    // Update participant status to REJECTED
+    participant.status = ParticipantStatus.REJECTED;
+    await participant.save();
+
+    return {
+      message: `Participant ${participant.displayName} has been rejected${reason ? `: ${reason}` : ''}`,
+      success: true
+    };
+  }
+
+  async admitParticipant(admitInput: AdmitParticipantInput, hostId: string) {
+    const { participantId, message } = admitInput;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(participant.meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can admit participants');
+    }
+
+    // Update participant status to ADMITTED
+    participant.status = ParticipantStatus.ADMITTED;
+    await participant.save();
+
+    return {
+      message: `Participant ${participant.displayName} has been admitted to the meeting${message ? `: ${message}` : ''}`,
+      success: true,
+      participant: {
+        _id: participant._id.toString(),
+        displayName: participant.displayName,
+        status: participant.status,
+        joinedAt: participant.createdAt,
+        micState: participant.micState,
+        cameraState: participant.cameraState,
+      }
+    };
+  }
+
+  async getWaitingRoomStats(meetingId: string, hostId: string) {
+    // Verify the meeting exists and the user is the host
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can view waiting room stats');
+    }
+
+    const stats = await this.participantModel.aggregate([
+      { $match: { meetingId: new Types.ObjectId(meetingId) } },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+
+    const result = {
+      totalWaiting: 0,
+      totalApproved: 0,
+      totalRejected: 0,
+      totalAdmitted: 0,
+    };
+
+    stats.forEach(stat => {
+      switch (stat._id) {
+        case ParticipantStatus.WAITING:
+          result.totalWaiting = stat.count;
+          break;
+        case ParticipantStatus.APPROVED:
+          result.totalApproved = stat.count;
+          break;
+        case ParticipantStatus.REJECTED:
+          result.totalRejected = stat.count;
+          break;
+        case ParticipantStatus.ADMITTED:
+          result.totalAdmitted = stat.count;
+          break;
+      }
+    });
+
+    return result;
+  }
+
+  // ===== DEVICE TESTING FUNCTIONALITY =====
+
+  async testDevice(testInput: DeviceTestInput) {
+    const { deviceType, deviceId } = testInput;
+
+    // This is a mock implementation - in a real app, you'd use WebRTC APIs
+    // to actually test the devices
+    const mockResults = {
+      camera: {
+        isWorking: true,
+        deviceName: 'Default Camera',
+        errorMessage: null,
+      },
+      microphone: {
+        isWorking: true,
+        deviceName: 'Default Microphone',
+        volumeLevel: 75,
+        errorMessage: null,
+      },
+      speaker: {
+        isWorking: true,
+        deviceName: 'Default Speaker',
+        volumeLevel: 50,
+        errorMessage: null,
+      }
+    };
+
+    const result = mockResults[deviceType as keyof typeof mockResults];
+    
+    if (!result) {
+      throw new BadRequestException('Invalid device type');
+    }
+
+    return {
+      deviceType,
+      isWorking: result.isWorking,
+      deviceName: result.deviceName,
+      volumeLevel: result.volumeLevel,
+      errorMessage: result.errorMessage,
+    };
   }
 }

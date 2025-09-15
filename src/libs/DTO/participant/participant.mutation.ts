@@ -84,6 +84,18 @@ export class UpdateSessionInput {
   action!: string; // 'join' or 'leave'
 }
 
+@InputType()
+export class ForceMediaInput {
+  @Field(() => ID)
+  @IsString()
+  participantId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
 @ObjectType()
 export class ParticipantResponse {
   @Field(() => ID)

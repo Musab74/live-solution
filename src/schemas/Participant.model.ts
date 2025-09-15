@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import { MediaState, Role } from 'src/libs/enums/enums';
+import { MediaState, Role, ParticipantStatus } from 'src/libs/enums/enums';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 
 @ObjectType()
@@ -47,6 +47,10 @@ export class Participant {
   @Field()
   @Prop({ type: String, enum: Object.values(MediaState), default: MediaState.OFF })
   cameraState!: MediaState;   // ON | OFF | OFF_BY_ADMIN
+
+  @Field()
+  @Prop({ type: String, enum: Object.values(ParticipantStatus), default: ParticipantStatus.WAITING })
+  status!: ParticipantStatus; // WAITING | APPROVED | REJECTED | ADMITTED | LEFT
 
   // live socket info (optional)
   @Field({ nullable: true })

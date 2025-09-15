@@ -4,9 +4,9 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/members/member.module';
 import { ParticipantModule } from './components/participants/participant.module';
-import { MeetingModule } from './components/rooms/meeting.module';
 import { VodModule } from './components/vod/vod.module';
 import { ChatModule } from './components/chat/chat.module';
+import { SignalingModule } from './components/signaling/signaling.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -33,9 +33,9 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     AuthModule,
     MemberModule,
     ParticipantModule,
-    MeetingModule,
     VodModule,
     ChatModule,
+    SignalingModule,
     MongooseModule.forFeature([
       { name: Member.name, schema: MemberSchema },
       { name: Meeting.name, schema: MeetingSchema },

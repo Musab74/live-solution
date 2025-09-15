@@ -11,9 +11,23 @@ import {
   JoinMeetingInput, 
   LeaveMeetingInput, 
   UpdateSessionInput,
+  ForceMediaInput,
   ParticipantResponse,
   ParticipantMessageResponse 
 } from '../../libs/DTO/participant/participant.mutation';
+import { 
+  PreMeetingSetupInput, 
+  ApproveParticipantInput, 
+  RejectParticipantInput, 
+  AdmitParticipantInput, 
+  DeviceTestInput 
+} from '../../libs/DTO/participant/waiting-room.input';
+import { 
+  WaitingParticipant, 
+  WaitingRoomStats, 
+  WaitingRoomResponse, 
+  DeviceTestResult 
+} from '../../libs/DTO/participant/waiting-room.query';
 
 @Resolver()
 export class ParticipantResolver {
@@ -98,5 +112,87 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     return this.participantService.updateSession(updateInput, user._id);
+  }
+
+  @Mutation(() => ParticipantMessageResponse, { name: 'forceMuteParticipant' })
+  @UseGuards(AuthGuard)
+  async forceMuteParticipant(
+    @Args('input') forceInput: ForceMediaInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.forceMuteParticipant(forceInput, user._id);
+  }
+
+  @Mutation(() => ParticipantMessageResponse, { name: 'forceVideoOffParticipant' })
+  @UseGuards(AuthGuard)
+  async forceVideoOffParticipant(
+    @Args('input') forceInput: ForceMediaInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.forceVideoOffParticipant(forceInput, user._id);
+  }
+
+  // ===== WAITING ROOM FUNCTIONALITY =====
+
+  @Mutation(() => WaitingRoomResponse, { name: 'preMeetingSetup' })
+  async preMeetingSetup(
+    @Args('input') setupInput: PreMeetingSetupInput,
+    @AuthMember() user?: Member,
+  ) {
+    return this.participantService.preMeetingSetup(setupInput, user?._id);
+  }
+
+  @Query(() => [WaitingParticipant], { name: 'getWaitingParticipants' })
+  @UseGuards(AuthGuard)
+  async getWaitingParticipants(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.getWaitingParticipants(meetingId, user._id);
+  }
+
+  @Query(() => WaitingRoomStats, { name: 'getWaitingRoomStats' })
+  @UseGuards(AuthGuard)
+  async getWaitingRoomStats(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.getWaitingRoomStats(meetingId, user._id);
+  }
+
+  @Mutation(() => WaitingRoomResponse, { name: 'approveParticipant' })
+  @UseGuards(AuthGuard)
+  async approveParticipant(
+    @Args('input') approveInput: ApproveParticipantInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.approveParticipant(approveInput, user._id);
+  }
+
+  @Mutation(() => WaitingRoomResponse, { name: 'rejectParticipant' })
+  @UseGuards(AuthGuard)
+  async rejectParticipant(
+    @Args('input') rejectInput: RejectParticipantInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.rejectParticipant(rejectInput, user._id);
+  }
+
+  @Mutation(() => WaitingRoomResponse, { name: 'admitParticipant' })
+  @UseGuards(AuthGuard)
+  async admitParticipant(
+    @Args('input') admitInput: AdmitParticipantInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.admitParticipant(admitInput, user._id);
+  }
+
+  // ===== DEVICE TESTING FUNCTIONALITY =====
+
+  @Query(() => DeviceTestResult, { name: 'testDevice' })
+  async testDevice(
+    @Args('input') testInput: DeviceTestInput,
+  ) {
+    return this.participantService.testDevice(testInput);
   }
 }

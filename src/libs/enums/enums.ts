@@ -27,9 +27,17 @@ export enum MeetingStatus {
     URL = 'URL',
   }
 
-  export enum SystemRole {
-    ADMIN = 'ADMIN',
-    MEMBER = 'MEMBER',
-  }
+export enum SystemRole {
+  ADMIN = 'ADMIN',
+  MEMBER = 'MEMBER',
+}
+
+export enum ParticipantStatus {
+  WAITING = 'WAITING',           // In waiting room
+  APPROVED = 'APPROVED',         // Approved by host
+  REJECTED = 'REJECTED',         // Rejected by host
+  ADMITTED = 'ADMITTED',         // Admitted to meeting
+  LEFT = 'LEFT',                 // Left the meeting
+}
   
   
