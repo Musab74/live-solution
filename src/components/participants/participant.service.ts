@@ -4,9 +4,9 @@ import { Model, Types } from 'mongoose';
 import { Participant, ParticipantDocument } from '../../schemas/Participant.model';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { CreateParticipantInput, UpdateParticipantInput, JoinMeetingInput, LeaveMeetingInput, UpdateSessionInput, ForceMediaInput } from '../../libs/DTO/participant/participant.mutation';
+import { CreateParticipantInput, UpdateParticipantInput, JoinMeetingInput, LeaveMeetingInput, UpdateSessionInput, ForceMediaInput, ForceMuteInput, ForceCameraOffInput, TransferHostInput } from '../../libs/DTO/participant/participant.mutation';
 import { PreMeetingSetupInput, ApproveParticipantInput, RejectParticipantInput, AdmitParticipantInput, DeviceTestInput } from '../../libs/DTO/participant/waiting-room.input';
-import { Role, MediaState, ParticipantStatus } from '../../libs/enums/enums';
+import { Role, MediaState, ParticipantStatus, MediaTrack, SystemRole } from '../../libs/enums/enums';
 
 @Injectable()
 export class ParticipantService {
@@ -372,63 +372,7 @@ export class ParticipantService {
     return { message: `Successfully ${action}ed the meeting` };
   }
 
-  async forceMuteParticipant(forceInput: ForceMediaInput, hostId: string) {
-    const { participantId, reason } = forceInput;
 
-    // Find the participant
-    const participant = await this.participantModel.findById(participantId);
-    if (!participant) {
-      throw new NotFoundException('Participant not found');
-    }
-
-    // Verify the user is the host of the meeting
-    const meeting = await this.meetingModel.findById(participant.meetingId);
-    if (!meeting) {
-      throw new NotFoundException('Meeting not found');
-    }
-
-    if (meeting.hostId.toString() !== hostId) {
-      throw new ForbiddenException('Only the meeting host can force mute participants');
-    }
-
-    // Update participant's mic state to OFF
-    participant.micState = MediaState.OFF;
-    await participant.save();
-
-    return { 
-      message: `Participant ${participant.displayName} has been force muted${reason ? `: ${reason}` : ''}`,
-      success: true 
-    };
-  }
-
-  async forceVideoOffParticipant(forceInput: ForceMediaInput, hostId: string) {
-    const { participantId, reason } = forceInput;
-
-    // Find the participant
-    const participant = await this.participantModel.findById(participantId);
-    if (!participant) {
-      throw new NotFoundException('Participant not found');
-    }
-
-    // Verify the user is the host of the meeting
-    const meeting = await this.meetingModel.findById(participant.meetingId);
-    if (!meeting) {
-      throw new NotFoundException('Meeting not found');
-    }
-
-    if (meeting.hostId.toString() !== hostId) {
-      throw new ForbiddenException('Only the meeting host can force video off participants');
-    }
-
-    // Update participant's camera state to OFF
-    participant.cameraState = MediaState.OFF;
-    await participant.save();
-
-    return { 
-      message: `Participant ${participant.displayName} has been force video off${reason ? `: ${reason}` : ''}`,
-      success: true 
-    };
-  }
 
   // ===== WAITING ROOM FUNCTIONALITY =====
 
@@ -693,6 +637,257 @@ export class ParticipantService {
       deviceName: result.deviceName,
       volumeLevel: 'volumeLevel' in result ? result.volumeLevel : undefined,
       errorMessage: result.errorMessage,
+    };
+  }
+
+  // Force mute participant (host/co-host only)
+  async forceMuteParticipant(input: ForceMuteInput, hostId: string): Promise<{ success: boolean; message: string }> {
+    const { meetingId, participantId, track, reason } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify host is authorized (host or co-host)
+    const hostParticipant = await this.participantModel.findOne({
+      meetingId,
+      userId: hostId,
+      role: { $in: [Role.HOST, Role.CO_HOST] }
+    });
+
+    if (!hostParticipant) {
+      throw new ForbiddenException('Only hosts and co-hosts can force mute participants');
+    }
+
+    // Find target participant
+    const targetParticipant = await this.participantModel.findOne({
+      _id: participantId,
+      meetingId
+    });
+
+    if (!targetParticipant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Don't allow muting other hosts/co-hosts unless you're the main host
+    if (targetParticipant.role === Role.HOST && hostParticipant.role !== Role.HOST) {
+      throw new ForbiddenException('Only the main host can mute other hosts');
+    }
+
+    if (targetParticipant.role === Role.CO_HOST && hostParticipant.role !== Role.HOST) {
+      throw new ForbiddenException('Only the main host can mute co-hosts');
+    }
+
+    // Update participant's media state
+    const updateData: any = {};
+    if (track === MediaTrack.MIC) {
+      updateData.micState = MediaState.MUTED;
+    } else if (track === MediaTrack.CAMERA) {
+      updateData.cameraState = MediaState.OFF;
+    }
+
+    await this.participantModel.findByIdAndUpdate(participantId, updateData);
+
+    return {
+      success: true,
+      message: `Successfully ${track === MediaTrack.MIC ? 'muted' : 'turned off camera for'} participant`
+    };
+  }
+
+  // Force camera off participant (host/co-host only)
+  async forceCameraOffParticipant(input: ForceCameraOffInput, hostId: string): Promise<{ success: boolean; message: string }> {
+    const { meetingId, participantId, reason } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify host is authorized (host or co-host)
+    const hostParticipant = await this.participantModel.findOne({
+      meetingId,
+      userId: hostId,
+      role: { $in: [Role.HOST, Role.CO_HOST] }
+    });
+
+    if (!hostParticipant) {
+      throw new ForbiddenException('Only hosts and co-hosts can force camera off participants');
+    }
+
+    // Find target participant
+    const targetParticipant = await this.participantModel.findOne({
+      _id: participantId,
+      meetingId
+    });
+
+    if (!targetParticipant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Don't allow turning off camera for other hosts/co-hosts unless you're the main host
+    if (targetParticipant.role === Role.HOST && hostParticipant.role !== Role.HOST) {
+      throw new ForbiddenException('Only the main host can turn off camera for other hosts');
+    }
+
+    if (targetParticipant.role === Role.CO_HOST && hostParticipant.role !== Role.HOST) {
+      throw new ForbiddenException('Only the main host can turn off camera for co-hosts');
+    }
+
+    // Update participant's camera state
+    await this.participantModel.findByIdAndUpdate(participantId, {
+      cameraState: MediaState.OFF
+    });
+
+    return {
+      success: true,
+      message: 'Successfully turned off camera for participant'
+    };
+  }
+
+  // Transfer host role to another participant
+  async transferHost(input: TransferHostInput, currentHostId: string): Promise<{ success: boolean; message: string }> {
+    const { meetingId, newHostParticipantId, reason } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify current user is the host
+    const currentHostParticipant = await this.participantModel.findOne({
+      meetingId,
+      userId: currentHostId,
+      role: Role.HOST
+    });
+
+    if (!currentHostParticipant) {
+      throw new ForbiddenException('Only the current host can transfer host role');
+    }
+
+    // Find new host participant
+    const newHostParticipant = await this.participantModel.findOne({
+      _id: newHostParticipantId,
+      meetingId
+    });
+
+    if (!newHostParticipant) {
+      throw new NotFoundException('New host participant not found');
+    }
+
+    // Verify new host has appropriate system role (TUTOR or ADMIN)
+    const newHostUser = await this.memberModel.findById(newHostParticipant.userId);
+    if (!newHostUser || (newHostUser.systemRole !== SystemRole.TUTOR && newHostUser.systemRole !== SystemRole.ADMIN)) {
+      throw new ForbiddenException('Only tutors and admins can be hosts');
+    }
+
+    // Transfer host role
+    await this.participantModel.findByIdAndUpdate(currentHostParticipant._id, {
+      role: Role.PARTICIPANT
+    });
+
+    await this.participantModel.findByIdAndUpdate(newHostParticipantId, {
+      role: Role.HOST
+    });
+
+    // Update meeting host
+    await this.meetingModel.findByIdAndUpdate(meetingId, {
+      hostId: newHostParticipant.userId
+    });
+
+    return {
+      success: true,
+      message: 'Host role transferred successfully'
+    };
+  }
+
+  // Check if user can be host (TUTOR or ADMIN only)
+  async canBeHost(userId: string): Promise<boolean> {
+    const user = await this.memberModel.findById(userId);
+    return user && (user.systemRole === SystemRole.TUTOR || user.systemRole === SystemRole.ADMIN);
+  }
+
+  // Get attendance for a meeting (host/tutor only - tutors see their own courses)
+  async getMeetingAttendance(meetingId: string, requesterId: string): Promise<any> {
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify requester has permission
+    const requester = await this.memberModel.findById(requesterId);
+    if (!requester) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Check permissions:
+    // 1. If requester is the host of the meeting
+    // 2. If requester is a tutor and this is their course (hostId matches requesterId)
+    const isHost = meeting.hostId.toString() === requesterId;
+    const isTutor = requester.systemRole === SystemRole.TUTOR && isHost;
+
+    if (!isHost && !isTutor) {
+      throw new ForbiddenException('Only meeting hosts and tutors can view attendance for their own courses');
+    }
+
+    // Get all participants with their session data
+    const participants = await this.participantModel
+      .find({ meetingId })
+      .populate('userId', 'email displayName firstName lastName')
+      .sort({ createdAt: 1 })
+      .lean();
+
+    // Calculate attendance data
+    const attendanceData = participants.map(participant => {
+      const sessions = participant.sessions || [];
+      const totalDuration = sessions.reduce((total, session) => {
+        const sessionDuration = session.leftAt 
+          ? new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()
+          : Date.now() - new Date(session.joinedAt).getTime();
+        return total + Math.floor(sessionDuration / 1000);
+      }, 0);
+
+      const userData = participant.userId && typeof participant.userId === 'object' ? {
+        _id: (participant.userId as any)._id,
+        email: (participant.userId as any).email,
+        displayName: (participant.userId as any).displayName,
+        firstName: (participant.userId as any).firstName,
+        lastName: (participant.userId as any).lastName,
+      } : null;
+
+      return {
+        _id: participant._id,
+        user: userData,
+        role: participant.role,
+        status: participant.status,
+        joinedAt: sessions.length > 0 ? sessions[0].joinedAt : participant.createdAt,
+        leftAt: sessions.length > 0 && sessions[sessions.length - 1].leftAt ? sessions[sessions.length - 1].leftAt : null,
+        totalDuration,
+        sessionCount: sessions.length,
+        isCurrentlyOnline: sessions.length > 0 && !sessions[sessions.length - 1].leftAt,
+        sessions: sessions.map((session, index) => ({
+          sessionId: session.joinedAt.getTime().toString() + '_' + index,
+          joinedAt: session.joinedAt,
+          leftAt: session.leftAt,
+          duration: session.leftAt 
+            ? Math.floor((new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()) / 1000)
+            : Math.floor((Date.now() - new Date(session.joinedAt).getTime()) / 1000)
+        }))
+      };
+    });
+
+    return {
+      meetingId,
+      totalParticipants: participants.length,
+      currentlyOnline: participants.filter(p => {
+        const sessions = p.sessions || [];
+        return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
+      }).length,
+      attendance: attendanceData
     };
   }
 }

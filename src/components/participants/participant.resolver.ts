@@ -12,6 +12,9 @@ import {
   LeaveMeetingInput, 
   UpdateSessionInput,
   ForceMediaInput,
+  ForceMuteInput,
+  ForceCameraOffInput,
+  TransferHostInput,
   ParticipantResponse,
   ParticipantMessageResponse 
 } from '../../libs/DTO/participant/participant.mutation';
@@ -114,23 +117,6 @@ export class ParticipantResolver {
     return this.participantService.updateSession(updateInput, user._id);
   }
 
-  @Mutation(() => ParticipantMessageResponse, { name: 'forceMuteParticipant' })
-  @UseGuards(AuthGuard)
-  async forceMuteParticipant(
-    @Args('input') forceInput: ForceMediaInput,
-    @AuthMember() user: Member,
-  ) {
-    return this.participantService.forceMuteParticipant(forceInput, user._id);
-  }
-
-  @Mutation(() => ParticipantMessageResponse, { name: 'forceVideoOffParticipant' })
-  @UseGuards(AuthGuard)
-  async forceVideoOffParticipant(
-    @Args('input') forceInput: ForceMediaInput,
-    @AuthMember() user: Member,
-  ) {
-    return this.participantService.forceVideoOffParticipant(forceInput, user._id);
-  }
 
   // ===== WAITING ROOM FUNCTIONALITY =====
 
@@ -194,5 +180,52 @@ export class ParticipantResolver {
     @Args('input') testInput: DeviceTestInput,
   ) {
     return this.participantService.testDevice(testInput);
+  }
+
+  // ===== HOST CONTROL FUNCTIONALITY =====
+
+  @Mutation(() => ParticipantMessageResponse, { name: 'forceMute' })
+  @UseGuards(AuthGuard)
+  async forceMute(
+    @Args('input') forceMuteInput: ForceMuteInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.forceMuteParticipant(forceMuteInput, user._id);
+  }
+
+  @Mutation(() => ParticipantMessageResponse, { name: 'forceCameraOff' })
+  @UseGuards(AuthGuard)
+  async forceCameraOff(
+    @Args('input') forceCameraOffInput: ForceCameraOffInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.forceCameraOffParticipant(forceCameraOffInput, user._id);
+  }
+
+  @Mutation(() => ParticipantMessageResponse, { name: 'transferHost' })
+  @UseGuards(AuthGuard)
+  async transferHost(
+    @Args('input') transferHostInput: TransferHostInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.transferHost(transferHostInput, user._id);
+  }
+
+  @Query(() => Boolean, { name: 'canBeHost' })
+  @UseGuards(AuthGuard)
+  async canBeHost(
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.canBeHost(user._id);
+  }
+
+  @Query(() => String, { name: 'getMeetingAttendance' })
+  @UseGuards(AuthGuard)
+  async getMeetingAttendance(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    const attendance = await this.participantService.getMeetingAttendance(meetingId, user._id);
+    return JSON.stringify(attendance, null, 2);
   }
 }

@@ -5,13 +5,20 @@ export enum MeetingStatus {
     CANCELED = 'CANCELED',
   }
   
-  export enum Role {
-    HOST = 'HOST',
-    CO_HOST = 'CO_HOST',
-    PRESENTER = 'PRESENTER',
-    PARTICIPANT = 'PARTICIPANT',
-    VIEWER = 'VIEWER',
-  }
+export enum Role {
+  HOST = 'HOST',
+  CO_HOST = 'CO_HOST',
+  PRESENTER = 'PRESENTER',
+  PARTICIPANT = 'PARTICIPANT',
+  VIEWER = 'VIEWER',
+}
+
+export enum MediaTrack {
+  MIC = 'MIC',
+  CAMERA = 'CAMERA',
+  SCREEN = 'SCREEN',
+}
+
   
   export enum MediaState {
     ON = 'ON',                  // actively sending audio/video
@@ -29,6 +36,7 @@ export enum MeetingStatus {
 
 export enum SystemRole {
   ADMIN = 'ADMIN',
+  TUTOR = 'TUTOR',
   MEMBER = 'MEMBER',
 }
 
@@ -39,5 +47,32 @@ export enum ParticipantStatus {
   ADMITTED = 'ADMITTED',         // Admitted to meeting
   LEFT = 'LEFT',                 // Left the meeting
 }
-  
+
+// Register enums with GraphQL
+import { registerEnumType } from '@nestjs/graphql';
+
+registerEnumType(MediaTrack, {
+  name: 'MediaTrack',
+  description: 'Media track types for force mute operations',
+});
+
+registerEnumType(Role, {
+  name: 'Role',
+  description: 'Participant roles in meetings',
+});
+
+registerEnumType(MediaState, {
+  name: 'MediaState',
+  description: 'Media state for audio/video controls',
+});
+
+registerEnumType(SystemRole, {
+  name: 'SystemRole',
+  description: 'System-wide user roles',
+});
+
+registerEnumType(ParticipantStatus, {
+  name: 'ParticipantStatus',
+  description: 'Participant status in waiting room',
+});
   

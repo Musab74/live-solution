@@ -14,7 +14,7 @@ services:
 
 
     #PRODUCTION
-  command: bash -c "npm install && npm run build && npm run start:prod:batch"
+  command: bash -c "npm install && npm run build && npm run start:dev"
 
 
 networks:

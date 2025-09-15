@@ -1,6 +1,6 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { Field, InputType, ID, ObjectType } from '@nestjs/graphql';
-import { Role, MediaState } from '../../enums/enums';
+import { Role, MediaState, MediaTrack } from '../../enums/enums';
 
 @InputType()
 export class CreateParticipantInput {
@@ -89,6 +89,58 @@ export class ForceMediaInput {
   @Field(() => ID)
   @IsString()
   participantId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+@InputType()
+export class ForceMuteInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field(() => ID)
+  @IsString()
+  participantId!: string;
+
+  @Field(() => MediaTrack, { defaultValue: MediaTrack.MIC })
+  @IsEnum(MediaTrack)
+  track!: MediaTrack;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+@InputType()
+export class ForceCameraOffInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field(() => ID)
+  @IsString()
+  participantId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+@InputType()
+export class TransferHostInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field(() => ID)
+  @IsString()
+  newHostParticipantId!: string;
 
   @Field({ nullable: true })
   @IsOptional()
