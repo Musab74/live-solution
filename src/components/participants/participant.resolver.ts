@@ -2,7 +2,7 @@ import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { ParticipantService } from './participant.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
 import { Member } from '../../schemas/Member.model';
 import { ParticipantWithLoginInfo, ParticipantStats } from '../../libs/DTO/participant/participant.query';
 import { 
@@ -34,6 +34,8 @@ import {
 
 @Resolver()
 export class ParticipantResolver {
+  private readonly logger = new Logger(ParticipantResolver.name);
+
   constructor(private readonly participantService: ParticipantService) {}
 
   @Query(() => [ParticipantWithLoginInfo], { name: 'getParticipantsByMeeting' })
@@ -42,7 +44,15 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<any[]> {
-    return this.participantService.getParticipantsByMeeting(meetingId, user._id);
+    this.logger.log(`[GET_PARTICIPANTS_BY_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.participantService.getParticipantsByMeeting(meetingId, user._id);
+      this.logger.log(`[GET_PARTICIPANTS_BY_MEETING] Success - Meeting ID: ${meetingId}, Count: ${result.length}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[GET_PARTICIPANTS_BY_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @Query(() => ParticipantStats, { name: 'getParticipantStats' })
@@ -190,7 +200,15 @@ export class ParticipantResolver {
     @Args('input') forceMuteInput: ForceMuteInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.forceMuteParticipant(forceMuteInput, user._id);
+    this.logger.log(`[FORCE_MUTE] Attempt - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}, Host ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.participantService.forceMuteParticipant(forceMuteInput, user._id);
+      this.logger.log(`[FORCE_MUTE] Success - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[FORCE_MUTE] Failed - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'forceCameraOff' })
@@ -199,7 +217,15 @@ export class ParticipantResolver {
     @Args('input') forceCameraOffInput: ForceCameraOffInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.forceCameraOffParticipant(forceCameraOffInput, user._id);
+    this.logger.log(`[FORCE_CAMERA_OFF] Attempt - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}, Host ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.participantService.forceCameraOffParticipant(forceCameraOffInput, user._id);
+      this.logger.log(`[FORCE_CAMERA_OFF] Success - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[FORCE_CAMERA_OFF] Failed - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'transferHost' })
@@ -208,7 +234,15 @@ export class ParticipantResolver {
     @Args('input') transferHostInput: TransferHostInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.transferHost(transferHostInput, user._id);
+    this.logger.log(`[TRANSFER_HOST] Attempt - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}, Current Host ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.participantService.transferHost(transferHostInput, user._id);
+      this.logger.log(`[TRANSFER_HOST] Success - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[TRANSFER_HOST] Failed - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @Query(() => Boolean, { name: 'canBeHost' })

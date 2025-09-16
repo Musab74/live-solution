@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, Context } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
 import { VodService } from './vod.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -25,6 +25,8 @@ import { ParticipantMessageResponse } from '../../libs/DTO/participant/participa
 
 @Resolver()
 export class VodResolver {
+  private readonly logger = new Logger(VodResolver.name);
+
   constructor(private readonly vodService: VodService) {}
 
   // ==================== QUERIES ====================
@@ -36,7 +38,15 @@ export class VodResolver {
     @Args('input', { nullable: true }) queryInput: VodQueryInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    return this.vodService.getAllVods(queryInput || {}, user._id, user.systemRole);
+    this.logger.log(`[GET_ALL_VODS] Attempt - User ID: ${user._id}, Email: ${user.email}, Role: ${user.systemRole}, Query: ${JSON.stringify(queryInput)}`);
+    try {
+      const result = await this.vodService.getAllVods(queryInput || {}, user._id, user.systemRole);
+      this.logger.log(`[GET_ALL_VODS] Success - User ID: ${user._id}, Count: ${result.vods?.length || 0}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[GET_ALL_VODS] Failed - User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @Query(() => VodWithMeeting, { name: 'getVodById' })

@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Args } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
 import { LivekitService } from './livekit.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -9,6 +9,8 @@ import { AuthMember } from '../auth/decorators/authMember.decorator';
 
 @Resolver()
 export class LivekitResolver {
+  private readonly logger = new Logger(LivekitResolver.name);
+
   constructor(private readonly lk: LivekitService) {}
 
   @UseGuards(AuthGuard)
@@ -17,18 +19,25 @@ export class LivekitResolver {
     @Args('meetingId') meetingId: string,
     @AuthMember() me: any,
   ) {
-    // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
-    const meetingRole = await /* participantsService */ Promise.resolve('PARTICIPANT' as const);
+    this.logger.log(`[CREATE_LIVEKIT_TOKEN] Attempt - Meeting ID: ${meetingId}, User ID: ${me._id}, Email: ${me.email}, Display Name: ${me.displayName}`);
+    try {
+      // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
+      const meetingRole = await /* participantsService */ Promise.resolve('PARTICIPANT' as const);
 
-    const token = this.lk.generateAccessToken({
-      room: meetingId,
-      identity: String(me._id),
-      name: me.displayName,
-      meetingRole,
-    });
+      const token = this.lk.generateAccessToken({
+        room: meetingId,
+        identity: String(me._id),
+        name: me.displayName,
+        meetingRole,
+      });
 
-    // Return JSON string or create a proper GraphQL type
-    return JSON.stringify({ wsUrl: this.lk.getWsUrl(), token });
+      const result = JSON.stringify({ wsUrl: this.lk.getWsUrl(), token });
+      this.logger.log(`[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, User ID: ${me._id}, Meeting Role: ${meetingRole}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[CREATE_LIVEKIT_TOKEN] Failed - Meeting ID: ${meetingId}, User ID: ${me._id}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   @UseGuards(AuthGuard, RolesGuard) @Roles(SystemRole.ADMIN)

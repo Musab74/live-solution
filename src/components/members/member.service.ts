@@ -6,6 +6,8 @@ import { AuthService } from '../auth/auth.service';
 import { MemberInput } from '../../libs/DTO/member/member.input';
 import { UpdateMemberInput } from '../../libs/DTO/member/member.update';
 import { SystemRole } from '../../libs/enums/enums';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class MemberService {
@@ -151,5 +153,105 @@ export class MemberService {
       throw new NotFoundException('User not found');
     }
     return { message: 'User deleted successfully' };
+  }
+
+  // LOGOUT
+  async logout(userId: string) {
+    // Update lastSeenAt timestamp
+    await this.memberModel.findByIdAndUpdate(userId, {
+      lastSeenAt: new Date()
+    });
+
+    // In a real application, you might want to:
+    // 1. Add token to blacklist
+    // 2. Clear user sessions
+    // 3. Notify other services about logout
+    
+    return { 
+      success: true, 
+      message: 'Logged out successfully',
+      timestamp: new Date().toISOString()
+    };
+  }
+
+  // UPLOAD PROFILE IMAGE
+  async uploadProfileImage(userId: string, file: any) {
+    const user = await this.memberModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Validate file object
+    if (!file) {
+      throw new Error('No file provided');
+    }
+
+    // Handle different file object structures
+    const originalName = file.originalname || file.filename || 'image';
+    const fileBuffer = file.buffer || file.data;
+    
+    if (!fileBuffer) {
+      throw new Error('File buffer is empty');
+    }
+
+    // Create uploads directory if it doesn't exist
+    const uploadsDir = path.join(process.cwd(), 'uploads', 'avatars');
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+
+    // Generate unique filename with safe extension
+    const fileExtension = originalName ? path.extname(originalName) : '.jpg';
+    const fileName = `avatar_${userId}_${Date.now()}${fileExtension}`;
+    const filePath = path.join(uploadsDir, fileName);
+
+    // Save file
+    fs.writeFileSync(filePath, fileBuffer);
+
+    // Generate URL
+    const avatarUrl = `/uploads/avatars/${fileName}`;
+
+    // Update user's avatar URL
+    user.avatarUrl = avatarUrl;
+    await user.save();
+
+    // Return updated user data without password
+    const { passwordHash: _, ...userWithoutPassword } = user.toObject();
+    
+    return {
+      success: true,
+      message: 'Profile image uploaded successfully',
+      avatarUrl,
+      user: userWithoutPassword
+    };
+  }
+
+  // DELETE PROFILE IMAGE
+  async deleteProfileImage(userId: string) {
+    const user = await this.memberModel.findById(userId);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Delete old image file if it exists
+    if (user.avatarUrl) {
+      const oldFilePath = path.join(process.cwd(), user.avatarUrl);
+      if (fs.existsSync(oldFilePath)) {
+        fs.unlinkSync(oldFilePath);
+      }
+    }
+
+    // Clear avatar URL
+    user.avatarUrl = undefined;
+    await user.save();
+
+    // Return updated user data without password
+    const { passwordHash: _, ...userWithoutPassword } = user.toObject();
+    
+    return {
+      success: true,
+      message: 'Profile image deleted successfully',
+      user: userWithoutPassword
+    };
   }
 }

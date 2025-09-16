@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
-import { UseGuards } from '@nestjs/common';
+import { UseGuards, Logger } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -22,6 +22,8 @@ import {
 
 @Resolver()
 export class ChatResolver {
+  private readonly logger = new Logger(ChatResolver.name);
+
   constructor(private readonly chatService: ChatService) {}
 
   // ==================== QUERIES ====================
