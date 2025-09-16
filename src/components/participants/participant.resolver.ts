@@ -8,7 +8,7 @@ import { ParticipantWithLoginInfo, ParticipantStats } from '../../libs/DTO/parti
 import { 
   CreateParticipantInput, 
   UpdateParticipantInput, 
-  JoinMeetingInput, 
+  JoinParticipantInput, 
   LeaveMeetingInput, 
   UpdateSessionInput,
   ForceMediaInput,
@@ -103,7 +103,7 @@ export class ParticipantResolver {
   @Mutation(() => ParticipantResponse, { name: 'joinMeeting' })
   @UseGuards(AuthGuard)
   async joinMeeting(
-    @Args('input') joinInput: JoinMeetingInput,
+    @Args('input') joinInput: JoinParticipantInput,
     @AuthMember() user: Member,
   ) {
     return this.participantService.joinMeeting(joinInput, user._id);

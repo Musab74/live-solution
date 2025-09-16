@@ -4,6 +4,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/members/member.module';
 import { ParticipantModule } from './components/participants/participant.module';
+import { MeetingModule } from './components/meetings/meeting.module';
 import { VodModule } from './components/vod/vod.module';
 import { ChatModule } from './components/chat/chat.module';
 import { SignalingModule } from './components/signaling/signaling.module';
@@ -34,6 +35,7 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     AuthModule,
     MemberModule,
     ParticipantModule,
+    MeetingModule,
     VodModule,
     ChatModule,
     SignalingModule,

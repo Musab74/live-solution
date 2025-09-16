@@ -67,15 +67,16 @@ export class UpdateMeetingInput {
 }
 
 @InputType()
-export class JoinMeetingByCodeInput {
+export class JoinMeetingInput {
   @Field()
   @IsString()
   inviteCode!: string;
 
-  @Field()
+  @Field({ nullable: true })
+  @IsOptional()
   @IsString()
   @MaxLength(100)
-  displayName!: string;
+  passcode?: string;
 }
 
 @InputType()
@@ -113,13 +114,18 @@ export class MeetingQueryInput {
 
   @Field({ nullable: true })
   @IsOptional()
-  @IsInt()
-  @Min(1)
-  limit?: number;
+  @IsString()
+  search?: string;
 
   @Field({ nullable: true })
   @IsOptional()
   @IsInt()
-  @Min(0)
-  offset?: number;
+  @Min(1)
+  page?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
 }

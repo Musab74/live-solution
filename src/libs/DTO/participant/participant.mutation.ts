@@ -51,7 +51,7 @@ export class UpdateParticipantInput {
 }
 
 @InputType()
-export class JoinMeetingInput {
+export class JoinParticipantInput {
   @Field(() => ID)
   @IsString()
   meetingId!: string;

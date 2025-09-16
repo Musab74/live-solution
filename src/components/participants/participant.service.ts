@@ -4,7 +4,7 @@ import { Model, Types } from 'mongoose';
 import { Participant, ParticipantDocument } from '../../schemas/Participant.model';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { CreateParticipantInput, UpdateParticipantInput, JoinMeetingInput, LeaveMeetingInput, UpdateSessionInput, ForceMediaInput, ForceMuteInput, ForceCameraOffInput, TransferHostInput } from '../../libs/DTO/participant/participant.mutation';
+import { CreateParticipantInput, UpdateParticipantInput, JoinParticipantInput, LeaveMeetingInput, UpdateSessionInput, ForceMediaInput, ForceMuteInput, ForceCameraOffInput, TransferHostInput } from '../../libs/DTO/participant/participant.mutation';
 import { PreMeetingSetupInput, ApproveParticipantInput, RejectParticipantInput, AdmitParticipantInput, DeviceTestInput } from '../../libs/DTO/participant/waiting-room.input';
 import { Role, MediaState, ParticipantStatus, MediaTrack, SystemRole } from '../../libs/enums/enums';
 
@@ -232,7 +232,7 @@ export class ParticipantService {
     return participant;
   }
 
-  async joinMeeting(joinInput: JoinMeetingInput, userId?: string) {
+  async joinMeeting(joinInput: JoinParticipantInput, userId?: string) {
     const { meetingId, displayName, inviteCode } = joinInput;
 
     // Verify the meeting exists

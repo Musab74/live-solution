@@ -1,4 +1,5 @@
 export enum MeetingStatus {
+    CREATED = 'CREATED',       // Created but not started
     SCHEDULED = 'SCHEDULED',   // 예약된 회의
     LIVE = 'LIVE',             // 시작된 회의
     ENDED = 'ENDED',           // 종료된 회의
