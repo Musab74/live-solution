@@ -21,7 +21,24 @@ export class MeetingService {
     this.logger.log(`[CREATE_MEETING] Attempt - User ID: ${userId}, Title: ${createInput.title}`);
     
     try {
-      const { title, notes, isPrivate, scheduledStartAt, durationMin } = createInput;
+      const { title, notes, isPrivate, scheduledFor, duration, maxParticipants } = createInput;
+
+      // Validate and parse scheduledFor date
+      let parsedScheduledFor: Date | undefined;
+      if (scheduledFor) {
+        try {
+          const date = new Date(scheduledFor);
+          if (isNaN(date.getTime())) {
+            this.logger.warn(`[CREATE_MEETING] Invalid date format: ${scheduledFor}, ignoring`);
+            parsedScheduledFor = undefined;
+          } else {
+            parsedScheduledFor = date;
+          }
+        } catch (error) {
+          this.logger.warn(`[CREATE_MEETING] Date parsing error: ${error.message}, ignoring scheduledFor`);
+          parsedScheduledFor = undefined;
+        }
+      }
 
       // Generate unique invite code
       const inviteCode = await this.generateUniqueInviteCode();
@@ -31,11 +48,12 @@ export class MeetingService {
         title,
         notes,
         isPrivate: isPrivate || false,
-        scheduledStartAt: scheduledStartAt ? new Date(scheduledStartAt) : undefined,
-        durationMin,
+        scheduledFor: parsedScheduledFor,
+        durationMin: duration,
+        maxParticipants: maxParticipants ?? 100,
         hostId: new Types.ObjectId(userId),
         inviteCode,
-        status: scheduledStartAt ? MeetingStatus.SCHEDULED : MeetingStatus.CREATED,
+        status: parsedScheduledFor ? MeetingStatus.SCHEDULED : MeetingStatus.CREATED,
         participantCount: 0,
       });
 
@@ -50,8 +68,10 @@ export class MeetingService {
         inviteCode: savedMeeting.inviteCode,
         status: savedMeeting.status,
         isPrivate: savedMeeting.isPrivate,
-        scheduledStartAt: savedMeeting.scheduledStartAt,
+        scheduledFor: savedMeeting.scheduledFor,
         durationMin: savedMeeting.durationMin,
+        duration: savedMeeting.durationMin,
+        maxParticipants: savedMeeting.maxParticipants || 100,
         participantCount: savedMeeting.participantCount,
         host: savedMeeting.hostId,
         createdAt: savedMeeting.createdAt,
@@ -80,11 +100,9 @@ export class MeetingService {
       if (hostId) {
         filter.hostId = new Types.ObjectId(hostId);
       } else {
-        // If no specific hostId, show user's meetings or all if admin
-        const user = await this.memberModel.findById(userId);
-        if (user.systemRole !== SystemRole.ADMIN) {
-          filter.hostId = new Types.ObjectId(userId);
-        }
+        // All users (MEMBER, TUTOR, ADMIN) can see all meetings
+        // No additional filtering needed - show all meetings
+        this.logger.log(`[GET_MEETINGS] Showing all meetings for user role: ${userId}`);
       }
 
       if (search) {
@@ -100,20 +118,40 @@ export class MeetingService {
         .populate('hostId', 'email displayName systemRole avatarUrl')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit)
-        .lean();
+        .limit(limit);
 
       // Get total count
       const total = await this.meetingModel.countDocuments(filter);
 
+      // Map meetings to ensure proper host data structure
+      const mappedMeetings = meetings.map(meeting => {
+        const meetingObj = meeting.toObject();
+        this.logger.debug(`[GET_MEETINGS] Meeting ${meetingObj._id} hostId:`, meetingObj.hostId);
+        
+        // Check if hostId is populated (has email property) or just an ObjectId
+        const hostData = meetingObj.hostId && typeof meetingObj.hostId === 'object' && 'email' in meetingObj.hostId ? {
+          _id: meetingObj.hostId._id,
+          email: meetingObj.hostId.email,
+          displayName: (meetingObj.hostId as any).displayName,
+          systemRole: (meetingObj.hostId as any).systemRole,
+          avatarUrl: (meetingObj.hostId as any).avatarUrl,
+        } : null;
+        
+        return {
+          ...meetingObj,
+          host: hostData,
+        };
+      });
+
       this.logger.log(`[GET_MEETINGS] Success - Found ${meetings.length} meetings, Total: ${total}`);
       
       return {
-        meetings,
+        meetings: mappedMeetings,
         total,
         page,
         limit,
-        totalPages: Math.ceil(total / limit),
+        offset: skip,
+        hasMore: skip + meetings.length < total,
       };
     } catch (error) {
       this.logger.error(`[GET_MEETINGS] Failed - User ID: ${userId}, Error: ${error.message}`);
@@ -228,7 +266,7 @@ export class MeetingService {
       if (updateInput.title) meeting.title = updateInput.title;
       if (updateInput.notes !== undefined) meeting.notes = updateInput.notes;
       if (updateInput.isPrivate !== undefined) meeting.isPrivate = updateInput.isPrivate;
-      if (updateInput.scheduledStartAt) meeting.scheduledStartAt = new Date(updateInput.scheduledStartAt);
+      if (updateInput.scheduledFor) meeting.scheduledFor = new Date(updateInput.scheduledFor);
       if (updateInput.durationMin) meeting.durationMin = updateInput.durationMin;
 
       await meeting.save();
@@ -241,7 +279,7 @@ export class MeetingService {
         title: meeting.title,
         notes: meeting.notes,
         isPrivate: meeting.isPrivate,
-        scheduledStartAt: meeting.scheduledStartAt,
+        scheduledFor: meeting.scheduledFor,
         durationMin: meeting.durationMin,
         status: meeting.status,
         inviteCode: meeting.inviteCode,

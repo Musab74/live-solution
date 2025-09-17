@@ -21,14 +21,20 @@ export class CreateMeetingInput {
 
   @Field({ nullable: true })
   @IsOptional()
-  @IsDateString()
-  scheduledStartAt?: string;
+  @IsString()
+  scheduledFor?: string;
 
   @Field({ nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
-  durationMin?: number;
+  duration?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxParticipants?: number;
 }
 
 @InputType()
@@ -56,8 +62,8 @@ export class UpdateMeetingInput {
 
   @Field({ nullable: true })
   @IsOptional()
-  @IsDateString()
-  scheduledStartAt?: string;
+  @IsString()
+  scheduledFor?: string;
 
   @Field({ nullable: true })
   @IsOptional()

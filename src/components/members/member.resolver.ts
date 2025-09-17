@@ -7,6 +7,7 @@ import { Member } from '../../schemas/Member.model';
 import { ObjectType, Field, InputType, ID } from '@nestjs/graphql';
 import { MemberInput } from '../../libs/DTO/member/member.input';
 import { UpdateMemberInput } from '../../libs/DTO/member/member.update';
+import { LoginInput } from '../../libs/DTO/auth/login.input';
 
 @ObjectType()
 export class AuthResponse {
@@ -223,6 +224,76 @@ export class MemberResolver {
       return result;
     } catch (error) {
       this.logger.error(`[DELETE_PROFILE_IMAGE] Failed - User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => ImageUploadResponse, { name: 'promoteUserRole' })
+  @UseGuards(AuthGuard)
+  async promoteUserRole(
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('newRole') newRole: string,
+    @AuthMember() admin: Member,
+  ) {
+    this.logger.log(`[PROMOTE_USER_ROLE] Attempt - User ID: ${userId}, New Role: ${newRole}, Admin ID: ${admin._id}`);
+    try {
+      const result = await this.memberService.promoteUserRole(userId, newRole as any, admin._id);
+      this.logger.log(`[PROMOTE_USER_ROLE] Success - User ID: ${userId}, New Role: ${newRole}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[PROMOTE_USER_ROLE] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => AuthResponse, { name: 'createFirstAdmin' })
+  async createFirstAdmin(@Args('input') adminInput: MemberInput) {
+    this.logger.log(`[CREATE_FIRST_ADMIN] Attempt - Email: ${adminInput.email}`);
+    try {
+      const result = await this.memberService.createFirstAdmin(adminInput);
+      this.logger.log(`[CREATE_FIRST_ADMIN] Success - Email: ${adminInput.email}, Role: ADMIN`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[CREATE_FIRST_ADMIN] Failed - Email: ${adminInput.email}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => AuthResponse, { name: 'tutorLogin' })
+  async tutorLogin(@Args('input') loginInput: LoginInput) {
+    this.logger.log(`[TUTOR_LOGIN] Attempt - Email: ${loginInput.email}`);
+    try {
+      const result = await this.memberService.tutorLogin(loginInput);
+      this.logger.log(`[TUTOR_LOGIN] Success - Email: ${loginInput.email}, Role: ${result.user.systemRole}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[TUTOR_LOGIN] Failed - Email: ${loginInput.email}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => AuthResponse, { name: 'adminLogin' })
+  async adminLogin(@Args('input') loginInput: LoginInput) {
+    this.logger.log(`[ADMIN_LOGIN] Attempt - Email: ${loginInput.email}`);
+    try {
+      const result = await this.memberService.adminLogin(loginInput);
+      this.logger.log(`[ADMIN_LOGIN] Success - Email: ${loginInput.email}, Role: ${result.user.systemRole}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[ADMIN_LOGIN] Failed - Email: ${loginInput.email}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => AuthResponse, { name: 'tutorSignup' })
+  async tutorSignup(@Args('input') memberInput: MemberInput) {
+    this.logger.log(`[TUTOR_SIGNUP] Attempt - Email: ${memberInput.email}`);
+    try {
+      const result = await this.memberService.tutorSignup(memberInput);
+      this.logger.log(`[TUTOR_SIGNUP] Success - Email: ${memberInput.email}, Role: TUTOR`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[TUTOR_SIGNUP] Failed - Email: ${memberInput.email}, Error: ${error.message}`);
       throw error;
     }
   }

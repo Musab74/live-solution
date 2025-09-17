@@ -166,7 +166,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'startMeeting' })
+  @Mutation(() => MeetingWithHost, { name: 'startMeeting' })
   @UseGuards(AuthGuard)
   async startMeeting(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -176,18 +176,14 @@ export class MeetingResolver {
     try {
       const result = await this.meetingService.startMeeting(meetingId, user._id);
       this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}, Status: ${result.status}`);
-      return {
-        success: true,
-        message: result.message,
-        meetingId: result._id,
-      };
+      return result;
     } catch (error) {
       this.logger.error(`[START_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
       throw error;
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'endMeeting' })
+  @Mutation(() => MeetingWithHost, { name: 'endMeeting' })
   @UseGuards(AuthGuard)
   async endMeeting(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -197,11 +193,7 @@ export class MeetingResolver {
     try {
       const result = await this.meetingService.endMeeting(meetingId, user._id);
       this.logger.log(`[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${result.durationMin} minutes`);
-      return {
-        success: true,
-        message: result.message,
-        meetingId: result._id,
-      };
+      return result;
     } catch (error) {
       this.logger.error(`[END_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
       throw error;

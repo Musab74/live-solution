@@ -12,6 +12,9 @@ export class HostInfo {
   @Field()
   displayName: string;
 
+  @Field()
+  systemRole: string;
+
   @Field({ nullable: true })
   avatarUrl?: string;
 
@@ -43,7 +46,7 @@ export class MeetingWithHost {
   isPrivate?: boolean;
 
   @Field({ nullable: true })
-  scheduledStartAt?: Date;
+  scheduledFor?: Date;
 
   @Field({ nullable: true })
   actualStartAt?: Date;
@@ -53,6 +56,12 @@ export class MeetingWithHost {
 
   @Field({ nullable: true })
   durationMin?: number;
+
+  @Field({ nullable: true })
+  duration?: number;
+
+  @Field({ nullable: true })
+  maxParticipants?: number;
 
   @Field({ nullable: true })
   notes?: string;
@@ -66,8 +75,8 @@ export class MeetingWithHost {
   @Field()
   updatedAt: Date;
 
-  @Field(() => HostInfo)
-  host: HostInfo;
+  @Field(() => HostInfo, { nullable: true })
+  host?: HostInfo;
 }
 
 @ObjectType()
@@ -98,6 +107,9 @@ export class MeetingListResponse {
 
   @Field()
   total: number;
+
+  @Field()
+  page: number;
 
   @Field()
   limit: number;

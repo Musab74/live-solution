@@ -32,7 +32,7 @@ export class Meeting {
   @Prop() isPrivate?: boolean;
 
   @Field({ nullable: true })
-  @Prop() scheduledStartAt?: Date;   // for 예약된 회의
+  @Prop() scheduledFor?: Date;   // for 예약된 회의
   
   @Field({ nullable: true })
   @Prop() actualStartAt?: Date;      // when it really started
@@ -42,6 +42,9 @@ export class Meeting {
 
   @Field({ nullable: true })
   @Prop() durationMin?: number;
+
+  @Field({ nullable: true })
+  @Prop({ default: 100 }) maxParticipants?: number;
   
   @Field({ nullable: true })
   @Prop() notes?: string;
@@ -60,5 +63,5 @@ export class Meeting {
 export type MeetingDocument = HydratedDocument<Meeting>;
 export const MeetingSchema = SchemaFactory.createForClass(Meeting);
 
-MeetingSchema.index({ status: 1, scheduledStartAt: -1 });
+MeetingSchema.index({ status: 1, scheduledFor: -1 });
 MeetingSchema.index({ hostId: 1, createdAt: -1 });
