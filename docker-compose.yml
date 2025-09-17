@@ -4,7 +4,7 @@ services:
   restart: unless-stopped
   image: node:20.10.0
   ports:
-    - "4050:3005"
+    - "4050:5005"
   volumes:
    - ./live-solution:/usr/src
   working_dir: /usr/src
