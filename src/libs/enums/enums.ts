@@ -1,11 +1,11 @@
 export enum MeetingStatus {
-    CREATED = 'CREATED',       // Created but not started
-    SCHEDULED = 'SCHEDULED',   // 예약된 회의
-    LIVE = 'LIVE',             // 시작된 회의
-    ENDED = 'ENDED',           // 종료된 회의
-    CANCELED = 'CANCELED',
-  }
-  
+  CREATED = 'CREATED', // Created but not started
+  SCHEDULED = 'SCHEDULED', // 예약된 회의
+  LIVE = 'LIVE', // 시작된 회의
+  ENDED = 'ENDED', // 종료된 회의
+  CANCELED = 'CANCELED',
+}
+
 export enum Role {
   HOST = 'HOST',
   CO_HOST = 'CO_HOST',
@@ -20,20 +20,18 @@ export enum MediaTrack {
   SCREEN = 'SCREEN',
 }
 
-  
-  export enum MediaState {
-    ON = 'ON',                  // actively sending audio/video
-    OFF = 'OFF',                // device disabled by the user
-    MUTED = 'MUTED',            // user muted themselves (mic only)
-    MUTED_BY_HOST = 'MUTED_BY_HOST',  // host/admin forced mute
-    OFF_BY_HOST = 'OFF_BY_HOST',    // host/admin forced camera off
-  }
-  
-  
-  export enum VodSourceType {
-    FILE = 'FILE',
-    URL = 'URL',
-  }
+export enum MediaState {
+  ON = 'ON', // actively sending audio/video
+  OFF = 'OFF', // device disabled by the user
+  MUTED = 'MUTED', // user muted themselves (mic only)
+  MUTED_BY_HOST = 'MUTED_BY_HOST', // host/admin forced mute
+  OFF_BY_HOST = 'OFF_BY_HOST', // host/admin forced camera off
+}
+
+export enum VodSourceType {
+  FILE = 'FILE',
+  URL = 'URL',
+}
 
 export enum SystemRole {
   ADMIN = 'ADMIN',
@@ -42,19 +40,19 @@ export enum SystemRole {
 }
 
 export enum ParticipantStatus {
-  WAITING = 'WAITING',           // In waiting room
-  APPROVED = 'APPROVED',         // Approved by host
-  REJECTED = 'REJECTED',         // Rejected by host
-  ADMITTED = 'ADMITTED',         // Admitted to meeting
-  LEFT = 'LEFT',                 // Left the meeting
+  WAITING = 'WAITING', // In waiting room
+  APPROVED = 'APPROVED', // Approved by host
+  REJECTED = 'REJECTED', // Rejected by host
+  ADMITTED = 'ADMITTED', // Admitted to meeting
+  LEFT = 'LEFT', // Left the meeting
 }
 
 export enum RecordingStatus {
-  RECORDING = 'RECORDING',       // Currently recording
-  PAUSED = 'PAUSED',             // Recording paused
-  STOPPED = 'STOPPED',           // Recording stopped
-  PROCESSING = 'PROCESSING',     // Processing recording
-  FAILED = 'FAILED',             // Recording failed
+  RECORDING = 'RECORDING', // Currently recording
+  PAUSED = 'PAUSED', // Recording paused
+  STOPPED = 'STOPPED', // Recording stopped
+  PROCESSING = 'PROCESSING', // Processing recording
+  FAILED = 'FAILED', // Recording failed
 }
 
 // Register enums with GraphQL
@@ -89,4 +87,3 @@ registerEnumType(RecordingStatus, {
   name: 'RecordingStatus',
   description: 'Recording status for meetings',
 });
-  

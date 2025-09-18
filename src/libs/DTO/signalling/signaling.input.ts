@@ -1,7 +1,6 @@
 import { IsIn, IsOptional, IsString, IsEnum } from 'class-validator';
 import { MediaState } from 'src/libs/enums/enums';
 
-
 export class JoinRoomWsInput {
   @IsString() roomId!: string;
   @IsOptional() @IsString() displayName?: string;
@@ -29,13 +28,16 @@ export class MediaStateChangeInput {
   @IsString() roomId!: string;
 
   // Optional: when host/admin controls someone else
-  @IsOptional() @IsString()
+  @IsOptional()
+  @IsString()
   targetPeerId?: string;
 
   // Either field can be provided; both optional to allow partial patch
-  @IsOptional() @IsEnum(MediaState)
-  mic?: MediaState;        // use MUTED_BY_HOST for forced mute
+  @IsOptional()
+  @IsEnum(MediaState)
+  mic?: MediaState; // use MUTED_BY_HOST for forced mute
 
-  @IsOptional() @IsEnum(MediaState)
-  camera?: MediaState;     // use OFF_BY_ADMIN for forced camera off
+  @IsOptional()
+  @IsEnum(MediaState)
+  camera?: MediaState; // use OFF_BY_ADMIN for forced camera off
 }

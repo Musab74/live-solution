@@ -4,25 +4,25 @@ import { Field, InputType } from '@nestjs/graphql';
 @InputType()
 export class MemberInput {
   @Field()
-  @IsEmail() 
+  @IsEmail()
   email!: string;
-  
+
   @Field()
-  @IsString() 
-  @MinLength(6) 
+  @IsString()
+  @MinLength(6)
   password!: string;
-  
+
   @Field()
-  @IsString() 
+  @IsString()
   displayName!: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   department?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   phone?: string;
 }

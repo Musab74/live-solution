@@ -1,14 +1,19 @@
-import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Vod, VodDocument } from '../../schemas/Vod.model';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { 
-  CreateVodFileInput, 
-  CreateVodUrlInput, 
-  UpdateVodInput, 
-  VodQueryInput 
+import {
+  CreateVodFileInput,
+  CreateVodUrlInput,
+  UpdateVodInput,
+  VodQueryInput,
 } from '../../libs/DTO/vod/vod.input';
 import { VodSourceType, SystemRole } from '../../libs/enums/enums';
 import * as crypto from 'crypto';
@@ -22,7 +27,11 @@ export class VodService {
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
   ) {}
 
-  async getAllVods(queryInput: VodQueryInput, userId: string, userRole: SystemRole): Promise<any> {
+  async getAllVods(
+    queryInput: VodQueryInput,
+    userId: string,
+    userRole: SystemRole,
+  ): Promise<any> {
     const { q, source, meetingId, limit = 20, offset = 0 } = queryInput;
 
     // Build filter
@@ -32,7 +41,7 @@ export class VodService {
     if (q) {
       filter.$or = [
         { title: { $regex: q, $options: 'i' } },
-        { notes: { $regex: q, $options: 'i' } }
+        { notes: { $regex: q, $options: 'i' } },
       ];
     }
 
@@ -46,8 +55,10 @@ export class VodService {
 
     // If user is not admin, only show VODs from their meetings
     if (userRole !== SystemRole.ADMIN) {
-      const userMeetings = await this.meetingModel.find({ hostId: new Types.ObjectId(userId) }).select('_id');
-      const meetingIds = userMeetings.map(meeting => meeting._id);
+      const userMeetings = await this.meetingModel
+        .find({ hostId: new Types.ObjectId(userId) })
+        .select('_id');
+      const meetingIds = userMeetings.map((meeting) => meeting._id);
       filter.meetingId = { $in: meetingIds };
     }
 
@@ -61,13 +72,16 @@ export class VodService {
 
     const total = await this.vodModel.countDocuments(filter);
 
-    const vodsWithMeeting = vods.map(vod => {
-      const meetingData = vod.meetingId && typeof vod.meetingId === 'object' ? {
-        _id: (vod.meetingId as any)._id,
-        title: (vod.meetingId as any).title,
-        status: (vod.meetingId as any).status,
-        inviteCode: (vod.meetingId as any).inviteCode,
-      } : null;
+    const vodsWithMeeting = vods.map((vod) => {
+      const meetingData =
+        vod.meetingId && typeof vod.meetingId === 'object'
+          ? {
+              _id: (vod.meetingId as any)._id,
+              title: (vod.meetingId as any).title,
+              status: (vod.meetingId as any).status,
+              inviteCode: (vod.meetingId as any).inviteCode,
+            }
+          : null;
 
       return {
         ...vod,
@@ -84,7 +98,11 @@ export class VodService {
     };
   }
 
-  async getVodById(vodId: string, userId: string, userRole: SystemRole): Promise<any> {
+  async getVodById(
+    vodId: string,
+    userId: string,
+    userRole: SystemRole,
+  ): Promise<any> {
     const vod = await this.vodModel
       .findById(vodId)
       .populate('meetingId', 'title status inviteCode hostId')
@@ -99,19 +117,26 @@ export class VodService {
       if (vod.meetingId && typeof vod.meetingId === 'object') {
         const meeting = vod.meetingId as any;
         if (meeting.hostId.toString() !== userId) {
-          throw new ForbiddenException('You can only view VODs from your meetings');
+          throw new ForbiddenException(
+            'You can only view VODs from your meetings',
+          );
         }
       } else {
-        throw new ForbiddenException('You can only view VODs from your meetings');
+        throw new ForbiddenException(
+          'You can only view VODs from your meetings',
+        );
       }
     }
 
-    const meetingData = vod.meetingId && typeof vod.meetingId === 'object' ? {
-      _id: (vod.meetingId as any)._id,
-      title: (vod.meetingId as any).title,
-      status: (vod.meetingId as any).status,
-      inviteCode: (vod.meetingId as any).inviteCode,
-    } : null;
+    const meetingData =
+      vod.meetingId && typeof vod.meetingId === 'object'
+        ? {
+            _id: (vod.meetingId as any)._id,
+            title: (vod.meetingId as any).title,
+            status: (vod.meetingId as any).status,
+            inviteCode: (vod.meetingId as any).inviteCode,
+          }
+        : null;
 
     return {
       ...vod,
@@ -119,7 +144,12 @@ export class VodService {
     };
   }
 
-  async createVodFromFile(createInput: CreateVodFileInput, file: any, userId: string, userRole: SystemRole) {
+  async createVodFromFile(
+    createInput: CreateVodFileInput,
+    file: any,
+    userId: string,
+    userRole: SystemRole,
+  ) {
     const { title, notes, meetingId, durationSec } = createInput;
 
     // Validate meeting access if meetingId is provided
@@ -129,7 +159,10 @@ export class VodService {
         throw new NotFoundException('Meeting not found');
       }
 
-      if (userRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+      if (
+        userRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
         throw new ForbiddenException('You can only add VODs to your meetings');
       }
     }
@@ -160,7 +193,11 @@ export class VodService {
     };
   }
 
-  async createVodFromUrl(createInput: CreateVodUrlInput, userId: string, userRole: SystemRole) {
+  async createVodFromUrl(
+    createInput: CreateVodUrlInput,
+    userId: string,
+    userRole: SystemRole,
+  ) {
     const { title, url, notes, meetingId, durationSec } = createInput;
 
     // Validate meeting access if meetingId is provided
@@ -170,7 +207,10 @@ export class VodService {
         throw new NotFoundException('Meeting not found');
       }
 
-      if (userRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+      if (
+        userRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
         throw new ForbiddenException('You can only add VODs to your meetings');
       }
     }
@@ -195,7 +235,11 @@ export class VodService {
     };
   }
 
-  async updateVod(updateInput: UpdateVodInput, userId: string, userRole: SystemRole) {
+  async updateVod(
+    updateInput: UpdateVodInput,
+    userId: string,
+    userRole: SystemRole,
+  ) {
     const { vodId, title, notes, durationSec } = updateInput;
 
     // Find the VOD
@@ -209,10 +253,14 @@ export class VodService {
       if (vod.meetingId) {
         const meeting = await this.meetingModel.findById(vod.meetingId);
         if (!meeting || meeting.hostId.toString() !== userId) {
-          throw new ForbiddenException('You can only update VODs from your meetings');
+          throw new ForbiddenException(
+            'You can only update VODs from your meetings',
+          );
         }
       } else {
-        throw new ForbiddenException('You can only update VODs from your meetings');
+        throw new ForbiddenException(
+          'You can only update VODs from your meetings',
+        );
       }
     }
 
@@ -247,12 +295,14 @@ export class VodService {
   }
 
   async getVodStats(userId: string, userRole: SystemRole) {
-    let filter: any = {};
+    const filter: any = {};
 
     // If user is not admin, only show stats for their meetings
     if (userRole !== SystemRole.ADMIN) {
-      const userMeetings = await this.meetingModel.find({ hostId: new Types.ObjectId(userId) }).select('_id');
-      const meetingIds = userMeetings.map(meeting => meeting._id);
+      const userMeetings = await this.meetingModel
+        .find({ hostId: new Types.ObjectId(userId) })
+        .select('_id');
+      const meetingIds = userMeetings.map((meeting) => meeting._id);
       filter.meetingId = { $in: meetingIds };
     }
 
@@ -261,27 +311,37 @@ export class VodService {
       fileVods,
       urlVods,
       totalSizeResult,
-      averageDurationResult
+      averageDurationResult,
     ] = await Promise.all([
       this.vodModel.countDocuments(filter),
       this.vodModel.countDocuments({ ...filter, source: VodSourceType.FILE }),
       this.vodModel.countDocuments({ ...filter, source: VodSourceType.URL }),
       this.vodModel.aggregate([
-        { $match: { ...filter, source: VodSourceType.FILE, sizeBytes: { $exists: true } } },
-        { $group: { _id: null, totalSize: { $sum: '$sizeBytes' } } }
+        {
+          $match: {
+            ...filter,
+            source: VodSourceType.FILE,
+            sizeBytes: { $exists: true },
+          },
+        },
+        { $group: { _id: null, totalSize: { $sum: '$sizeBytes' } } },
       ]),
       this.vodModel.aggregate([
         { $match: { ...filter, durationSec: { $exists: true } } },
-        { $group: { _id: null, avgDuration: { $avg: '$durationSec' } } }
-      ])
+        { $group: { _id: null, avgDuration: { $avg: '$durationSec' } } },
+      ]),
     ]);
 
     return {
       totalVods,
       fileVods,
       urlVods,
-      totalSizeBytes: totalSizeResult.length > 0 ? totalSizeResult[0].totalSize : 0,
-      averageDuration: averageDurationResult.length > 0 ? Math.round(averageDurationResult[0].avgDuration) : 0,
+      totalSizeBytes:
+        totalSizeResult.length > 0 ? totalSizeResult[0].totalSize : 0,
+      averageDuration:
+        averageDurationResult.length > 0
+          ? Math.round(averageDurationResult[0].avgDuration)
+          : 0,
     };
   }
 }

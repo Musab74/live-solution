@@ -20,4 +20,10 @@ export class Invite {
 
 export type InviteDocument = HydratedDocument<Invite>;
 export const InviteSchema = SchemaFactory.createForClass(Invite);
-InviteSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0, partialFilterExpression: { expiresAt: { $exists: true } } });
+InviteSchema.index(
+  { expiresAt: 1 },
+  {
+    expireAfterSeconds: 0,
+    partialFilterExpression: { expiresAt: { $exists: true } },
+  },
+);

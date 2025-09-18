@@ -20,7 +20,7 @@ export class AdminUpdateScheduledMeetingInput {
   // reuse fields from your normal UpdateMeetingInput,
   // but keep all optional so admin can patch any subset
   @IsOptional() title?: string;
-  @IsOptional() startAt?: string;        // ISO
+  @IsOptional() startAt?: string; // ISO
   @IsOptional() durationMin?: number;
   @IsOptional() passcode?: string;
   @IsOptional() notes?: string;

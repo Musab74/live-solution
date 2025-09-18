@@ -24,9 +24,9 @@ export class HealthService {
 
     // Overall status is unhealthy if any service is down
     const allHealthy = Object.values(health.services).every(
-      service => typeof service === 'object' && service.status === 'healthy'
+      (service) => typeof service === 'object' && service.status === 'healthy',
     );
-    
+
     if (!allHealthy) {
       health.status = 'unhealthy';
     }
@@ -54,7 +54,7 @@ export class HealthService {
     try {
       const livekitUrl = this.configService.get('LIVEKIT_URL');
       const livekitApiKey = this.configService.get('LIVEKIT_API_KEY');
-      
+
       if (!livekitUrl || !livekitApiKey) {
         return {
           status: 'unhealthy',

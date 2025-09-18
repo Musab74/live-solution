@@ -304,3 +304,4 @@ await updateMeeting('68cb734d0d96a87a2d5f5803', {
 - The API automatically updates the meeting status based on scheduling
 - Changes are logged for audit purposes
 - Only the meeting host or admin can update the meeting
+

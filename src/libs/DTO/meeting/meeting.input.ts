@@ -1,4 +1,12 @@
-import { IsOptional, IsString, IsBoolean, IsDateString, IsInt, Min, MaxLength } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsBoolean,
+  IsDateString,
+  IsInt,
+  Min,
+  MaxLength,
+} from 'class-validator';
 import { Field, InputType } from '@nestjs/graphql';
 
 @InputType()

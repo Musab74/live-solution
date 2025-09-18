@@ -18,20 +18,26 @@ export class LivekitService {
   constructor(config: ConfigService) {
     this.apiKey = config.get<string>('LIVEKIT_API_KEY')!;
     this.apiSecret = config.get<string>('LIVEKIT_API_SECRET')!;
-    const base = config.get<string>('LIVEKIT_URL')!;      // https://...
+    const base = config.get<string>('LIVEKIT_URL')!; // https://...
     this.httpUrl = base.replace(/\/$/, '');
-    this.wsUrl   = this.httpUrl.replace('http', 'ws');    // wss://...
-    this.rooms = new RoomServiceClient(this.httpUrl, this.apiKey, this.apiSecret);
+    this.wsUrl = this.httpUrl.replace('http', 'ws'); // wss://...
+    this.rooms = new RoomServiceClient(
+      this.httpUrl,
+      this.apiKey,
+      this.apiSecret,
+    );
     this.egress = new EgressClient(this.httpUrl, this.apiKey, this.apiSecret);
   }
 
-  getWsUrl() { return this.wsUrl; }
+  getWsUrl() {
+    return this.wsUrl;
+  }
 
   generateAccessToken(opts: {
     room: string;
     identity: string;
     name: string;
-    meetingRole: 'HOST'|'CO_HOST'|'PRESENTER'|'PARTICIPANT'|'VIEWER';
+    meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER';
   }) {
     const at = new AccessToken(this.apiKey, this.apiSecret, {
       identity: opts.identity,
@@ -47,9 +53,9 @@ export class LivekitService {
       canSubscribe: true,
       canPublishData: true,
       canUpdateOwnMetadata: true,
-      roomAdmin: ['HOST','CO_HOST'].includes(opts.meetingRole),
-      roomCreate: ['HOST','CO_HOST'].includes(opts.meetingRole),
-      roomList:   ['HOST','CO_HOST'].includes(opts.meetingRole),
+      roomAdmin: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
+      roomCreate: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
+      roomList: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
     });
 
     return at.toJwt();
@@ -59,10 +65,20 @@ export class LivekitService {
   createRoom(name: string, maxParticipants = 50) {
     return this.rooms.createRoom({ name, maxParticipants, emptyTimeout: 600 });
   }
-  deleteRoom(name: string) { return this.rooms.deleteRoom(name); }
-  getRoom(name: string) { return this.rooms.listRooms().then(rooms => rooms.find(r => r.name === name)); }
-  listParticipants(room: string) { return this.rooms.listParticipants(room); }
-  removeParticipant(room: string, identity: string) { return this.rooms.removeParticipant(room, identity); }
+  deleteRoom(name: string) {
+    return this.rooms.deleteRoom(name);
+  }
+  getRoom(name: string) {
+    return this.rooms
+      .listRooms()
+      .then((rooms) => rooms.find((r) => r.name === name));
+  }
+  listParticipants(room: string) {
+    return this.rooms.listParticipants(room);
+  }
+  removeParticipant(room: string, identity: string) {
+    return this.rooms.removeParticipant(room, identity);
+  }
   muteTrack(room: string, identity: string, trackSid: string, muted: boolean) {
     return this.rooms.mutePublishedTrack(room, identity, trackSid, muted);
   }
@@ -76,12 +92,14 @@ export class LivekitService {
     console.log(`Starting recording for room ${room} to ${filepath}`);
     return `rec_${Date.now()}`;
   }
-  stopRecording(egressId: string) { 
+  stopRecording(egressId: string) {
     console.log(`Stopping recording ${egressId}`);
     return Promise.resolve();
   }
-  getRecording(egressId: string) { 
-    return this.egress.listEgress({ egressId }).then(list => list?.[0]);
+  getRecording(egressId: string) {
+    return this.egress.listEgress({ egressId }).then((list) => list?.[0]);
   }
-  listRecordings(room?: string) { return this.egress.listEgress({ roomName: room }); }
+  listRecordings(room?: string) {
+    return this.egress.listEgress({ roomName: room });
+  }
 }
