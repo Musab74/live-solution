@@ -1,6 +1,7 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { Field, InputType, ID, ObjectType } from '@nestjs/graphql';
-import { Role, MediaState, MediaTrack } from '../../enums/enums';
+import { Role, MediaState, MediaTrack, ParticipantStatus } from '../../enums/enums';
+import { Session } from '../../../schemas/Participant.model';
 
 @InputType()
 export class CreateParticipantInput {
@@ -59,6 +60,11 @@ export class JoinParticipantInput {
   @Field()
   @IsString()
   displayName!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsEnum(Role)
+  role?: Role;
 
   @Field({ nullable: true })
   @IsOptional()
@@ -171,8 +177,17 @@ export class ParticipantResponse {
   @Field()
   cameraState: string;
 
+  @Field()
+  status: string;
+
   @Field({ nullable: true })
   socketId?: string;
+
+  @Field(() => [Session])
+  sessions: Session[];
+
+  @Field()
+  totalDurationSec: number;
 
   @Field()
   createdAt: Date;

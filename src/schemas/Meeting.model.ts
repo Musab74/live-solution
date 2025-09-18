@@ -32,6 +32,9 @@ export class Meeting {
   @Prop() isPrivate?: boolean;
 
   @Field({ nullable: true })
+  @Prop({ default: false }) isLocked?: boolean;
+
+  @Field({ nullable: true })
   @Prop() scheduledFor?: Date;   // for 예약된 회의
   
   @Field({ nullable: true })
@@ -48,6 +51,34 @@ export class Meeting {
   
   @Field({ nullable: true })
   @Prop() notes?: string;
+
+  // Recording fields
+  @Field({ nullable: true })
+  @Prop({ default: false }) isRecording?: boolean;
+
+  @Field({ nullable: true })
+  @Prop() recordingStartedAt?: Date;
+
+  @Field({ nullable: true })
+  @Prop() recordingEndedAt?: Date;
+
+  @Field({ nullable: true })
+  @Prop() recordingPausedAt?: Date;
+
+  @Field({ nullable: true })
+  @Prop() recordingResumedAt?: Date;
+
+  @Field({ nullable: true })
+  @Prop() recordingId?: string;
+
+  @Field({ nullable: true })
+  @Prop() recordingUrl?: string;
+
+  @Field({ nullable: true })
+  @Prop() recordingDuration?: number; // in seconds
+
+  @Field({ nullable: true })
+  @Prop() recordingStatus?: string; // 'recording', 'paused', 'stopped', 'processing'
 
   // denormalized count for fast lists (optional)
   @Field()

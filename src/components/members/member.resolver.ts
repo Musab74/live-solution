@@ -246,6 +246,58 @@ export class MemberResolver {
     }
   }
 
+  @Mutation(() => MessageResponse, { name: 'deleteUser' })
+  @UseGuards(AuthGuard)
+  async deleteUser(
+    @Args('userId', { type: () => ID }) userId: string,
+    @AuthMember() admin: Member,
+  ) {
+    this.logger.log(`[DELETE_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}`);
+    try {
+      const result = await this.memberService.deleteUser(userId, admin._id);
+      this.logger.log(`[DELETE_USER] Success - User ID: ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[DELETE_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => ImageUploadResponse, { name: 'blockUser' })
+  @UseGuards(AuthGuard)
+  async blockUser(
+    @Args('userId', { type: () => ID }) userId: string,
+    @AuthMember() admin: Member,
+    @Args('reason', { nullable: true }) reason?: string,
+  ) {
+    this.logger.log(`[BLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}, Reason: ${reason || 'No reason provided'}`);
+    try {
+      const result = await this.memberService.blockUser(userId, admin._id, reason);
+      this.logger.log(`[BLOCK_USER] Success - User ID: ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[BLOCK_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => ImageUploadResponse, { name: 'unblockUser' })
+  @UseGuards(AuthGuard)
+  async unblockUser(
+    @Args('userId', { type: () => ID }) userId: string,
+    @AuthMember() admin: Member,
+  ) {
+    this.logger.log(`[UNBLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}`);
+    try {
+      const result = await this.memberService.unblockUser(userId, admin._id);
+      this.logger.log(`[UNBLOCK_USER] Success - User ID: ${userId}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[UNBLOCK_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
   @Mutation(() => AuthResponse, { name: 'createFirstAdmin' })
   async createFirstAdmin(@Args('input') adminInput: MemberInput) {
     this.logger.log(`[CREATE_FIRST_ADMIN] Attempt - Email: ${adminInput.email}`);

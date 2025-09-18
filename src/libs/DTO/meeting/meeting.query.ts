@@ -46,6 +46,9 @@ export class MeetingWithHost {
   isPrivate?: boolean;
 
   @Field({ nullable: true })
+  isLocked?: boolean;
+
+  @Field({ nullable: true })
   scheduledFor?: Date;
 
   @Field({ nullable: true })
