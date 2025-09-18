@@ -238,4 +238,46 @@ export class MeetingResolver {
       throw error;
     }
   }
+
+  @Mutation(() => MeetingResponse, { name: 'lockRoom' })
+  @UseGuards(AuthGuard)
+  async lockRoom(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(`[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.meetingService.lockRoom(meetingId, user._id);
+      this.logger.log(`[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`);
+      return {
+        success: true,
+        message: result.message,
+        meetingId: result._id,
+      };
+    } catch (error) {
+      this.logger.error(`[LOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  @Mutation(() => MeetingResponse, { name: 'unlockRoom' })
+  @UseGuards(AuthGuard)
+  async unlockRoom(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(`[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.meetingService.unlockRoom(meetingId, user._id);
+      this.logger.log(`[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`);
+      return {
+        success: true,
+        message: result.message,
+        meetingId: result._id,
+      };
+    } catch (error) {
+      this.logger.error(`[UNLOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
+  }
 }

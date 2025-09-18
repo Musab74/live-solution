@@ -68,6 +68,7 @@ export class MeetingService {
         inviteCode: savedMeeting.inviteCode,
         status: savedMeeting.status,
         isPrivate: savedMeeting.isPrivate,
+        isLocked: savedMeeting.isLocked || false,
         scheduledFor: savedMeeting.scheduledFor,
         durationMin: savedMeeting.durationMin,
         duration: savedMeeting.durationMin,
@@ -139,6 +140,7 @@ export class MeetingService {
         
         return {
           ...meetingObj,
+          isLocked: meetingObj.isLocked || false,
           host: hostData,
         };
       });
@@ -164,6 +166,11 @@ export class MeetingService {
     this.logger.log(`[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel
         .findById(meetingId)
         .populate('hostId', 'email displayName systemRole avatarUrl')
@@ -210,6 +217,11 @@ export class MeetingService {
         throw new BadRequestException('This meeting has ended');
       }
 
+      // Check if room is locked
+      if (meeting.isLocked) {
+        throw new ForbiddenException('This room is currently locked. No new participants can join.');
+      }
+
       // Check passcode if meeting is private
       if (meeting.isPrivate && meeting.passcodeHash) {
         // Note: In a real app, you'd verify the passcode hash
@@ -251,6 +263,11 @@ export class MeetingService {
     this.logger.log(`[UPDATE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel.findById(meetingId);
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
@@ -262,17 +279,78 @@ export class MeetingService {
         throw new ForbiddenException('You can only update your own meetings');
       }
 
+      // Check if meeting can be updated (not live or ended)
+      if (meeting.status === MeetingStatus.LIVE) {
+        throw new BadRequestException('Cannot update a meeting that is currently live');
+      }
+      if (meeting.status === MeetingStatus.ENDED) {
+        throw new BadRequestException('Cannot update a meeting that has ended');
+      }
+
+      // Track changes for logging
+      const changes: string[] = [];
+
       // Update allowed fields
-      if (updateInput.title) meeting.title = updateInput.title;
-      if (updateInput.notes !== undefined) meeting.notes = updateInput.notes;
-      if (updateInput.isPrivate !== undefined) meeting.isPrivate = updateInput.isPrivate;
-      if (updateInput.scheduledFor) meeting.scheduledFor = new Date(updateInput.scheduledFor);
-      if (updateInput.durationMin) meeting.durationMin = updateInput.durationMin;
+      if (updateInput.title !== undefined) {
+        meeting.title = updateInput.title;
+        changes.push(`title: "${updateInput.title}"`);
+      }
+      
+      if (updateInput.notes !== undefined) {
+        meeting.notes = updateInput.notes;
+        changes.push(`notes: "${updateInput.notes}"`);
+      }
+      
+      if (updateInput.isPrivate !== undefined) {
+        meeting.isPrivate = updateInput.isPrivate;
+        changes.push(`isPrivate: ${updateInput.isPrivate}`);
+      }
+      
+      if (updateInput.scheduledFor !== undefined) {
+        if (updateInput.scheduledFor) {
+          // Parse and validate the new scheduled date
+          const newScheduledDate = new Date(updateInput.scheduledFor);
+          if (isNaN(newScheduledDate.getTime())) {
+            throw new BadRequestException(`Invalid date format: ${updateInput.scheduledFor}. Please use a valid date string.`);
+          }
+          
+          // Check if the new date is in the past
+          if (newScheduledDate < new Date()) {
+            throw new BadRequestException('Cannot schedule a meeting in the past');
+          }
+          
+          meeting.scheduledFor = newScheduledDate;
+          changes.push(`scheduledFor: ${newScheduledDate.toISOString()}`);
+        } else {
+          // If scheduledFor is explicitly set to null/empty, remove the scheduled time
+          meeting.scheduledFor = undefined;
+          changes.push('scheduledFor: removed');
+        }
+      }
+      
+      if (updateInput.duration !== undefined) {
+        meeting.durationMin = updateInput.duration;
+        changes.push(`duration: ${updateInput.duration} minutes`);
+      }
+      
+      if (updateInput.maxParticipants !== undefined) {
+        meeting.maxParticipants = updateInput.maxParticipants;
+        changes.push(`maxParticipants: ${updateInput.maxParticipants}`);
+      }
+
+      // Update meeting status based on scheduledFor
+      if (updateInput.scheduledFor !== undefined) {
+        if (updateInput.scheduledFor) {
+          meeting.status = MeetingStatus.SCHEDULED;
+        } else {
+          meeting.status = MeetingStatus.CREATED;
+        }
+      }
 
       await meeting.save();
       await meeting.populate('hostId', 'email displayName systemRole avatarUrl');
 
-      this.logger.log(`[UPDATE_MEETING] Success - Meeting ID: ${meetingId}`);
+      this.logger.log(`[UPDATE_MEETING] Success - Meeting ID: ${meetingId}, Changes: [${changes.join(', ')}]`);
       
       return {
         _id: meeting._id,
@@ -281,6 +359,8 @@ export class MeetingService {
         isPrivate: meeting.isPrivate,
         scheduledFor: meeting.scheduledFor,
         durationMin: meeting.durationMin,
+        duration: meeting.durationMin,
+        maxParticipants: meeting.maxParticipants || 100,
         status: meeting.status,
         inviteCode: meeting.inviteCode,
         participantCount: meeting.participantCount,
@@ -298,6 +378,11 @@ export class MeetingService {
     this.logger.log(`[START_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel.findById(meetingId);
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
@@ -333,6 +418,11 @@ export class MeetingService {
     this.logger.log(`[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel.findById(meetingId);
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
@@ -376,6 +466,11 @@ export class MeetingService {
     this.logger.log(`[DELETE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel.findById(meetingId);
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
@@ -406,6 +501,11 @@ export class MeetingService {
     this.logger.log(`[ROTATE_INVITE_CODE] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
     
     try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
       const meeting = await this.meetingModel.findById(meetingId);
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
@@ -472,6 +572,92 @@ export class MeetingService {
       return result;
     } catch (error) {
       this.logger.error(`[GET_MEETING_STATS] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // LOCK ROOM
+  async lockRoom(meetingId: string, userId: string) {
+    this.logger.log(`[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
+    
+    try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
+      const meeting = await this.meetingModel.findById(meetingId);
+      if (!meeting) {
+        throw new NotFoundException('Meeting not found');
+      }
+
+      // Check permissions
+      const user = await this.memberModel.findById(userId);
+      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+        throw new ForbiddenException('Only the meeting host can lock the room');
+      }
+
+      // Check if meeting is active
+      if (meeting.status === MeetingStatus.ENDED) {
+        throw new BadRequestException('Cannot lock a meeting that has ended');
+      }
+
+      // Lock the room
+      meeting.isLocked = true;
+      await meeting.save();
+
+      this.logger.log(`[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`);
+      
+      return {
+        _id: meeting._id,
+        isLocked: meeting.isLocked,
+        message: 'Room locked successfully. No new participants can join.',
+      };
+    } catch (error) {
+      this.logger.error(`[LOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // UNLOCK ROOM
+  async unlockRoom(meetingId: string, userId: string) {
+    this.logger.log(`[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
+    
+    try {
+      // Validate ObjectId format
+      if (!Types.ObjectId.isValid(meetingId)) {
+        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+      }
+
+      const meeting = await this.meetingModel.findById(meetingId);
+      if (!meeting) {
+        throw new NotFoundException('Meeting not found');
+      }
+
+      // Check permissions
+      const user = await this.memberModel.findById(userId);
+      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+        throw new ForbiddenException('Only the meeting host can unlock the room');
+      }
+
+      // Check if meeting is active
+      if (meeting.status === MeetingStatus.ENDED) {
+        throw new BadRequestException('Cannot unlock a meeting that has ended');
+      }
+
+      // Unlock the room
+      meeting.isLocked = false;
+      await meeting.save();
+
+      this.logger.log(`[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`);
+      
+      return {
+        _id: meeting._id,
+        isLocked: meeting.isLocked,
+        message: 'Room unlocked successfully. New participants can now join.',
+      };
+    } catch (error) {
+      this.logger.error(`[UNLOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
       throw error;
     }
   }

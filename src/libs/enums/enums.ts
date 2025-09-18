@@ -49,6 +49,14 @@ export enum ParticipantStatus {
   LEFT = 'LEFT',                 // Left the meeting
 }
 
+export enum RecordingStatus {
+  RECORDING = 'RECORDING',       // Currently recording
+  PAUSED = 'PAUSED',             // Recording paused
+  STOPPED = 'STOPPED',           // Recording stopped
+  PROCESSING = 'PROCESSING',     // Processing recording
+  FAILED = 'FAILED',             // Recording failed
+}
+
 // Register enums with GraphQL
 import { registerEnumType } from '@nestjs/graphql';
 
@@ -75,5 +83,10 @@ registerEnumType(SystemRole, {
 registerEnumType(ParticipantStatus, {
   name: 'ParticipantStatus',
   description: 'Participant status in waiting room',
+});
+
+registerEnumType(RecordingStatus, {
+  name: 'RecordingStatus',
+  description: 'Recording status for meetings',
 });
   

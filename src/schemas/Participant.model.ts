@@ -4,7 +4,7 @@ import { MediaState, Role, ParticipantStatus } from 'src/libs/enums/enums';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 
 @ObjectType()
-class Session {
+export class Session {
   @Field()
   @Prop({ required: true }) joinedAt!: Date;
   

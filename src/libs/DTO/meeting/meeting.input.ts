@@ -39,10 +39,6 @@ export class CreateMeetingInput {
 
 @InputType()
 export class UpdateMeetingInput {
-  @Field()
-  @IsString()
-  meetingId!: string;
-
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
@@ -69,7 +65,13 @@ export class UpdateMeetingInput {
   @IsOptional()
   @IsInt()
   @Min(1)
-  durationMin?: number;
+  duration?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxParticipants?: number;
 }
 
 @InputType()

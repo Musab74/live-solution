@@ -51,6 +51,30 @@ export class Member {
   @Prop() 
   @Field({ nullable: true })
   lastSeenAt?: Date;
+
+  @Prop({ default: false })
+  @Field()
+  isBlocked!: boolean;
+
+  @Prop()
+  @Field({ nullable: true })
+  blockedAt?: Date;
+
+  @Prop()
+  @Field({ nullable: true })
+  blockedBy?: string;
+
+  @Prop()
+  @Field({ nullable: true })
+  blockReason?: string;
+
+  @Prop()
+  @Field({ nullable: true })
+  unblockedAt?: Date;
+
+  @Prop()
+  @Field({ nullable: true })
+  unblockedBy?: string;
 }
 
 export type MemberDocument = HydratedDocument<Member>;

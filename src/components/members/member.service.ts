@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, UnauthorizedException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, ConflictException, UnauthorizedException, NotFoundException, ForbiddenException, BadRequestException, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Member, MemberDocument } from '../../schemas/Member.model';
@@ -412,6 +412,151 @@ export class MemberService {
       };
     } catch (error) {
       this.logger.error(`[PROMOTE_USER_ROLE] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // ADMIN: DELETE USER
+  async deleteUser(userId: string, adminId: string) {
+    this.logger.log(`[DELETE_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}`);
+    
+    try {
+      // Verify admin has permission
+      const admin = await this.memberModel.findById(adminId);
+      if (!admin || admin.systemRole !== SystemRole.ADMIN) {
+        throw new ForbiddenException('Only admins can delete users');
+      }
+
+      // Find user to delete
+      const user = await this.memberModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Prevent admin from deleting themselves
+      if (userId === adminId) {
+        throw new ForbiddenException('Admins cannot delete themselves');
+      }
+
+      // Prevent deleting other admins
+      if (user.systemRole === SystemRole.ADMIN) {
+        throw new ForbiddenException('Cannot delete other admin users');
+      }
+
+      // Delete user
+      await this.memberModel.findByIdAndDelete(userId);
+
+      this.logger.log(`[DELETE_USER] Success - User ID: ${userId}, Email: ${user.email}`);
+      return { 
+        success: true, 
+        message: `User ${user.email} deleted successfully`
+      };
+    } catch (error) {
+      this.logger.error(`[DELETE_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // ADMIN: BLOCK USER
+  async blockUser(userId: string, adminId: string, reason?: string) {
+    this.logger.log(`[BLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}, Reason: ${reason || 'No reason provided'}`);
+    
+    try {
+      // Verify admin has permission
+      const admin = await this.memberModel.findById(adminId);
+      if (!admin || admin.systemRole !== SystemRole.ADMIN) {
+        throw new ForbiddenException('Only admins can block users');
+      }
+
+      // Find user to block
+      const user = await this.memberModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Prevent admin from blocking themselves
+      if (userId === adminId) {
+        throw new ForbiddenException('Admins cannot block themselves');
+      }
+
+      // Prevent blocking other admins
+      if (user.systemRole === SystemRole.ADMIN) {
+        throw new ForbiddenException('Cannot block other admin users');
+      }
+
+      // Block user
+      user.isBlocked = true;
+      user.blockedAt = new Date();
+      user.blockedBy = adminId;
+      user.blockReason = reason || 'No reason provided';
+      await user.save();
+
+      this.logger.log(`[BLOCK_USER] Success - User ID: ${userId}, Email: ${user.email}`);
+      return { 
+        success: true, 
+        message: `User ${user.email} blocked successfully`,
+        user: {
+          _id: user._id,
+          email: user.email,
+          displayName: user.displayName,
+          systemRole: user.systemRole,
+          isBlocked: user.isBlocked,
+          blockedAt: user.blockedAt,
+          blockReason: user.blockReason
+        }
+      };
+    } catch (error) {
+      this.logger.error(`[BLOCK_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // ADMIN: UNBLOCK USER
+  async unblockUser(userId: string, adminId: string) {
+    this.logger.log(`[UNBLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}`);
+    
+    try {
+      // Verify admin has permission
+      const admin = await this.memberModel.findById(adminId);
+      if (!admin || admin.systemRole !== SystemRole.ADMIN) {
+        throw new ForbiddenException('Only admins can unblock users');
+      }
+
+      // Find user to unblock
+      const user = await this.memberModel.findById(userId);
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Check if user is actually blocked
+      if (!user.isBlocked) {
+        throw new BadRequestException('User is not currently blocked');
+      }
+
+      // Unblock user
+      user.isBlocked = false;
+      user.unblockedAt = new Date();
+      user.unblockedBy = adminId;
+      user.blockedAt = undefined;
+      user.blockedBy = undefined;
+      user.blockReason = undefined;
+      await user.save();
+
+      this.logger.log(`[UNBLOCK_USER] Success - User ID: ${userId}, Email: ${user.email}`);
+      return { 
+        success: true, 
+        message: `User ${user.email} unblocked successfully`,
+        user: {
+          _id: user._id,
+          email: user.email,
+          displayName: user.displayName,
+          systemRole: user.systemRole,
+          isBlocked: user.isBlocked,
+          unblockedAt: user.unblockedAt
+        }
+      };
+    } catch (error) {
+      this.logger.error(`[UNBLOCK_USER] Failed - User ID: ${userId}, Error: ${error.message}`);
       throw error;
     }
   }
