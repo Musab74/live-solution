@@ -431,3 +431,4 @@ export class SignalingGateway {
 - The `isLocked` field is included in all meeting queries
 - Room locking works with both private and public meetings
 - Lock status is visible to all users who can view the meeting
+

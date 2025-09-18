@@ -1,9 +1,20 @@
-import { Injectable, NotFoundException, ForbiddenException, ConflictException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  ConflictException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { CreateMeetingInput, UpdateMeetingInput, JoinMeetingInput, MeetingQueryInput } from '../../libs/DTO/meeting/meeting.input';
+import {
+  CreateMeetingInput,
+  UpdateMeetingInput,
+  JoinMeetingInput,
+  MeetingQueryInput,
+} from '../../libs/DTO/meeting/meeting.input';
 import { SystemRole, MeetingStatus } from '../../libs/enums/enums';
 import { Logger } from '@nestjs/common';
 
@@ -18,10 +29,19 @@ export class MeetingService {
 
   // CREATE MEETING
   async createMeeting(createInput: CreateMeetingInput, userId: string) {
-    this.logger.log(`[CREATE_MEETING] Attempt - User ID: ${userId}, Title: ${createInput.title}`);
-    
+    this.logger.log(
+      `[CREATE_MEETING] Attempt - User ID: ${userId}, Title: ${createInput.title}`,
+    );
+
     try {
-      const { title, notes, isPrivate, scheduledFor, duration, maxParticipants } = createInput;
+      const {
+        title,
+        notes,
+        isPrivate,
+        scheduledFor,
+        duration,
+        maxParticipants,
+      } = createInput;
 
       // Validate and parse scheduledFor date
       let parsedScheduledFor: Date | undefined;
@@ -29,13 +49,17 @@ export class MeetingService {
         try {
           const date = new Date(scheduledFor);
           if (isNaN(date.getTime())) {
-            this.logger.warn(`[CREATE_MEETING] Invalid date format: ${scheduledFor}, ignoring`);
+            this.logger.warn(
+              `[CREATE_MEETING] Invalid date format: ${scheduledFor}, ignoring`,
+            );
             parsedScheduledFor = undefined;
           } else {
             parsedScheduledFor = date;
           }
         } catch (error) {
-          this.logger.warn(`[CREATE_MEETING] Date parsing error: ${error.message}, ignoring scheduledFor`);
+          this.logger.warn(
+            `[CREATE_MEETING] Date parsing error: ${error.message}, ignoring scheduledFor`,
+          );
           parsedScheduledFor = undefined;
         }
       }
@@ -53,15 +77,19 @@ export class MeetingService {
         maxParticipants: maxParticipants ?? 100,
         hostId: new Types.ObjectId(userId),
         inviteCode,
-        status: parsedScheduledFor ? MeetingStatus.SCHEDULED : MeetingStatus.CREATED,
+        status: parsedScheduledFor
+          ? MeetingStatus.SCHEDULED
+          : MeetingStatus.CREATED,
         participantCount: 0,
       });
 
       const savedMeeting = await newMeeting.save();
       await savedMeeting.populate('hostId', 'email displayName systemRole');
 
-      this.logger.log(`[CREATE_MEETING] Success - Meeting ID: ${savedMeeting._id}, Invite Code: ${inviteCode}`);
-      
+      this.logger.log(
+        `[CREATE_MEETING] Success - Meeting ID: ${savedMeeting._id}, Invite Code: ${inviteCode}`,
+      );
+
       return {
         _id: savedMeeting._id,
         title: savedMeeting.title,
@@ -78,32 +106,38 @@ export class MeetingService {
         createdAt: savedMeeting.createdAt,
       };
     } catch (error) {
-      this.logger.error(`[CREATE_MEETING] Failed - User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[CREATE_MEETING] Failed - User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // GET MEETINGS
   async getMeetings(queryInput: MeetingQueryInput, userId: string) {
-    this.logger.log(`[GET_MEETINGS] Attempt - User ID: ${userId}, Page: ${queryInput.page}, Limit: ${queryInput.limit}`);
-    
+    this.logger.log(
+      `[GET_MEETINGS] Attempt - User ID: ${userId}, Page: ${queryInput.page}, Limit: ${queryInput.limit}`,
+    );
+
     try {
       const { page = 1, limit = 10, status, search, hostId } = queryInput;
       const skip = (page - 1) * limit;
 
       // Build filter
       const filter: any = {};
-      
+
       if (status) {
         filter.status = status;
       }
-      
+
       if (hostId) {
         filter.hostId = new Types.ObjectId(hostId);
       } else {
         // All users (MEMBER, TUTOR, ADMIN) can see all meetings
         // No additional filtering needed - show all meetings
-        this.logger.log(`[GET_MEETINGS] Showing all meetings for user role: ${userId}`);
+        this.logger.log(
+          `[GET_MEETINGS] Showing all meetings for user role: ${userId}`,
+        );
       }
 
       if (search) {
@@ -125,19 +159,27 @@ export class MeetingService {
       const total = await this.meetingModel.countDocuments(filter);
 
       // Map meetings to ensure proper host data structure
-      const mappedMeetings = meetings.map(meeting => {
+      const mappedMeetings = meetings.map((meeting) => {
         const meetingObj = meeting.toObject();
-        this.logger.debug(`[GET_MEETINGS] Meeting ${meetingObj._id} hostId:`, meetingObj.hostId);
-        
+        this.logger.debug(
+          `[GET_MEETINGS] Meeting ${meetingObj._id} hostId:`,
+          meetingObj.hostId,
+        );
+
         // Check if hostId is populated (has email property) or just an ObjectId
-        const hostData = meetingObj.hostId && typeof meetingObj.hostId === 'object' && 'email' in meetingObj.hostId ? {
-          _id: meetingObj.hostId._id,
-          email: meetingObj.hostId.email,
-          displayName: (meetingObj.hostId as any).displayName,
-          systemRole: (meetingObj.hostId as any).systemRole,
-          avatarUrl: (meetingObj.hostId as any).avatarUrl,
-        } : null;
-        
+        const hostData =
+          meetingObj.hostId &&
+          typeof meetingObj.hostId === 'object' &&
+          'email' in meetingObj.hostId
+            ? {
+                _id: meetingObj.hostId._id,
+                email: meetingObj.hostId.email,
+                displayName: (meetingObj.hostId as any).displayName,
+                systemRole: (meetingObj.hostId as any).systemRole,
+                avatarUrl: (meetingObj.hostId as any).avatarUrl,
+              }
+            : null;
+
         return {
           ...meetingObj,
           isLocked: meetingObj.isLocked || false,
@@ -145,8 +187,10 @@ export class MeetingService {
         };
       });
 
-      this.logger.log(`[GET_MEETINGS] Success - Found ${meetings.length} meetings, Total: ${total}`);
-      
+      this.logger.log(
+        `[GET_MEETINGS] Success - Found ${meetings.length} meetings, Total: ${total}`,
+      );
+
       return {
         meetings: mappedMeetings,
         total,
@@ -156,19 +200,25 @@ export class MeetingService {
         hasMore: skip + meetings.length < total,
       };
     } catch (error) {
-      this.logger.error(`[GET_MEETINGS] Failed - User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_MEETINGS] Failed - User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // GET MEETING BY ID
   async getMeetingById(meetingId: string, userId: string) {
-    this.logger.log(`[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel
@@ -182,23 +232,30 @@ export class MeetingService {
 
       // Check access permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId._id.toString() !== userId) {
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId._id.toString() !== userId
+      ) {
         throw new ForbiddenException('You can only view your own meetings');
       }
 
       this.logger.log(`[GET_MEETING_BY_ID] Success - Meeting ID: ${meetingId}`);
-      
+
       return meeting;
     } catch (error) {
-      this.logger.error(`[GET_MEETING_BY_ID] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_MEETING_BY_ID] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // JOIN MEETING BY CODE
   async joinMeetingByCode(joinInput: JoinMeetingInput, userId: string) {
-    this.logger.log(`[JOIN_MEETING_BY_CODE] Attempt - Invite Code: ${joinInput.inviteCode}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[JOIN_MEETING_BY_CODE] Attempt - Invite Code: ${joinInput.inviteCode}, User ID: ${userId}`,
+    );
+
     try {
       const { inviteCode, passcode } = joinInput;
 
@@ -219,13 +276,16 @@ export class MeetingService {
 
       // Check if room is locked
       if (meeting.isLocked) {
-        throw new ForbiddenException('This room is currently locked. No new participants can join.');
+        throw new ForbiddenException(
+          'This room is currently locked. No new participants can join.',
+        );
       }
 
       // Check passcode if meeting is private
       if (meeting.isPrivate && meeting.passcodeHash) {
         // Note: In a real app, you'd verify the passcode hash
-        if (passcode !== 'default_passcode') { // Simplified for now
+        if (passcode !== 'default_passcode') {
+          // Simplified for now
           throw new ForbiddenException('Invalid passcode');
         }
       }
@@ -233,8 +293,10 @@ export class MeetingService {
       // Get user info
       const user = await this.memberModel.findById(userId).lean();
 
-      this.logger.log(`[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${meeting._id}, User: ${user.email}`);
-      
+      this.logger.log(
+        `[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${meeting._id}, User: ${user.email}`,
+      );
+
       return {
         meeting: {
           _id: meeting._id,
@@ -253,19 +315,29 @@ export class MeetingService {
         message: 'Successfully joined meeting',
       };
     } catch (error) {
-      this.logger.error(`[JOIN_MEETING_BY_CODE] Failed - Invite Code: ${joinInput.inviteCode}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[JOIN_MEETING_BY_CODE] Failed - Invite Code: ${joinInput.inviteCode}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // UPDATE MEETING
-  async updateMeeting(meetingId: string, updateInput: UpdateMeetingInput, userId: string) {
-    this.logger.log(`[UPDATE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+  async updateMeeting(
+    meetingId: string,
+    updateInput: UpdateMeetingInput,
+    userId: string,
+  ) {
+    this.logger.log(
+      `[UPDATE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -275,13 +347,18 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
         throw new ForbiddenException('You can only update your own meetings');
       }
 
       // Check if meeting can be updated (not live or ended)
       if (meeting.status === MeetingStatus.LIVE) {
-        throw new BadRequestException('Cannot update a meeting that is currently live');
+        throw new BadRequestException(
+          'Cannot update a meeting that is currently live',
+        );
       }
       if (meeting.status === MeetingStatus.ENDED) {
         throw new BadRequestException('Cannot update a meeting that has ended');
@@ -295,30 +372,34 @@ export class MeetingService {
         meeting.title = updateInput.title;
         changes.push(`title: "${updateInput.title}"`);
       }
-      
+
       if (updateInput.notes !== undefined) {
         meeting.notes = updateInput.notes;
         changes.push(`notes: "${updateInput.notes}"`);
       }
-      
+
       if (updateInput.isPrivate !== undefined) {
         meeting.isPrivate = updateInput.isPrivate;
         changes.push(`isPrivate: ${updateInput.isPrivate}`);
       }
-      
+
       if (updateInput.scheduledFor !== undefined) {
         if (updateInput.scheduledFor) {
           // Parse and validate the new scheduled date
           const newScheduledDate = new Date(updateInput.scheduledFor);
           if (isNaN(newScheduledDate.getTime())) {
-            throw new BadRequestException(`Invalid date format: ${updateInput.scheduledFor}. Please use a valid date string.`);
+            throw new BadRequestException(
+              `Invalid date format: ${updateInput.scheduledFor}. Please use a valid date string.`,
+            );
           }
-          
+
           // Check if the new date is in the past
           if (newScheduledDate < new Date()) {
-            throw new BadRequestException('Cannot schedule a meeting in the past');
+            throw new BadRequestException(
+              'Cannot schedule a meeting in the past',
+            );
           }
-          
+
           meeting.scheduledFor = newScheduledDate;
           changes.push(`scheduledFor: ${newScheduledDate.toISOString()}`);
         } else {
@@ -327,12 +408,12 @@ export class MeetingService {
           changes.push('scheduledFor: removed');
         }
       }
-      
+
       if (updateInput.duration !== undefined) {
         meeting.durationMin = updateInput.duration;
         changes.push(`duration: ${updateInput.duration} minutes`);
       }
-      
+
       if (updateInput.maxParticipants !== undefined) {
         meeting.maxParticipants = updateInput.maxParticipants;
         changes.push(`maxParticipants: ${updateInput.maxParticipants}`);
@@ -348,10 +429,15 @@ export class MeetingService {
       }
 
       await meeting.save();
-      await meeting.populate('hostId', 'email displayName systemRole avatarUrl');
+      await meeting.populate(
+        'hostId',
+        'email displayName systemRole avatarUrl',
+      );
 
-      this.logger.log(`[UPDATE_MEETING] Success - Meeting ID: ${meetingId}, Changes: [${changes.join(', ')}]`);
-      
+      this.logger.log(
+        `[UPDATE_MEETING] Success - Meeting ID: ${meetingId}, Changes: [${changes.join(', ')}]`,
+      );
+
       return {
         _id: meeting._id,
         title: meeting.title,
@@ -368,19 +454,25 @@ export class MeetingService {
         updatedAt: meeting.updatedAt,
       };
     } catch (error) {
-      this.logger.error(`[UPDATE_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[UPDATE_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // START MEETING
   async startMeeting(meetingId: string, userId: string) {
-    this.logger.log(`[START_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[START_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -390,8 +482,13 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can start the meeting');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can start the meeting',
+        );
       }
 
       // Update meeting status
@@ -400,7 +497,7 @@ export class MeetingService {
       await meeting.save();
 
       this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}`);
-      
+
       return {
         _id: meeting._id,
         status: meeting.status,
@@ -408,19 +505,25 @@ export class MeetingService {
         message: 'Meeting started successfully',
       };
     } catch (error) {
-      this.logger.error(`[START_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[START_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // END MEETING
   async endMeeting(meetingId: string, userId: string) {
-    this.logger.log(`[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -430,24 +533,32 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can end the meeting');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can end the meeting',
+        );
       }
 
       // Update meeting status
       meeting.status = MeetingStatus.ENDED;
       meeting.endedAt = new Date();
-      
+
       // Calculate duration if meeting was started
       if (meeting.actualStartAt) {
-        const durationMs = meeting.endedAt.getTime() - meeting.actualStartAt.getTime();
+        const durationMs =
+          meeting.endedAt.getTime() - meeting.actualStartAt.getTime();
         meeting.durationMin = Math.round(durationMs / (1000 * 60));
       }
 
       await meeting.save();
 
-      this.logger.log(`[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${meeting.durationMin} minutes`);
-      
+      this.logger.log(
+        `[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${meeting.durationMin} minutes`,
+      );
+
       return {
         _id: meeting._id,
         status: meeting.status,
@@ -456,19 +567,25 @@ export class MeetingService {
         message: 'Meeting ended successfully',
       };
     } catch (error) {
-      this.logger.error(`[END_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[END_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // DELETE MEETING
   async deleteMeeting(meetingId: string, userId: string) {
-    this.logger.log(`[DELETE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[DELETE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -478,32 +595,41 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
         throw new ForbiddenException('You can only delete your own meetings');
       }
 
       await this.meetingModel.findByIdAndDelete(meetingId);
 
       this.logger.log(`[DELETE_MEETING] Success - Meeting ID: ${meetingId}`);
-      
+
       return {
         success: true,
         message: 'Meeting deleted successfully',
       };
     } catch (error) {
-      this.logger.error(`[DELETE_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[DELETE_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // ROTATE INVITE CODE
   async rotateInviteCode(meetingId: string, userId: string) {
-    this.logger.log(`[ROTATE_INVITE_CODE] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[ROTATE_INVITE_CODE] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -513,8 +639,13 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can rotate the invite code');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can rotate the invite code',
+        );
       }
 
       // Generate new unique invite code
@@ -522,15 +653,19 @@ export class MeetingService {
       meeting.inviteCode = newInviteCode;
       await meeting.save();
 
-      this.logger.log(`[ROTATE_INVITE_CODE] Success - Meeting ID: ${meetingId}, New Code: ${newInviteCode}`);
-      
+      this.logger.log(
+        `[ROTATE_INVITE_CODE] Success - Meeting ID: ${meetingId}, New Code: ${newInviteCode}`,
+      );
+
       return {
         _id: meeting._id,
         inviteCode: newInviteCode,
         message: 'Invite code rotated successfully',
       };
     } catch (error) {
-      this.logger.error(`[ROTATE_INVITE_CODE] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[ROTATE_INVITE_CODE] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -538,10 +673,13 @@ export class MeetingService {
   // GET MEETING STATS
   async getMeetingStats(userId: string) {
     this.logger.log(`[GET_MEETING_STATS] Attempt - User ID: ${userId}`);
-    
+
     try {
       const user = await this.memberModel.findById(userId);
-      const filter = user.systemRole === SystemRole.ADMIN ? {} : { hostId: new Types.ObjectId(userId) };
+      const filter =
+        user.systemRole === SystemRole.ADMIN
+          ? {}
+          : { hostId: new Types.ObjectId(userId) };
 
       const stats = await this.meetingModel.aggregate([
         { $match: filter },
@@ -549,9 +687,19 @@ export class MeetingService {
           $group: {
             _id: null,
             totalMeetings: { $sum: 1 },
-            liveMeetings: { $sum: { $cond: [{ $eq: ['$status', MeetingStatus.LIVE] }, 1, 0] } },
-            scheduledMeetings: { $sum: { $cond: [{ $eq: ['$status', MeetingStatus.SCHEDULED] }, 1, 0] } },
-            endedMeetings: { $sum: { $cond: [{ $eq: ['$status', MeetingStatus.ENDED] }, 1, 0] } },
+            liveMeetings: {
+              $sum: { $cond: [{ $eq: ['$status', MeetingStatus.LIVE] }, 1, 0] },
+            },
+            scheduledMeetings: {
+              $sum: {
+                $cond: [{ $eq: ['$status', MeetingStatus.SCHEDULED] }, 1, 0],
+              },
+            },
+            endedMeetings: {
+              $sum: {
+                $cond: [{ $eq: ['$status', MeetingStatus.ENDED] }, 1, 0],
+              },
+            },
             totalParticipants: { $sum: '$participantCount' },
             averageDuration: { $avg: '$durationMin' },
           },
@@ -567,23 +715,31 @@ export class MeetingService {
         averageDuration: 0,
       };
 
-      this.logger.log(`[GET_MEETING_STATS] Success - Total Meetings: ${result.totalMeetings}`);
-      
+      this.logger.log(
+        `[GET_MEETING_STATS] Success - Total Meetings: ${result.totalMeetings}`,
+      );
+
       return result;
     } catch (error) {
-      this.logger.error(`[GET_MEETING_STATS] Failed - User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_MEETING_STATS] Failed - User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // LOCK ROOM
   async lockRoom(meetingId: string, userId: string) {
-    this.logger.log(`[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -593,7 +749,10 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
         throw new ForbiddenException('Only the meeting host can lock the room');
       }
 
@@ -606,27 +765,35 @@ export class MeetingService {
       meeting.isLocked = true;
       await meeting.save();
 
-      this.logger.log(`[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`);
-      
+      this.logger.log(
+        `[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`,
+      );
+
       return {
         _id: meeting._id,
         isLocked: meeting.isLocked,
         message: 'Room locked successfully. No new participants can join.',
       };
     } catch (error) {
-      this.logger.error(`[LOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[LOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // UNLOCK ROOM
   async unlockRoom(meetingId: string, userId: string) {
-    this.logger.log(`[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
-    
+    this.logger.log(
+      `[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
@@ -636,8 +803,13 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can unlock the room');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can unlock the room',
+        );
       }
 
       // Check if meeting is active
@@ -649,15 +821,19 @@ export class MeetingService {
       meeting.isLocked = false;
       await meeting.save();
 
-      this.logger.log(`[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`);
-      
+      this.logger.log(
+        `[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`,
+      );
+
       return {
         _id: meeting._id,
         isLocked: meeting.isLocked,
         message: 'Room unlocked successfully. New participants can now join.',
       };
     } catch (error) {
-      this.logger.error(`[UNLOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[UNLOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }

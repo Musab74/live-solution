@@ -6,13 +6,16 @@ import { ObjectType, Field, ID } from '@nestjs/graphql';
 @ObjectType()
 export class Session {
   @Field()
-  @Prop({ required: true }) joinedAt!: Date;
-  
+  @Prop({ required: true })
+  joinedAt!: Date;
+
   @Field({ nullable: true })
-  @Prop() leftAt?: Date;
-  
+  @Prop()
+  leftAt?: Date;
+
   @Field()
-  @Prop({ default: 0 }) durationSec!: number;
+  @Prop({ default: 0 })
+  durationSec!: number;
 }
 
 const SessionSchema = SchemaFactory.createForClass(Session);
@@ -36,25 +39,43 @@ export class Participant {
   displayName!: string;
 
   @Field()
-  @Prop({ type: String, enum: Object.values(Role), default: Role.PARTICIPANT, index: true })
+  @Prop({
+    type: String,
+    enum: Object.values(Role),
+    default: Role.PARTICIPANT,
+    index: true,
+  })
   role!: Role;
 
   // Option 1 (chosen): forced states included in enum
   @Field()
-  @Prop({ type: String, enum: Object.values(MediaState), default: MediaState.OFF })
-  micState!: MediaState;      // ON | OFF | MUTED | MUTED_BY_HOST
+  @Prop({
+    type: String,
+    enum: Object.values(MediaState),
+    default: MediaState.OFF,
+  })
+  micState!: MediaState; // ON | OFF | MUTED | MUTED_BY_HOST
 
   @Field()
-  @Prop({ type: String, enum: Object.values(MediaState), default: MediaState.OFF })
-  cameraState!: MediaState;   // ON | OFF | OFF_BY_ADMIN
+  @Prop({
+    type: String,
+    enum: Object.values(MediaState),
+    default: MediaState.OFF,
+  })
+  cameraState!: MediaState; // ON | OFF | OFF_BY_ADMIN
 
   @Field()
-  @Prop({ type: String, enum: Object.values(ParticipantStatus), default: ParticipantStatus.WAITING })
+  @Prop({
+    type: String,
+    enum: Object.values(ParticipantStatus),
+    default: ParticipantStatus.WAITING,
+  })
   status!: ParticipantStatus; // WAITING | APPROVED | REJECTED | ADMITTED | LEFT
 
   // live socket info (optional)
   @Field({ nullable: true })
-  @Prop() socketId?: string;
+  @Prop()
+  socketId?: string;
 
   // attendance: multiple sessions if reconnects
   @Field(() => [Session])
@@ -62,7 +83,8 @@ export class Participant {
   sessions!: Session[];
 
   @Field()
-  @Prop({ default: 0 }) totalDurationSec!: number;
+  @Prop({ default: 0 })
+  totalDurationSec!: number;
 
   @Field()
   createdAt!: Date;

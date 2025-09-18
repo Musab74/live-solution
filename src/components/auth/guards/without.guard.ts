@@ -1,5 +1,5 @@
-import { CanActivate, ExecutionContext, Injectable } from "@nestjs/common";
-import { AuthService } from "../auth.service";
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { AuthService } from '../auth.service';
 
 @Injectable()
 export class WithoutGuard implements CanActivate {
@@ -9,10 +9,17 @@ export class WithoutGuard implements CanActivate {
     const type = ctx.getType<'http' | 'graphql' | 'ws'>();
     const tryAttach = async (reqOrClient: any) => {
       const bearer = reqOrClient?.headers?.authorization;
-      const token = reqOrClient?.handshake?.auth?.token || bearer?.split(' ')[1];
-      if (!token) { reqOrClient.user = null; return; }
-      try { reqOrClient.user = await this.auth.verifyToken(token); }
-      catch { reqOrClient.user = null; }
+      const token =
+        reqOrClient?.handshake?.auth?.token || bearer?.split(' ')[1];
+      if (!token) {
+        reqOrClient.user = null;
+        return;
+      }
+      try {
+        reqOrClient.user = await this.auth.verifyToken(token);
+      } catch {
+        reqOrClient.user = null;
+      }
     };
 
     if (type === 'http') await tryAttach(ctx.switchToHttp().getRequest());

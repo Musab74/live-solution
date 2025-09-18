@@ -1,20 +1,26 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting } from '../../schemas/Meeting.model';
 import { Member } from '../../schemas/Member.model';
 import { SystemRole, RecordingStatus } from '../../libs/enums/enums';
-import { 
-  StartRecordingInput, 
-  StopRecordingInput, 
-  PauseRecordingInput, 
+import {
+  StartMeetingRecordingInput,
+  StopMeetingRecordingInput,
+  PauseMeetingRecordingInput,
   ResumeRecordingInput,
-  GetRecordingInput
+  GetRecordingInput,
 } from '../../libs/DTO/recording/recording.input';
 import {
   MeetingRecordingInfo,
   RecordingResponse,
-  RecordingStats
+  RecordingStats,
 } from '../../libs/DTO/recording/recording.query';
 
 @Injectable()
@@ -27,13 +33,20 @@ export class RecordingService {
   ) {}
 
   // START RECORDING
-  async startRecording(input: StartRecordingInput, userId: string): Promise<RecordingResponse> {
-    this.logger.log(`[START_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`);
-    
+  async startRecording(
+    input: StartMeetingRecordingInput,
+    userId: string,
+  ): Promise<RecordingResponse> {
+    this.logger.log(
+      `[START_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(input.meetingId);
@@ -43,18 +56,27 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can start recording');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can start recording',
+        );
       }
 
       // Check if meeting is active
       if (meeting.status === 'ENDED') {
-        throw new BadRequestException('Cannot start recording for a meeting that has ended');
+        throw new BadRequestException(
+          'Cannot start recording for a meeting that has ended',
+        );
       }
 
       // Check if already recording
       if (meeting.isRecording) {
-        throw new BadRequestException('Recording is already in progress for this meeting');
+        throw new BadRequestException(
+          'Recording is already in progress for this meeting',
+        );
       }
 
       // Generate recording ID
@@ -77,8 +99,10 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(`[START_RECORDING] Success - Meeting ID: ${input.meetingId}, Recording ID: ${recordingId}`);
-      
+      this.logger.log(
+        `[START_RECORDING] Success - Meeting ID: ${input.meetingId}, Recording ID: ${recordingId}`,
+      );
+
       return {
         success: true,
         message: 'Recording started successfully',
@@ -93,22 +117,31 @@ export class RecordingService {
           recordingDuration: 0,
           quality: quality,
           format: format,
-        }
+        },
       };
     } catch (error) {
-      this.logger.error(`[START_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[START_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // STOP RECORDING
-  async stopRecording(input: StopRecordingInput, userId: string): Promise<RecordingResponse> {
-    this.logger.log(`[STOP_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`);
-    
+  async stopRecording(
+    input: StopMeetingRecordingInput,
+    userId: string,
+  ): Promise<RecordingResponse> {
+    this.logger.log(
+      `[STOP_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(input.meetingId);
@@ -118,13 +151,20 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can stop recording');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can stop recording',
+        );
       }
 
       // Check if recording is in progress
       if (!meeting.isRecording) {
-        throw new BadRequestException('No recording is currently in progress for this meeting');
+        throw new BadRequestException(
+          'No recording is currently in progress for this meeting',
+        );
       }
 
       // Stop recording
@@ -135,7 +175,9 @@ export class RecordingService {
 
       // Calculate total recording duration
       if (meeting.recordingStartedAt) {
-        const totalDuration = Math.floor((now.getTime() - meeting.recordingStartedAt.getTime()) / 1000);
+        const totalDuration = Math.floor(
+          (now.getTime() - meeting.recordingStartedAt.getTime()) / 1000,
+        );
         meeting.recordingDuration = totalDuration;
       }
 
@@ -145,8 +187,10 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(`[STOP_RECORDING] Success - Meeting ID: ${input.meetingId}, Duration: ${meeting.recordingDuration}s`);
-      
+      this.logger.log(
+        `[STOP_RECORDING] Success - Meeting ID: ${input.meetingId}, Duration: ${meeting.recordingDuration}s`,
+      );
+
       return {
         success: true,
         message: 'Recording stopped successfully',
@@ -162,22 +206,31 @@ export class RecordingService {
           recordingEndedAt: now,
           recordingDuration: meeting.recordingDuration,
           recordingStatus: RecordingStatus.STOPPED,
-        }
+        },
       };
     } catch (error) {
-      this.logger.error(`[STOP_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[STOP_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // PAUSE RECORDING
-  async pauseRecording(input: PauseRecordingInput, userId: string): Promise<RecordingResponse> {
-    this.logger.log(`[PAUSE_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`);
-    
+  async pauseRecording(
+    input: PauseMeetingRecordingInput,
+    userId: string,
+  ): Promise<RecordingResponse> {
+    this.logger.log(
+      `[PAUSE_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(input.meetingId);
@@ -187,13 +240,20 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can pause recording');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can pause recording',
+        );
       }
 
       // Check if recording is in progress
       if (!meeting.isRecording) {
-        throw new BadRequestException('No recording is currently in progress for this meeting');
+        throw new BadRequestException(
+          'No recording is currently in progress for this meeting',
+        );
       }
 
       // Check if already paused
@@ -208,8 +268,10 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(`[PAUSE_RECORDING] Success - Meeting ID: ${input.meetingId}, Paused at: ${now}`);
-      
+      this.logger.log(
+        `[PAUSE_RECORDING] Success - Meeting ID: ${input.meetingId}, Paused at: ${now}`,
+      );
+
       return {
         success: true,
         message: 'Recording paused successfully',
@@ -223,22 +285,31 @@ export class RecordingService {
           recordingPausedAt: now,
           recordingStatus: RecordingStatus.PAUSED,
           recordingDuration: meeting.recordingDuration,
-        }
+        },
       };
     } catch (error) {
-      this.logger.error(`[PAUSE_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[PAUSE_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // RESUME RECORDING
-  async resumeRecording(input: ResumeRecordingInput, userId: string): Promise<RecordingResponse> {
-    this.logger.log(`[RESUME_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`);
-    
+  async resumeRecording(
+    input: ResumeRecordingInput,
+    userId: string,
+  ): Promise<RecordingResponse> {
+    this.logger.log(
+      `[RESUME_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(input.meetingId);
@@ -248,8 +319,13 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can resume recording');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can resume recording',
+        );
       }
 
       // Check if recording is paused
@@ -264,14 +340,19 @@ export class RecordingService {
 
       // Calculate paused duration and add to total
       if (meeting.recordingPausedAt) {
-        const pausedDuration = Math.floor((now.getTime() - meeting.recordingPausedAt.getTime()) / 1000);
-        meeting.recordingDuration = (meeting.recordingDuration || 0) + pausedDuration;
+        const pausedDuration = Math.floor(
+          (now.getTime() - meeting.recordingPausedAt.getTime()) / 1000,
+        );
+        meeting.recordingDuration =
+          (meeting.recordingDuration || 0) + pausedDuration;
       }
 
       await meeting.save();
 
-      this.logger.log(`[RESUME_RECORDING] Success - Meeting ID: ${input.meetingId}, Resumed at: ${now}`);
-      
+      this.logger.log(
+        `[RESUME_RECORDING] Success - Meeting ID: ${input.meetingId}, Resumed at: ${now}`,
+      );
+
       return {
         success: true,
         message: 'Recording resumed successfully',
@@ -285,22 +366,31 @@ export class RecordingService {
           recordingResumedAt: now,
           recordingStatus: RecordingStatus.RECORDING,
           recordingDuration: meeting.recordingDuration,
-        }
+        },
       };
     } catch (error) {
-      this.logger.error(`[RESUME_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[RESUME_RECORDING] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
 
   // GET RECORDING INFO
-  async getRecordingInfo(input: GetRecordingInput, userId: string): Promise<MeetingRecordingInfo> {
-    this.logger.log(`[GET_RECORDING_INFO] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`);
-    
+  async getRecordingInfo(
+    input: GetRecordingInput,
+    userId: string,
+  ): Promise<MeetingRecordingInfo> {
+    this.logger.log(
+      `[GET_RECORDING_INFO] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
+    );
+
     try {
       // Validate ObjectId format
       if (!Types.ObjectId.isValid(input.meetingId)) {
-        throw new BadRequestException(`Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`);
+        throw new BadRequestException(
+          `Invalid meeting ID format: ${input.meetingId}. Expected a valid MongoDB ObjectId.`,
+        );
       }
 
       const meeting = await this.meetingModel.findById(input.meetingId);
@@ -310,12 +400,19 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (user.systemRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
-        throw new ForbiddenException('Only the meeting host can view recording info');
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId
+      ) {
+        throw new ForbiddenException(
+          'Only the meeting host can view recording info',
+        );
       }
 
-      this.logger.log(`[GET_RECORDING_INFO] Success - Meeting ID: ${input.meetingId}`);
-      
+      this.logger.log(
+        `[GET_RECORDING_INFO] Success - Meeting ID: ${input.meetingId}`,
+      );
+
       return {
         meetingId: meeting._id,
         isRecording: meeting.isRecording || false,
@@ -331,7 +428,9 @@ export class RecordingService {
         format: 'mp4', // Default format
       };
     } catch (error) {
-      this.logger.error(`[GET_RECORDING_INFO] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_RECORDING_INFO] Failed - Meeting ID: ${input.meetingId}, User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -339,7 +438,7 @@ export class RecordingService {
   // GET RECORDING STATS
   async getRecordingStats(userId: string): Promise<RecordingStats> {
     this.logger.log(`[GET_RECORDING_STATS] Attempt - User ID: ${userId}`);
-    
+
     try {
       const user = await this.memberModel.findById(userId);
       if (!user) {
@@ -353,19 +452,28 @@ export class RecordingService {
       }
 
       const meetings = await this.meetingModel.find(query).lean();
-      
-      const totalRecordings = meetings.filter(m => m.recordingId).length;
-      const activeRecordings = meetings.filter(m => m.isRecording && m.recordingStatus === RecordingStatus.RECORDING).length;
-      const pausedRecordings = meetings.filter(m => m.isRecording && m.recordingStatus === RecordingStatus.PAUSED).length;
-      
+
+      const totalRecordings = meetings.filter((m) => m.recordingId).length;
+      const activeRecordings = meetings.filter(
+        (m) => m.isRecording && m.recordingStatus === RecordingStatus.RECORDING,
+      ).length;
+      const pausedRecordings = meetings.filter(
+        (m) => m.isRecording && m.recordingStatus === RecordingStatus.PAUSED,
+      ).length;
+
       const totalRecordingTime = meetings.reduce((total, meeting) => {
         return total + (meeting.recordingDuration || 0);
       }, 0);
 
-      const averageRecordingDuration = totalRecordings > 0 ? Math.floor(totalRecordingTime / totalRecordings) : 0;
+      const averageRecordingDuration =
+        totalRecordings > 0
+          ? Math.floor(totalRecordingTime / totalRecordings)
+          : 0;
 
-      this.logger.log(`[GET_RECORDING_STATS] Success - Total: ${totalRecordings}, Active: ${activeRecordings}, Paused: ${pausedRecordings}`);
-      
+      this.logger.log(
+        `[GET_RECORDING_STATS] Success - Total: ${totalRecordings}, Active: ${activeRecordings}, Paused: ${pausedRecordings}`,
+      );
+
       return {
         totalRecordings,
         activeRecordings,
@@ -374,7 +482,9 @@ export class RecordingService {
         averageRecordingDuration,
       };
     } catch (error) {
-      this.logger.error(`[GET_RECORDING_STATS] Failed - User ID: ${userId}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_RECORDING_STATS] Failed - User ID: ${userId}, Error: ${error.message}`,
+      );
       throw error;
     }
   }

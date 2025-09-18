@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, ID, Context } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { UseGuards, Logger } from '@nestjs/common';
 import { VodService } from './vod.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -7,18 +7,18 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Member } from '../../schemas/Member.model';
 import { SystemRole } from '../../libs/enums/enums';
-import { 
-  CreateVodFileInput, 
-  CreateVodUrlInput, 
-  UpdateVodInput, 
-  VodQueryInput 
+import {
+  CreateVodFileInput,
+  CreateVodUrlInput,
+  UpdateVodInput,
+  VodQueryInput,
 } from '../../libs/DTO/vod/vod.input';
-import { 
-  VodWithMeeting, 
-  VodListResponse, 
-  VodStats, 
-  VodUploadResponse, 
-  VodUrlResponse 
+import {
+  VodWithMeeting,
+  VodListResponse,
+  VodStats,
+  VodUploadResponse,
+  VodUrlResponse,
 } from '../../libs/DTO/vod/vod.query';
 import { ParticipantMessageResponse } from '../../libs/DTO/participant/participant.mutation';
 // import { GraphQLUpload } from 'graphql-upload';
@@ -38,13 +38,23 @@ export class VodResolver {
     @Args('input', { nullable: true }) queryInput: VodQueryInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    this.logger.log(`[GET_ALL_VODS] Attempt - User ID: ${user._id}, Email: ${user.email}, Role: ${user.systemRole}, Query: ${JSON.stringify(queryInput)}`);
+    this.logger.log(
+      `[GET_ALL_VODS] Attempt - User ID: ${user._id}, Email: ${user.email}, Role: ${user.systemRole}, Query: ${JSON.stringify(queryInput)}`,
+    );
     try {
-      const result = await this.vodService.getAllVods(queryInput || {}, user._id, user.systemRole);
-      this.logger.log(`[GET_ALL_VODS] Success - User ID: ${user._id}, Count: ${result.vods?.length || 0}`);
+      const result = await this.vodService.getAllVods(
+        queryInput || {},
+        user._id,
+        user.systemRole,
+      );
+      this.logger.log(
+        `[GET_ALL_VODS] Success - User ID: ${user._id}, Count: ${result.vods?.length || 0}`,
+      );
       return result;
     } catch (error) {
-      this.logger.error(`[GET_ALL_VODS] Failed - User ID: ${user._id}, Error: ${error.message}`);
+      this.logger.error(
+        `[GET_ALL_VODS] Failed - User ID: ${user._id}, Error: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -61,9 +71,7 @@ export class VodResolver {
   @Query(() => VodStats, { name: 'getVodStats' })
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
-  async getVodStats(
-    @AuthMember() user: Member,
-  ) {
+  async getVodStats(@AuthMember() user: Member) {
     return this.vodService.getVodStats(user._id, user.systemRole);
   }
 
@@ -77,7 +85,12 @@ export class VodResolver {
     @Args('file', { type: () => String }) file: any,
     @AuthMember() user: Member,
   ) {
-    return this.vodService.createVodFromFile(createInput, file, user._id, user.systemRole);
+    return this.vodService.createVodFromFile(
+      createInput,
+      file,
+      user._id,
+      user.systemRole,
+    );
   }
 
   @Mutation(() => VodUrlResponse, { name: 'createVodUrl' })
@@ -87,7 +100,11 @@ export class VodResolver {
     @Args('input') createInput: CreateVodUrlInput,
     @AuthMember() user: Member,
   ) {
-    return this.vodService.createVodFromUrl(createInput, user._id, user.systemRole);
+    return this.vodService.createVodFromUrl(
+      createInput,
+      user._id,
+      user.systemRole,
+    );
   }
 
   @Mutation(() => VodWithMeeting, { name: 'updateVod' })

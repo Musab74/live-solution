@@ -4,32 +4,32 @@ import { Field, InputType } from '@nestjs/graphql';
 @InputType()
 export class UpdateMemberInput {
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   displayName?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   avatarUrl?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   department?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   phone?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   language?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   timezone?: string;
 }

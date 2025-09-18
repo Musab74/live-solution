@@ -2,7 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ChatService } from './chat.service';
 import { ChatResolver } from './chat.resolver';
-import { ChatMessage, ChatMessageSchema } from '../../schemas/Chat.message.model';
+import {
+  ChatMessage,
+  ChatMessageSchema,
+} from '../../schemas/Chat.message.model';
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';

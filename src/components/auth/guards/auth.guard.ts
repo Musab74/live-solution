@@ -1,4 +1,10 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from '../auth.service';
 
 @Injectable()
@@ -20,10 +26,12 @@ export class AuthGuard implements CanActivate {
       if (type === 'ws') {
         const client: any = ctx.switchToWs().getClient();
         // allow either header or query/handshake auth
-        return client?.handshake?.auth?.token
-            || client?.handshake?.headers?.authorization?.split(' ')[1]
-            || client?.token
-            || null;
+        return (
+          client?.handshake?.auth?.token ||
+          client?.handshake?.headers?.authorization?.split(' ')[1] ||
+          client?.token ||
+          null
+        );
       }
       return null;
     };

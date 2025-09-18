@@ -19,24 +19,29 @@ export class Vod {
 
   @Field()
   @Prop({ type: String, enum: Object.values(VodSourceType), required: true })
-  source!: VodSourceType;     // FILE | URL
+  source!: VodSourceType; // FILE | URL
 
   // When FILE
   @Field({ nullable: true })
-  @Prop() storageKey?: string;  // e.g., s3://bucket/key
-  
+  @Prop()
+  storageKey?: string; // e.g., s3://bucket/key
+
   @Field({ nullable: true })
-  @Prop() sizeBytes?: number;
+  @Prop()
+  sizeBytes?: number;
 
   // When URL
   @Field({ nullable: true })
-  @Prop() url?: string;
+  @Prop()
+  url?: string;
 
   @Field({ nullable: true })
-  @Prop() durationSec?: number;
-  
+  @Prop()
+  durationSec?: number;
+
   @Field({ nullable: true })
-  @Prop() notes?: string;
+  @Prop()
+  notes?: string;
 
   @Field()
   createdAt!: Date;

@@ -32,7 +32,9 @@ interface AuthenticatedSocket extends Socket {
   },
   namespace: '/signaling',
 })
-export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class SignalingGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
@@ -49,8 +51,10 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   async handleConnection(client: AuthenticatedSocket) {
     try {
       // Extract token from handshake
-      const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
-      
+      const token =
+        client.handshake.auth?.token ||
+        client.handshake.headers?.authorization?.replace('Bearer ', '');
+
       if (!token) {
         client.disconnect();
         return;
@@ -59,7 +63,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       // Verify JWT token
       const payload = this.jwtService.verify(token);
       const user = await this.memberService.getProfile(payload.sub);
-      
+
       if (!user) {
         client.disconnect();
         return;
@@ -67,8 +71,10 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
       client.user = user;
       this.connectedUsers.set(client.id, client);
-      
-      console.log(`User ${user.displayName} connected with socket ${client.id}`);
+
+      console.log(
+        `User ${user.displayName} connected with socket ${client.id}`,
+      );
     } catch (error) {
       console.error('Connection error:', error);
       client.disconnect();
@@ -78,7 +84,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
       console.log(`User ${client.user.displayName} disconnected`);
-      
+
       // Remove from all rooms
       for (const [roomName, users] of this.roomUsers.entries()) {
         if (users.has(client.id)) {
@@ -90,7 +96,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
           });
         }
       }
-      
+
       this.connectedUsers.delete(client.id);
     }
   }
@@ -103,36 +109,38 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!client.user) return;
 
     const { meetingId, roomName } = data;
-    
+
     // Verify user has access to this meeting
     try {
       // This would typically check if user is a participant in the meeting
       // For now, we'll allow it
-      
+
       // Join socket room
       await client.join(roomName);
-      
+
       // Track user in room
       if (!this.roomUsers.has(roomName)) {
         this.roomUsers.set(roomName, new Set());
       }
       this.roomUsers.get(roomName)!.add(client.id);
-      
+
       // Get current participants in room
       const roomParticipants = Array.from(this.roomUsers.get(roomName) || [])
-        .map(socketId => {
+        .map((socketId) => {
           const user = this.connectedUsers.get(socketId);
-          return user ? {
-            userId: user.user!._id,
-            displayName: user.user!.displayName,
-            socketId,
-          } : null;
+          return user
+            ? {
+                userId: user.user!._id,
+                displayName: user.user!.displayName,
+                socketId,
+              }
+            : null;
         })
         .filter(Boolean);
 
       // Notify user of current participants
       client.emit('PEER_LIST', { participants: roomParticipants });
-      
+
       // Notify others that user joined
       client.to(roomName).emit('USER_JOINED', {
         userId: client.user._id,
@@ -154,16 +162,16 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     if (!client.user) return;
 
     const { roomName } = data;
-    
+
     // Leave socket room
     await client.leave(roomName);
-    
+
     // Remove from room tracking
     const roomUsers = this.roomUsers.get(roomName);
     if (roomUsers) {
       roomUsers.delete(client.id);
     }
-    
+
     // Notify others that user left
     client.to(roomName).emit('USER_LEFT', {
       userId: client.user._id,
@@ -178,13 +186,14 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('CHAT_SEND')
   async handleChatSend(
-    @MessageBody() data: { roomName: string; message: string; replyToMessageId?: string },
+    @MessageBody()
+    data: { roomName: string; message: string; replyToMessageId?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
 
     const { roomName, message, replyToMessageId } = data;
-    
+
     try {
       // Save message to database
       const chatMessage = {
@@ -194,7 +203,7 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
         userId: client.user._id,
         replyToMessageId,
       };
-      
+
       // Broadcast to room
       client.to(roomName).emit('CHAT_MESSAGE', {
         ...chatMessage,
@@ -202,7 +211,9 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
         createdAt: new Date(),
       });
 
-      console.log(`Chat message from ${client.user.displayName} in room ${roomName}`);
+      console.log(
+        `Chat message from ${client.user.displayName} in room ${roomName}`,
+      );
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to send chat message' });
     }
@@ -210,7 +221,8 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('FORCE_MUTE')
   async handleForceMute(
-    @MessageBody() data: { roomName: string; targetUserId: string; reason?: string },
+    @MessageBody()
+    data: { roomName: string; targetUserId: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
@@ -222,11 +234,12 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
 
     const { roomName, targetUserId, reason } = data;
-    
+
     // Find target user's socket
-    const targetSocket = Array.from(this.connectedUsers.values())
-      .find(socket => socket.user?._id === targetUserId);
-    
+    const targetSocket = Array.from(this.connectedUsers.values()).find(
+      (socket) => socket.user?._id === targetUserId,
+    );
+
     if (targetSocket) {
       targetSocket.emit('FORCE_MUTE', { reason });
       client.to(roomName).emit('USER_MUTED', {
@@ -239,7 +252,8 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('FORCE_CAMERA_OFF')
   async handleForceCameraOff(
-    @MessageBody() data: { roomName: string; targetUserId: string; reason?: string },
+    @MessageBody()
+    data: { roomName: string; targetUserId: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
@@ -251,11 +265,12 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
 
     const { roomName, targetUserId, reason } = data;
-    
+
     // Find target user's socket
-    const targetSocket = Array.from(this.connectedUsers.values())
-      .find(socket => socket.user?._id === targetUserId);
-    
+    const targetSocket = Array.from(this.connectedUsers.values()).find(
+      (socket) => socket.user?._id === targetUserId,
+    );
+
     if (targetSocket) {
       targetSocket.emit('FORCE_CAMERA_OFF', { reason });
       client.to(roomName).emit('USER_CAMERA_OFF', {
@@ -268,7 +283,8 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('KICK_USER')
   async handleKickUser(
-    @MessageBody() data: { roomName: string; targetUserId: string; reason?: string },
+    @MessageBody()
+    data: { roomName: string; targetUserId: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     if (!client.user) return;
@@ -280,15 +296,16 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
     }
 
     const { roomName, targetUserId, reason } = data;
-    
+
     // Find target user's socket
-    const targetSocket = Array.from(this.connectedUsers.values())
-      .find(socket => socket.user?._id === targetUserId);
-    
+    const targetSocket = Array.from(this.connectedUsers.values()).find(
+      (socket) => socket.user?._id === targetUserId,
+    );
+
     if (targetSocket) {
       targetSocket.emit('KICKED', { reason });
       targetSocket.disconnect();
-      
+
       client.to(roomName).emit('USER_KICKED', {
         userId: targetUserId,
         byUserId: client.user._id,
@@ -306,15 +323,17 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   getRoomParticipants(roomName: string) {
     const roomUsers = this.roomUsers.get(roomName);
     if (!roomUsers) return [];
-    
+
     return Array.from(roomUsers)
-      .map(socketId => {
+      .map((socketId) => {
         const user = this.connectedUsers.get(socketId);
-        return user ? {
-          userId: user.user!._id,
-          displayName: user.user!.displayName,
-          socketId,
-        } : null;
+        return user
+          ? {
+              userId: user.user!._id,
+              displayName: user.user!.displayName,
+              socketId,
+            }
+          : null;
       })
       .filter(Boolean);
   }
@@ -333,13 +352,13 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       const { meetingId, participantId } = data;
-      
+
       // Join the waiting room
       await client.join(`waiting_${meetingId}`);
-      
+
       // Store participant info
       client.data = { ...client.data, meetingId, participantId };
-      
+
       // Notify host about new participant in waiting room
       client.to(`host_${meetingId}`).emit('PARTICIPANT_WAITING', {
         participantId,
@@ -364,10 +383,10 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
   ) {
     try {
       const { meetingId, participantId } = data;
-      
+
       // Leave the waiting room
       await client.leave(`waiting_${meetingId}`);
-      
+
       // Notify host about participant leaving waiting room
       client.to(`host_${meetingId}`).emit('PARTICIPANT_LEFT_WAITING', {
         participantId,
@@ -396,10 +415,10 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
       }
 
       const { meetingId } = data;
-      
+
       // Join host room
       await client.join(`host_${meetingId}`);
-      
+
       // Notify all waiting participants that host has joined
       client.to(`waiting_${meetingId}`).emit('HOST_JOINED', {
         message: 'Host has joined the meeting',
@@ -417,12 +436,13 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('PARTICIPANT_APPROVED')
   async handleParticipantApproved(
-    @MessageBody() data: { meetingId: string; participantId: string; message?: string },
+    @MessageBody()
+    data: { meetingId: string; participantId: string; message?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
       const { meetingId, participantId, message } = data;
-      
+
       // Notify the specific participant
       client.to(`waiting_${meetingId}`).emit('PARTICIPANT_APPROVED', {
         participantId,
@@ -443,12 +463,13 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('PARTICIPANT_REJECTED')
   async handleParticipantRejected(
-    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @MessageBody()
+    data: { meetingId: string; participantId: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
       const { meetingId, participantId, reason } = data;
-      
+
       // Notify the specific participant
       client.to(`waiting_${meetingId}`).emit('PARTICIPANT_REJECTED', {
         participantId,
@@ -469,12 +490,13 @@ export class SignalingGateway implements OnGatewayConnection, OnGatewayDisconnec
 
   @SubscribeMessage('PARTICIPANT_ADMITTED')
   async handleParticipantAdmitted(
-    @MessageBody() data: { meetingId: string; participantId: string; message?: string },
+    @MessageBody()
+    data: { meetingId: string; participantId: string; message?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
       const { meetingId, participantId, message } = data;
-      
+
       // Notify the specific participant
       client.to(`waiting_${meetingId}`).emit('PARTICIPANT_ADMITTED', {
         participantId,

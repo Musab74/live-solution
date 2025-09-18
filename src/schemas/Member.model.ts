@@ -9,7 +9,13 @@ export class Member {
   @Field(() => ID)
   _id!: string;
 
-  @Prop({ required: true, unique: true, index: true, lowercase: true, trim: true })
+  @Prop({
+    required: true,
+    unique: true,
+    index: true,
+    lowercase: true,
+    trim: true,
+  })
   @Field()
   email!: string;
 
@@ -20,35 +26,40 @@ export class Member {
   @Field()
   displayName!: string;
 
-  @Prop() 
+  @Prop()
   @Field({ nullable: true })
   avatarUrl?: string;
-  
-  @Prop() 
+
+  @Prop()
   @Field({ nullable: true })
   organization?: string;
-  
-  @Prop() 
+
+  @Prop()
   @Field({ nullable: true })
   department?: string;
-  
-  @Prop() 
+
+  @Prop()
   @Field({ nullable: true })
   phone?: string;
-  
-  @Prop() 
+
+  @Prop()
   @Field({ nullable: true })
   language?: string;
-  
-  @Prop() 
+
+  @Prop()
   @Field({ nullable: true })
   timezone?: string;
 
-  @Prop({ type: String, enum: Object.values(SystemRole), default: SystemRole.MEMBER, index: true })
+  @Prop({
+    type: String,
+    enum: Object.values(SystemRole),
+    default: SystemRole.MEMBER,
+    index: true,
+  })
   @Field()
   systemRole!: SystemRole;
 
-  @Prop() 
+  @Prop()
   @Field({ nullable: true })
   lastSeenAt?: Date;
 

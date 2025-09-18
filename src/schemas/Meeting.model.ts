@@ -14,7 +14,12 @@ export class Meeting {
   title!: string;
 
   @Field()
-  @Prop({ type: String, enum: Object.values(MeetingStatus), default: MeetingStatus.SCHEDULED, index: true })
+  @Prop({
+    type: String,
+    enum: Object.values(MeetingStatus),
+    default: MeetingStatus.SCHEDULED,
+    index: true,
+  })
   status!: MeetingStatus;
 
   @Field(() => ID)
@@ -26,63 +31,82 @@ export class Meeting {
   inviteCode!: string;
 
   @Field({ nullable: true })
-  @Prop() passcodeHash?: string;     // if you protect rooms
-  
-  @Field({ nullable: true })
-  @Prop() isPrivate?: boolean;
+  @Prop()
+  passcodeHash?: string; // if you protect rooms
 
   @Field({ nullable: true })
-  @Prop({ default: false }) isLocked?: boolean;
+  @Prop()
+  isPrivate?: boolean;
 
   @Field({ nullable: true })
-  @Prop() scheduledFor?: Date;   // for 예약된 회의
-  
-  @Field({ nullable: true })
-  @Prop() actualStartAt?: Date;      // when it really started
-  
-  @Field({ nullable: true })
-  @Prop() endedAt?: Date;
+  @Prop({ default: false })
+  isLocked?: boolean;
 
   @Field({ nullable: true })
-  @Prop() durationMin?: number;
+  @Prop()
+  scheduledFor?: Date; // for 예약된 회의
 
   @Field({ nullable: true })
-  @Prop({ default: 100 }) maxParticipants?: number;
-  
+  @Prop()
+  actualStartAt?: Date; // when it really started
+
   @Field({ nullable: true })
-  @Prop() notes?: string;
+  @Prop()
+  endedAt?: Date;
+
+  @Field({ nullable: true })
+  @Prop()
+  durationMin?: number;
+
+  @Field({ nullable: true })
+  @Prop({ default: 100 })
+  maxParticipants?: number;
+
+  @Field({ nullable: true })
+  @Prop()
+  notes?: string;
 
   // Recording fields
   @Field({ nullable: true })
-  @Prop({ default: false }) isRecording?: boolean;
+  @Prop({ default: false })
+  isRecording?: boolean;
 
   @Field({ nullable: true })
-  @Prop() recordingStartedAt?: Date;
+  @Prop()
+  recordingStartedAt?: Date;
 
   @Field({ nullable: true })
-  @Prop() recordingEndedAt?: Date;
+  @Prop()
+  recordingEndedAt?: Date;
 
   @Field({ nullable: true })
-  @Prop() recordingPausedAt?: Date;
+  @Prop()
+  recordingPausedAt?: Date;
 
   @Field({ nullable: true })
-  @Prop() recordingResumedAt?: Date;
+  @Prop()
+  recordingResumedAt?: Date;
 
   @Field({ nullable: true })
-  @Prop() recordingId?: string;
+  @Prop()
+  recordingId?: string;
 
   @Field({ nullable: true })
-  @Prop() recordingUrl?: string;
+  @Prop()
+  recordingUrl?: string;
 
   @Field({ nullable: true })
-  @Prop() recordingDuration?: number; // in seconds
+  @Prop()
+  recordingDuration?: number; // in seconds
 
   @Field({ nullable: true })
-  @Prop() recordingStatus?: string; // 'recording', 'paused', 'stopped', 'processing'
+  @Prop()
+  recordingStatus?: string; // 'recording', 'paused', 'stopped', 'processing'
 
   // denormalized count for fast lists (optional)
   @Field()
-  @Prop({ default: 0 }) participantCount!: number;
+  @Prop({ default: 0 })
+  participantCount!: number;
 
   @Field()
   createdAt!: Date;

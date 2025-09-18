@@ -4,87 +4,87 @@ import { Field, InputType } from '@nestjs/graphql';
 @InputType()
 export class ParticipantCreateInput {
   @Field()
-  @IsString() 
+  @IsString()
   meetingId!: string;
-  
+
   @Field()
-  @IsString() 
+  @IsString()
   userId!: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   displayName?: string;
 }
 
 @InputType()
 export class ParticipantSummaryInput {
   @Field()
-  @IsString() 
+  @IsString()
   meetingId!: string;
-  
+
   @Field()
-  @IsString() 
+  @IsString()
   userId!: string;
-  
+
   @Field()
-  @IsISO8601() 
+  @IsISO8601()
   joinedAt!: string;
-  
+
   @Field()
-  @IsInt() 
-  @Min(0) 
+  @IsInt()
+  @Min(0)
   durationSec!: number;
 }
 
 @InputType()
 export class JoinMeetingInput {
   @Field()
-  @IsString() 
+  @IsString()
   meetingId!: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   displayName?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   passcode?: string;
 }
 
 @InputType()
 export class UpdateParticipantInput {
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   displayName?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   role?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   micState?: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   cameraState?: string;
 }
 
 @InputType()
 export class KickParticipantInput {
   @Field()
-  @IsString() 
+  @IsString()
   participantId!: string;
-  
+
   @Field({ nullable: true })
-  @IsOptional() 
-  @IsString() 
+  @IsOptional()
+  @IsString()
   reason?: string;
 }

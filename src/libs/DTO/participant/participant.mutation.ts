@@ -1,6 +1,11 @@
 import { IsEnum, IsOptional, IsString } from 'class-validator';
 import { Field, InputType, ID, ObjectType } from '@nestjs/graphql';
-import { Role, MediaState, MediaTrack, ParticipantStatus } from '../../enums/enums';
+import {
+  Role,
+  MediaState,
+  MediaTrack,
+  ParticipantStatus,
+} from '../../enums/enums';
 import { Session } from '../../../schemas/Participant.model';
 
 @InputType()

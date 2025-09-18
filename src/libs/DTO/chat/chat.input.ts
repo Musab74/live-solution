@@ -1,4 +1,11 @@
-import { IsOptional, IsString, IsInt, Min, MaxLength, IsMongoId } from 'class-validator';
+import {
+  IsOptional,
+  IsString,
+  IsInt,
+  Min,
+  MaxLength,
+  IsMongoId,
+} from 'class-validator';
 import { Field, InputType } from '@nestjs/graphql';
 
 @InputType()

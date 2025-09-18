@@ -7,17 +7,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Member } from '../../schemas/Member.model';
 import { SystemRole } from '../../libs/enums/enums';
-import { 
-  ChatHistoryInput, 
-  ChatSearchInput, 
-  DeleteMessageInput 
+import {
+  ChatHistoryInput,
+  ChatSearchInput,
+  DeleteMessageInput,
 } from '../../libs/DTO/chat/chat.input';
-import { 
-  ChatHistoryResponse, 
-  ChatSearchResponse, 
-  ChatStats, 
+import {
+  ChatHistoryResponse,
+  ChatSearchResponse,
+  ChatStats,
   ChatMessageWithDetails,
-  ChatMessageResponse 
+  ChatMessageResponse,
 } from '../../libs/DTO/chat/chat.query';
 
 @Resolver()
@@ -34,7 +34,11 @@ export class ChatResolver {
     @Args('input') historyInput: ChatHistoryInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    return this.chatService.getChatHistory(historyInput, user._id, user.systemRole);
+    return this.chatService.getChatHistory(
+      historyInput,
+      user._id,
+      user.systemRole,
+    );
   }
 
   @Query(() => ChatSearchResponse, { name: 'searchChatMessages' })
@@ -44,7 +48,11 @@ export class ChatResolver {
     @Args('input') searchInput: ChatSearchInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    return this.chatService.searchMessages(searchInput, user._id, user.systemRole);
+    return this.chatService.searchMessages(
+      searchInput,
+      user._id,
+      user.systemRole,
+    );
   }
 
   @Query(() => ChatStats, { name: 'getChatStats' })
@@ -63,7 +71,11 @@ export class ChatResolver {
     @Args('messageId', { type: () => ID }) messageId: string,
     @AuthMember() user: Member,
   ): Promise<any> {
-    return this.chatService.getMessageById(messageId, user._id, user.systemRole);
+    return this.chatService.getMessageById(
+      messageId,
+      user._id,
+      user.systemRole,
+    );
   }
 
   // ==================== MUTATIONS ====================
@@ -75,6 +87,10 @@ export class ChatResolver {
     @Args('input') deleteInput: DeleteMessageInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    return this.chatService.deleteMessage(deleteInput, user._id, user.systemRole);
+    return this.chatService.deleteMessage(
+      deleteInput,
+      user._id,
+      user.systemRole,
+    );
   }
 }
