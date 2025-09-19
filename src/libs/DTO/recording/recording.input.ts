@@ -61,3 +61,11 @@ export class GetRecordingInput {
   @IsString()
   meetingId!: string;
 }
+
+// Alias for frontend compatibility
+@InputType()
+export class RecordingInfoInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+}

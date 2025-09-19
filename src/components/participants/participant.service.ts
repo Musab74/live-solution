@@ -25,6 +25,27 @@ import {
   TransferHostInput,
 } from '../../libs/DTO/participant/participant.mutation';
 import {
+  ForceScreenShareInput,
+  UpdateScreenShareInfoInput,
+  GetScreenShareStatusInput,
+} from '../../libs/DTO/participant/screen-sharing.input';
+import {
+  ScreenShareStatusResponse,
+  ScreenShareControlResponse,
+  ScreenShareInfo,
+} from '../../libs/DTO/participant/screen-sharing.query';
+import {
+  RaiseHandInput,
+  LowerHandInput,
+  HostLowerHandInput,
+  GetRaisedHandsInput,
+} from '../../libs/DTO/participant/raise-hand.input';
+import {
+  HandRaiseActionResponse,
+  RaisedHandsResponse,
+  HandRaiseInfo,
+} from '../../libs/DTO/participant/raise-hand.query';
+import {
   PreMeetingSetupInput,
   ApproveParticipantInput,
   RejectParticipantInput,
@@ -50,17 +71,31 @@ export class ParticipantService {
 
   async getParticipantsByMeeting(
     meetingId: string,
-    hostId: string,
+    userId: string,
   ): Promise<any[]> {
-    // Verify the meeting exists and the user is the host
+    // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    if (meeting.hostId.toString() !== hostId) {
+    // Check if user is either the host or a participant in this meeting
+    const isHost = meeting.hostId.toString() === userId;
+    let isParticipant = false;
+
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+        status: { $in: ['APPROVED', 'ADMITTED'] },
+      });
+      isParticipant = !!userParticipant;
+    }
+
+    if (!isHost && !isParticipant) {
       throw new ForbiddenException(
-        'Only the meeting host can view participants',
+        'You must be the host or a participant in this meeting to view participants',
       );
     }
 
@@ -116,16 +151,30 @@ export class ParticipantService {
     return participantsWithLoginInfo;
   }
 
-  async getParticipantStats(meetingId: string, hostId: string) {
-    // Verify the meeting exists and the user is the host
+  async getParticipantStats(meetingId: string, userId: string) {
+    // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    if (meeting.hostId.toString() !== hostId) {
+    // Check if user is either the host or a participant in this meeting
+    const isHost = meeting.hostId.toString() === userId;
+    let isParticipant = false;
+
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+        status: { $in: ['APPROVED', 'ADMITTED'] },
+      });
+      isParticipant = !!userParticipant;
+    }
+
+    if (!isHost && !isParticipant) {
       throw new ForbiddenException(
-        'Only the meeting host can view participant stats',
+        'You must be the host or a participant in this meeting to view participant stats',
       );
     }
 
@@ -143,6 +192,19 @@ export class ParticipantService {
       ),
       averageSessionDuration: 0,
       totalMeetingDuration: 0,
+      // Additional stats for frontend
+      activeParticipants: participants.filter((p) => {
+        const sessions = p.sessions || [];
+        return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
+      }).length,
+      mutedParticipants: participants.filter((p) => 
+        p.micState === 'OFF' || p.micState === 'MUTED' || p.micState === 'MUTED_BY_HOST'
+      ).length,
+      cameraOffParticipants: participants.filter((p) => 
+        p.cameraState === 'OFF' || p.cameraState === 'OFF_BY_HOST'
+      ).length,
+      raisedHandsCount: participants.filter((p) => p.hasHandRaised).length,
+      screenSharersCount: participants.filter((p) => p.screenState === 'ON').length,
     };
 
     // Calculate average session duration
@@ -499,16 +561,30 @@ export class ParticipantService {
     };
   }
 
-  async getWaitingParticipants(meetingId: string, hostId: string) {
-    // Verify the meeting exists and the user is the host
+  async getWaitingParticipants(meetingId: string, userId: string) {
+    // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    if (meeting.hostId.toString() !== hostId) {
+    // Check if user is either the host or a participant in this meeting
+    const isHost = meeting.hostId.toString() === userId;
+    let isParticipant = false;
+
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+        status: { $in: ['APPROVED', 'ADMITTED'] },
+      });
+      isParticipant = !!userParticipant;
+    }
+
+    if (!isHost && !isParticipant) {
       throw new ForbiddenException(
-        'Only the meeting host can view waiting participants',
+        'You must be the host or a participant in this meeting to view waiting participants',
       );
     }
 
@@ -650,16 +726,30 @@ export class ParticipantService {
     };
   }
 
-  async getWaitingRoomStats(meetingId: string, hostId: string) {
-    // Verify the meeting exists and the user is the host
+  async getWaitingRoomStats(meetingId: string, userId: string) {
+    // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
-    if (meeting.hostId.toString() !== hostId) {
+    // Check if user is either the host or a participant in this meeting
+    const isHost = meeting.hostId.toString() === userId;
+    let isParticipant = false;
+
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+        status: { $in: ['APPROVED', 'ADMITTED'] },
+      });
+      isParticipant = !!userParticipant;
+    }
+
+    if (!isHost && !isParticipant) {
       throw new ForbiddenException(
-        'Only the meeting host can view waiting room stats',
+        'You must be the host or a participant in this meeting to view waiting room stats',
       );
     }
 
@@ -1052,5 +1142,475 @@ export class ParticipantService {
       }).length,
       attendance: attendanceData,
     };
+  }
+
+  // ==================== SCREEN SHARING METHODS ====================
+
+  // Force screen share control (host/co-host only)
+  async forceScreenShareControl(
+    input: ForceScreenShareInput,
+    hostId: string,
+  ): Promise<ScreenShareControlResponse> {
+    const { meetingId, participantId, screenState, reason, screenShareInfo } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify the user is the host
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can control screen sharing');
+    }
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify participant is in the meeting
+    if (participant.meetingId.toString() !== meetingId) {
+      throw new BadRequestException('Participant is not in this meeting');
+    }
+
+    // Update participant's screen state
+    const updateData: any = {
+      screenState,
+    };
+
+    if (screenShareInfo) {
+      updateData.screenShareInfo = screenShareInfo;
+    }
+
+    await this.participantModel.findByIdAndUpdate(participantId, updateData);
+
+    const action = screenState === MediaState.ON ? 'enabled' : 'disabled';
+    return {
+      success: true,
+      message: `Successfully ${action} screen sharing for participant${reason ? `: ${reason}` : ''}`,
+      participantId,
+      screenState,
+      screenShareInfo,
+    };
+  }
+
+  // Update screen share info (for when user starts/stops sharing)
+  async updateScreenShareInfo(
+    input: UpdateScreenShareInfoInput,
+    userId: string,
+  ): Promise<ScreenShareControlResponse> {
+    const { participantId, screenShareInfo, screenState } = input;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user owns this participant record
+    if (participant.userId && participant.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only update your own screen share info');
+    }
+
+    // Update participant's screen share info
+    const updateData: any = {};
+    if (screenShareInfo !== undefined) {
+      updateData.screenShareInfo = screenShareInfo;
+    }
+    if (screenState !== undefined) {
+      updateData.screenState = screenState;
+    }
+
+    await this.participantModel.findByIdAndUpdate(participantId, updateData);
+
+    return {
+      success: true,
+      message: 'Screen share info updated successfully',
+      participantId,
+      screenState: screenState || participant.screenState,
+      screenShareInfo: screenShareInfo || participant.screenShareInfo,
+    };
+  }
+
+  // Get screen share status for meeting
+  async getScreenShareStatus(
+    input: GetScreenShareStatusInput,
+    userId: string,
+  ): Promise<ScreenShareStatusResponse> {
+    const { meetingId, participantId } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify the user is the host or a participant in the meeting
+    const isHost = meeting.hostId.toString() === userId;
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+      });
+      if (!userParticipant) {
+        throw new ForbiddenException('You must be the host or a participant to view screen share status');
+      }
+    }
+
+    // Build query
+    let query: any = { meetingId };
+    if (participantId) {
+      query._id = new Types.ObjectId(participantId);
+    }
+
+    // Get participants
+    const participants = await this.participantModel
+      .find(query)
+      .select('_id displayName screenState screenShareInfo createdAt')
+      .lean();
+
+    // Transform to screen share info
+    const screenShareInfos: ScreenShareInfo[] = participants.map((p) => ({
+      participantId: p._id.toString(),
+      displayName: p.displayName,
+      screenState: p.screenState as MediaState,
+      screenShareInfo: p.screenShareInfo,
+      screenShareStartedAt: p.screenState === MediaState.ON ? p.createdAt : undefined,
+      screenShareDuration: p.screenState === MediaState.ON ? 
+        Math.floor((Date.now() - p.createdAt.getTime()) / 1000) : undefined,
+      isCurrentlySharing: p.screenState === MediaState.ON,
+    }));
+
+    const currentlySharingCount = screenShareInfos.filter(
+      (info) => info.isCurrentlySharing,
+    ).length;
+
+    return {
+      participants: screenShareInfos,
+      totalParticipants: participants.length,
+      currentlySharingCount,
+      meetingId,
+    };
+  }
+
+  // Get who is currently screen sharing
+  async getActiveScreenSharers(meetingId: string): Promise<ScreenShareInfo[]> {
+    const participants = await this.participantModel
+      .find({
+        meetingId,
+        screenState: MediaState.ON,
+      })
+      .select('_id displayName screenState screenShareInfo createdAt')
+      .lean();
+
+    return participants.map((p) => ({
+      participantId: p._id.toString(),
+      displayName: p.displayName,
+      screenState: p.screenState as MediaState,
+      screenShareInfo: p.screenShareInfo,
+      screenShareStartedAt: p.createdAt,
+      screenShareDuration: Math.floor((Date.now() - p.createdAt.getTime()) / 1000),
+      isCurrentlySharing: true,
+    }));
+  }
+
+  // Check if specific screen is being shared
+  async checkScreenShareConflict(
+    meetingId: string,
+    screenShareInfo: string,
+    excludeParticipantId?: string,
+  ): Promise<{ isConflict: boolean; conflictingParticipant?: ScreenShareInfo }> {
+    let query: any = {
+      meetingId,
+      screenState: MediaState.ON,
+      screenShareInfo,
+    };
+
+    if (excludeParticipantId) {
+      query._id = { $ne: new Types.ObjectId(excludeParticipantId) };
+    }
+
+    const conflictingParticipant = await this.participantModel
+      .findOne(query)
+      .select('_id displayName screenState screenShareInfo createdAt')
+      .lean();
+
+    if (conflictingParticipant) {
+      return {
+        isConflict: true,
+        conflictingParticipant: {
+          participantId: conflictingParticipant._id.toString(),
+          displayName: conflictingParticipant.displayName,
+          screenState: conflictingParticipant.screenState as MediaState,
+          screenShareInfo: conflictingParticipant.screenShareInfo,
+          screenShareStartedAt: conflictingParticipant.createdAt,
+          screenShareDuration: Math.floor((Date.now() - conflictingParticipant.createdAt.getTime()) / 1000),
+          isCurrentlySharing: true,
+        },
+      };
+    }
+
+    return { isConflict: false };
+  }
+
+  // ==================== RAISE HAND METHODS ====================
+
+  // Raise hand (participant action)
+  async raiseHand(input: RaiseHandInput, userId: string): Promise<HandRaiseActionResponse> {
+    const { participantId, reason } = input;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user owns this participant record
+    if (participant.userId && participant.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only raise your own hand');
+    }
+
+    // Check if hand is already raised
+    if (participant.hasHandRaised) {
+      throw new BadRequestException('Your hand is already raised');
+    }
+
+    // Raise hand
+    const now = new Date();
+    await this.participantModel.findByIdAndUpdate(participantId, {
+      hasHandRaised: true,
+      handRaisedAt: now,
+      handLoweredAt: undefined,
+    });
+
+    return {
+      success: true,
+      message: 'Hand raised successfully',
+      participantId,
+      hasHandRaised: true,
+      handRaisedAt: now,
+      reason,
+    };
+  }
+
+  // Lower hand (participant action)
+  async lowerHand(input: LowerHandInput, userId: string): Promise<HandRaiseActionResponse> {
+    const { participantId, reason } = input;
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify the user owns this participant record
+    if (participant.userId && participant.userId.toString() !== userId) {
+      throw new ForbiddenException('You can only lower your own hand');
+    }
+
+    // Check if hand is raised
+    if (!participant.hasHandRaised) {
+      throw new BadRequestException('Your hand is not currently raised');
+    }
+
+    // Lower hand
+    const now = new Date();
+    await this.participantModel.findByIdAndUpdate(participantId, {
+      hasHandRaised: false,
+      handLoweredAt: now,
+    });
+
+    return {
+      success: true,
+      message: 'Hand lowered successfully',
+      participantId,
+      hasHandRaised: false,
+      handLoweredAt: now,
+      reason,
+    };
+  }
+
+  // Host lowers participant's hand
+  async hostLowerHand(input: HostLowerHandInput, hostId: string): Promise<HandRaiseActionResponse> {
+    const { meetingId, participantId, reason } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify the user is the host
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can lower participants\' hands');
+    }
+
+    // Find the participant
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    // Verify participant is in the meeting
+    if (participant.meetingId.toString() !== meetingId) {
+      throw new BadRequestException('Participant is not in this meeting');
+    }
+
+    // Check if hand is raised
+    if (!participant.hasHandRaised) {
+      throw new BadRequestException('Participant\'s hand is not currently raised');
+    }
+
+    // Lower hand
+    const now = new Date();
+    await this.participantModel.findByIdAndUpdate(participantId, {
+      hasHandRaised: false,
+      handLoweredAt: now,
+    });
+
+    return {
+      success: true,
+      message: 'Participant\'s hand lowered successfully',
+      participantId,
+      hasHandRaised: false,
+      handLoweredAt: now,
+      reason,
+    };
+  }
+
+  // Get all raised hands in a meeting
+  async getRaisedHands(input: GetRaisedHandsInput, userId: string): Promise<RaisedHandsResponse> {
+    const { meetingId, includeLowered } = input;
+
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify the user is the host or a participant in the meeting
+    const isHost = meeting.hostId.toString() === userId;
+    if (!isHost) {
+      // Check if user is a participant in this meeting
+      const userParticipant = await this.participantModel.findOne({
+        meetingId,
+        userId: new Types.ObjectId(userId),
+      });
+      if (!userParticipant) {
+        throw new ForbiddenException('You must be the host or a participant to view raised hands');
+      }
+    }
+
+    // Build query
+    let query: any = { meetingId };
+    if (!includeLowered) {
+      query.hasHandRaised = true;
+    }
+
+    // Get participants with raised hands
+    const participants = await this.participantModel
+      .find(query)
+      .select('_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt')
+      .sort({ handRaisedAt: 1 }) // Sort by when hand was raised (oldest first)
+      .lean();
+
+    // Transform to hand raise info
+    const raisedHands: HandRaiseInfo[] = participants.map((p) => {
+      const handRaiseDuration = p.handRaisedAt && !p.handLoweredAt ? 
+        Math.floor((Date.now() - p.handRaisedAt.getTime()) / 1000) : undefined;
+
+      return {
+        participantId: p._id.toString(),
+        displayName: p.displayName,
+        hasHandRaised: p.hasHandRaised,
+        handRaisedAt: p.handRaisedAt,
+        handLoweredAt: p.handLoweredAt,
+        handRaiseDuration,
+        isWaitingForResponse: p.hasHandRaised,
+      };
+    });
+
+    const totalRaisedHands = raisedHands.filter((info) => info.hasHandRaised).length;
+
+    return {
+      raisedHands,
+      totalRaisedHands,
+      meetingId,
+      timestamp: new Date(),
+    };
+  }
+
+  // Get participant's hand raise status
+  async getParticipantHandStatus(participantId: string): Promise<HandRaiseInfo> {
+    const participant = await this.participantModel
+      .findById(participantId)
+      .select('_id displayName hasHandRaised handRaisedAt handLoweredAt createdAt')
+      .lean();
+
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    const handRaiseDuration = participant.handRaisedAt && !participant.handLoweredAt ? 
+      Math.floor((Date.now() - participant.handRaisedAt.getTime()) / 1000) : undefined;
+
+    return {
+      participantId: participant._id.toString(),
+      displayName: participant.displayName,
+      hasHandRaised: participant.hasHandRaised,
+      handRaisedAt: participant.handRaisedAt,
+      handLoweredAt: participant.handLoweredAt,
+      handRaiseDuration,
+      isWaitingForResponse: participant.hasHandRaised,
+    };
+  }
+
+  // Lower all hands in meeting (host action)
+  async lowerAllHands(meetingId: string, hostId: string): Promise<HandRaiseActionResponse[]> {
+    // Verify meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting) {
+      throw new NotFoundException('Meeting not found');
+    }
+
+    // Verify the user is the host
+    if (meeting.hostId.toString() !== hostId) {
+      throw new ForbiddenException('Only the meeting host can lower all hands');
+    }
+
+    // Find all participants with raised hands
+    const participantsWithRaisedHands = await this.participantModel.find({
+      meetingId,
+      hasHandRaised: true,
+    });
+
+    if (participantsWithRaisedHands.length === 0) {
+      return [];
+    }
+
+    // Lower all hands
+    const now = new Date();
+    const participantIds = participantsWithRaisedHands.map(p => p._id);
+    
+    await this.participantModel.updateMany(
+      { _id: { $in: participantIds } },
+      { 
+        hasHandRaised: false,
+        handLoweredAt: now,
+      }
+    );
+
+    // Return results for each participant
+    return participantsWithRaisedHands.map((p) => ({
+      success: true,
+      message: 'Hand lowered by host',
+      participantId: p._id.toString(),
+      hasHandRaised: false,
+      handLoweredAt: now,
+      reason: 'Host lowered all hands',
+    }));
   }
 }

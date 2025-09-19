@@ -106,6 +106,22 @@ export class ParticipantStats {
 
   @Field()
   totalMeetingDuration: number;
+
+  // Additional fields for frontend compatibility
+  @Field()
+  activeParticipants: number;
+
+  @Field()
+  mutedParticipants: number;
+
+  @Field()
+  cameraOffParticipants: number;
+
+  @Field()
+  raisedHandsCount: number;
+
+  @Field()
+  screenSharersCount: number;
 }
 
 @ObjectType()
