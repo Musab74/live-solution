@@ -22,6 +22,25 @@ import {
   ParticipantMessageResponse,
 } from '../../libs/DTO/participant/participant.mutation';
 import {
+  ForceScreenShareInput,
+  UpdateScreenShareInfoInput,
+  GetScreenShareStatusInput,
+} from '../../libs/DTO/participant/screen-sharing.input';
+import {
+  ScreenShareStatusResponse,
+  ScreenShareControlResponse,
+} from '../../libs/DTO/participant/screen-sharing.query';
+import {
+  RaiseHandInput,
+  LowerHandInput,
+  HostLowerHandInput,
+  GetRaisedHandsInput,
+} from '../../libs/DTO/participant/raise-hand.input';
+import {
+  HandRaiseActionResponse,
+  RaisedHandsResponse,
+} from '../../libs/DTO/participant/raise-hand.query';
+import {
   PreMeetingSetupInput,
   ApproveParticipantInput,
   RejectParticipantInput,
@@ -298,5 +317,239 @@ export class ParticipantResolver {
       user._id,
     );
     return JSON.stringify(attendance, null, 2);
+  }
+
+  // ==================== SCREEN SHARING RESOLVERS ====================
+
+  @Mutation(() => ScreenShareControlResponse, { name: 'forceScreenShareControl' })
+  @UseGuards(AuthGuard)
+  async forceScreenShareControl(
+    @Args('input') input: ForceScreenShareInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[FORCE_SCREEN_SHARE_CONTROL] Attempt - Meeting ID: ${input.meetingId}, Participant ID: ${input.participantId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.forceScreenShareControl(input, user._id);
+      this.logger.log(
+        `[FORCE_SCREEN_SHARE_CONTROL] Success - Participant ID: ${input.participantId}, Screen State: ${input.screenState}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[FORCE_SCREEN_SHARE_CONTROL] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Mutation(() => ScreenShareControlResponse, { name: 'updateScreenShareInfo' })
+  @UseGuards(AuthGuard)
+  async updateScreenShareInfo(
+    @Args('input') input: UpdateScreenShareInfoInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[UPDATE_SCREEN_SHARE_INFO] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.updateScreenShareInfo(input, user._id);
+      this.logger.log(
+        `[UPDATE_SCREEN_SHARE_INFO] Success - Participant ID: ${input.participantId}, Screen Info: ${input.screenShareInfo}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[UPDATE_SCREEN_SHARE_INFO] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Query(() => ScreenShareStatusResponse, { name: 'getScreenShareStatus' })
+  @UseGuards(AuthGuard)
+  async getScreenShareStatus(
+    @Args('input') input: GetScreenShareStatusInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[GET_SCREEN_SHARE_STATUS] Attempt - Meeting ID: ${input.meetingId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.getScreenShareStatus(input, user._id);
+      this.logger.log(
+        `[GET_SCREEN_SHARE_STATUS] Success - Meeting ID: ${input.meetingId}, Currently Sharing: ${result.currentlySharingCount}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[GET_SCREEN_SHARE_STATUS] Failed - Meeting ID: ${input.meetingId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Query(() => [ScreenShareControlResponse], { name: 'getActiveScreenSharers' })
+  @UseGuards(AuthGuard)
+  async getActiveScreenSharers(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[GET_ACTIVE_SCREEN_SHARERS] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.getActiveScreenSharers(meetingId);
+      this.logger.log(
+        `[GET_ACTIVE_SCREEN_SHARERS] Success - Meeting ID: ${meetingId}, Active Sharers: ${result.length}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[GET_ACTIVE_SCREEN_SHARERS] Failed - Meeting ID: ${meetingId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  // ==================== RAISE HAND RESOLVERS ====================
+
+  @Mutation(() => HandRaiseActionResponse, { name: 'raiseHand' })
+  @UseGuards(AuthGuard)
+  async raiseHand(
+    @Args('input') input: RaiseHandInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[RAISE_HAND] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.raiseHand(input, user._id);
+      this.logger.log(
+        `[RAISE_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[RAISE_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Mutation(() => HandRaiseActionResponse, { name: 'lowerHand' })
+  @UseGuards(AuthGuard)
+  async lowerHand(
+    @Args('input') input: LowerHandInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[LOWER_HAND] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.lowerHand(input, user._id);
+      this.logger.log(
+        `[LOWER_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[LOWER_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Mutation(() => HandRaiseActionResponse, { name: 'hostLowerHand' })
+  @UseGuards(AuthGuard)
+  async hostLowerHand(
+    @Args('input') input: HostLowerHandInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[HOST_LOWER_HAND] Attempt - Meeting ID: ${input.meetingId}, Participant ID: ${input.participantId}, Host ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.hostLowerHand(input, user._id);
+      this.logger.log(
+        `[HOST_LOWER_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[HOST_LOWER_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Mutation(() => [HandRaiseActionResponse], { name: 'lowerAllHands' })
+  @UseGuards(AuthGuard)
+  async lowerAllHands(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[LOWER_ALL_HANDS] Attempt - Meeting ID: ${meetingId}, Host ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.lowerAllHands(meetingId, user._id);
+      this.logger.log(
+        `[LOWER_ALL_HANDS] Success - Meeting ID: ${meetingId}, Lowered: ${result.length} hands`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[LOWER_ALL_HANDS] Failed - Meeting ID: ${meetingId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Query(() => RaisedHandsResponse, { name: 'getRaisedHands' })
+  @UseGuards(AuthGuard)
+  async getRaisedHands(
+    @Args('input') input: GetRaisedHandsInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[GET_RAISED_HANDS] Attempt - Meeting ID: ${input.meetingId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.getRaisedHands(input, user._id);
+      this.logger.log(
+        `[GET_RAISED_HANDS] Success - Meeting ID: ${input.meetingId}, Raised Hands: ${result.totalRaisedHands}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[GET_RAISED_HANDS] Failed - Meeting ID: ${input.meetingId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
+  @Query(() => HandRaiseActionResponse, { name: 'getParticipantHandStatus' })
+  @UseGuards(AuthGuard)
+  async getParticipantHandStatus(
+    @Args('participantId', { type: () => ID }) participantId: string,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[GET_PARTICIPANT_HAND_STATUS] Attempt - Participant ID: ${participantId}, User ID: ${user._id}`,
+    );
+    try {
+      const result = await this.participantService.getParticipantHandStatus(participantId);
+      this.logger.log(
+        `[GET_PARTICIPANT_HAND_STATUS] Success - Participant ID: ${participantId}, Hand Raised: ${result.hasHandRaised}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[GET_PARTICIPANT_HAND_STATUS] Failed - Participant ID: ${participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
   }
 }

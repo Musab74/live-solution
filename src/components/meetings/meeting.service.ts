@@ -9,6 +9,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
+import { Participant, ParticipantDocument } from '../../schemas/Participant.model';
 import {
   CreateMeetingInput,
   UpdateMeetingInput,
@@ -25,6 +26,7 @@ export class MeetingService {
   constructor(
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
+    @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
   ) {}
 
   // CREATE MEETING
@@ -232,11 +234,20 @@ export class MeetingService {
 
       // Check access permissions
       const user = await this.memberModel.findById(userId);
-      if (
-        user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId._id.toString() !== userId
-      ) {
-        throw new ForbiddenException('You can only view your own meetings');
+      const isHost = meeting.hostId._id.toString() === userId;
+      const isAdmin = user.systemRole === SystemRole.ADMIN;
+      
+      if (!isAdmin && !isHost) {
+        // Check if user is a participant in this meeting
+        const participant = await this.participantModel.findOne({
+          meetingId: new Types.ObjectId(meetingId),
+          userId: new Types.ObjectId(userId),
+          status: { $in: ['APPROVED', 'ADMITTED'] },
+        });
+        
+        if (!participant) {
+          throw new ForbiddenException('You can only view meetings you host or participate in');
+        }
       }
 
       this.logger.log(`[GET_MEETING_BY_ID] Success - Meeting ID: ${meetingId}`);

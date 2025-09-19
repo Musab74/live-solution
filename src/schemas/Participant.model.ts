@@ -67,6 +67,30 @@ export class Participant {
   @Field()
   @Prop({
     type: String,
+    enum: Object.values(MediaState),
+    default: MediaState.OFF,
+  })
+  screenState!: MediaState; // ON | OFF | OFF_BY_HOST
+
+  @Field({ nullable: true })
+  @Prop()
+  screenShareInfo?: string; // Store screen/window name being shared
+
+  @Field()
+  @Prop({ default: false })
+  hasHandRaised!: boolean; // Is participant's hand raised
+
+  @Field({ nullable: true })
+  @Prop()
+  handRaisedAt?: Date; // When hand was raised
+
+  @Field({ nullable: true })
+  @Prop()
+  handLoweredAt?: Date; // When hand was lowered
+
+  @Field()
+  @Prop({
+    type: String,
     enum: Object.values(ParticipantStatus),
     default: ParticipantStatus.WAITING,
   })

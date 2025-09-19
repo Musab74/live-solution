@@ -24,6 +24,12 @@ export class ChatHistoryInput {
   @IsInt()
   @Min(1)
   limit?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  offset?: number;
 }
 
 @InputType()

@@ -425,7 +425,18 @@ export class RecordingService {
         recordingDuration: meeting.recordingDuration,
         recordingStatus: meeting.recordingStatus as RecordingStatus,
         quality: '720p', // Default quality
-        format: 'mp4', // Default format
+        format: 'mp4', // Default format,
+        
+        // Additional fields for frontend compatibility
+        status: meeting.recordingStatus as RecordingStatus, // Alias for recordingStatus
+        recordingType: 'VIDEO', // Default recording type
+        startedAt: meeting.recordingStartedAt, // Alias for recordingStartedAt
+        stoppedAt: meeting.recordingEndedAt, // Alias for recordingEndedAt
+        pausedAt: meeting.recordingPausedAt, // Alias for recordingPausedAt
+        resumedAt: meeting.recordingResumedAt, // Alias for recordingResumedAt
+        durationSec: meeting.recordingDuration, // Alias for recordingDuration
+        fileSize: 0, // File size in bytes (placeholder)
+        downloadUrl: meeting.recordingUrl, // Direct download URL (same as recordingUrl)
       };
     } catch (error) {
       this.logger.error(

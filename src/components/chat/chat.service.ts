@@ -32,7 +32,7 @@ export class ChatService {
     userId: string,
     userRole: SystemRole,
   ): Promise<any> {
-    const { meetingId, before, limit = 50 } = historyInput;
+    const { meetingId, before, limit = 50, offset = 0 } = historyInput;
 
     // Verify meeting exists and user has access
     const meeting = await this.meetingModel.findById(meetingId);
@@ -71,6 +71,7 @@ export class ChatService {
       .populate('userId', 'displayName avatarUrl')
       .populate('replyToMessageId', 'text displayName createdAt')
       .sort({ createdAt: -1 })
+      .skip(offset)
       .limit(limit)
       .lean();
 
