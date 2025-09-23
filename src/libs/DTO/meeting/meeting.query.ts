@@ -39,8 +39,8 @@ export class MeetingWithHost {
   @Field(() => ID)
   hostId: string;
 
-  @Field()
-  inviteCode: string;
+  @Field({ nullable: true })
+  inviteCode?: string;
 
   @Field({ nullable: true })
   isPrivate?: boolean;
@@ -149,4 +149,100 @@ export class MeetingJoinResponse {
 
   @Field()
   message: string;
+}
+
+@ObjectType()
+export class ParticipantAttendance {
+  @Field()
+  _id: string;
+
+  @Field()
+  displayName: string;
+
+  @Field()
+  joinedAt: string;
+
+  @Field({ nullable: true })
+  leftAt?: string;
+
+  @Field()
+  totalTime: number;
+
+  @Field()
+  status: string;
+}
+
+@ObjectType()
+export class MeetingResponse {
+  @Field(() => ID)
+  _id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  status: string;
+
+  @Field()
+  inviteCode: string;
+
+  @Field()
+  isPrivate: boolean;
+
+  @Field()
+  isLocked: boolean;
+
+  @Field({ nullable: true })
+  scheduledFor?: string;
+
+  @Field({ nullable: true })
+  actualStartAt?: string;
+
+  @Field({ nullable: true })
+  endedAt?: string;
+
+  @Field({ nullable: true })
+  durationMin?: number;
+
+  @Field({ nullable: true })
+  notes?: string;
+
+  @Field()
+  participantCount: number;
+
+  @Field()
+  createdAt: string;
+
+  @Field()
+  updatedAt: string;
+
+  @Field()
+  hostId: string;
+
+  @Field(() => HostInfo, { nullable: true })
+  host?: HostInfo;
+}
+
+@ObjectType()
+export class MeetingAttendance {
+  @Field()
+  meetingId: string;
+
+  @Field()
+  totalParticipants: number;
+
+  @Field()
+  presentParticipants: number;
+
+  @Field()
+  absentParticipants: number;
+
+  @Field()
+  averageAttendanceTime: number;
+
+  @Field()
+  attendanceRate: number;
+
+  @Field(() => [ParticipantAttendance])
+  participants: ParticipantAttendance[];
 }

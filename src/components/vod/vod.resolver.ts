@@ -21,7 +21,9 @@ import {
   VodUrlResponse,
 } from '../../libs/DTO/vod/vod.query';
 import { ParticipantMessageResponse } from '../../libs/DTO/participant/participant.mutation';
-// import { GraphQLUpload } from 'graphql-upload';
+// GraphQL upload disabled due to ES module compatibility issues
+// import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs';
+// import Upload from 'graphql-upload/Upload.mjs';
 
 @Resolver()
 export class VodResolver {
@@ -82,7 +84,7 @@ export class VodResolver {
   @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
   async uploadVodFile(
     @Args('input') createInput: CreateVodFileInput,
-    @Args('file', { type: () => String }) file: any,
+    @Args('file', { type: () => String }) file: string,
     @AuthMember() user: Member,
   ) {
     return this.vodService.createVodFromFile(
@@ -102,6 +104,21 @@ export class VodResolver {
   ) {
     return this.vodService.createVodFromUrl(
       createInput,
+      user._id,
+      user.systemRole,
+    );
+  }
+
+  @Mutation(() => VodWithMeeting, { name: 'createVOD' })
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  async createVOD(
+    @Args('input') createInput: CreateVodFileInput,
+    @AuthMember() user: Member,
+  ) {
+    return this.vodService.createVodFromFile(
+      createInput,
+      null,
       user._id,
       user.systemRole,
     );

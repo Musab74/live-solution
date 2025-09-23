@@ -30,13 +30,13 @@ async function bootstrap() {
   app.use(express.json({ limit: '50mb' }));
   app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-  // GraphQL file upload (optional)
-  try {
-    const { graphqlUploadExpress } = require('graphql-upload');
-    app.use(graphqlUploadExpress({ maxSize: 50000000, maxFiles: 10 }));
-  } catch (error) {
-    console.log('GraphQL upload middleware not available');
-  }
+  // GraphQL file upload disabled due to ES module compatibility issues
+  // try {
+  //   const { graphqlUploadExpress } = require('graphql-upload');
+  //   app.use(graphqlUploadExpress({ maxSize: 50000000, maxFiles: 10 }));
+  // } catch (error) {
+  //   console.log('GraphQL upload middleware not available');
+  // }
 
   // Static file serving
   app.use('/uploads', express.static('./uploads'));

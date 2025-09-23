@@ -6,6 +6,7 @@ import {
   IsInt,
   Min,
   MaxLength,
+  IsNotEmpty,
 } from 'class-validator';
 import { Field, InputType } from '@nestjs/graphql';
 import { VodSourceType } from '../../enums/enums';
@@ -14,6 +15,7 @@ import { VodSourceType } from '../../enums/enums';
 export class CreateVodFileInput {
   @Field()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   title!: string;
 
@@ -39,11 +41,13 @@ export class CreateVodFileInput {
 export class CreateVodUrlInput {
   @Field()
   @IsString()
+  @IsNotEmpty()
   @MaxLength(200)
   title!: string;
 
   @Field()
   @IsUrl()
+  @IsNotEmpty()
   url!: string;
 
   @Field({ nullable: true })
@@ -68,6 +72,7 @@ export class CreateVodUrlInput {
 export class UpdateVodInput {
   @Field()
   @IsString()
+  @IsNotEmpty()
   vodId!: string;
 
   @Field({ nullable: true })

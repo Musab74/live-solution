@@ -30,6 +30,11 @@ export class ChatHistoryInput {
   @IsInt()
   @Min(0)
   offset?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  cursor?: string;
 }
 
 @InputType()
@@ -61,4 +66,9 @@ export class DeleteMessageInput {
   @Field()
   @IsMongoId()
   messageId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }

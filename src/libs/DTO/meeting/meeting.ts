@@ -1,5 +1,6 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
 import { MeetingStatus } from '../../enums/enums';
+import { MeetingWithHost } from './meeting.query';
 
 @ObjectType()
 export class MeetingDto {
@@ -44,4 +45,16 @@ export class MeetingDto {
 
   @Field()
   updatedAt!: Date;
+}
+
+@ObjectType()
+export class MeetingResponse {
+  @Field()
+  success!: boolean;
+
+  @Field()
+  message!: string;
+
+  @Field(() => MeetingWithHost, { nullable: true })
+  meeting?: MeetingWithHost;
 }
