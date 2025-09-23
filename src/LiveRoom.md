@@ -1716,13 +1716,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                     setPrivateMessage('');
                   }}
                   style={{
-                    padding: '8px 12px',
-                    backgroundColor: '#007bff',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '13px'
+                  padding: '8px 12px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px'
                   }}
                 >
                   Send
@@ -1872,13 +1872,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                       setNewMessage('');
                     }}
                     style={{
-                      padding: '8px 16px',
-                      backgroundColor: '#007bff',
-                      color: 'white',
-                      border: 'none',
-                      borderRadius: '20px',
-                      cursor: 'pointer',
-                      fontSize: '14px'
+                    padding: '8px 16px',
+                    backgroundColor: '#007bff',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '20px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
                     }}
                   >
                     Send
@@ -1996,164 +1996,164 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                       {participants.map((participant) => {
                         const isHandRaised = raisedHands.some(hand => hand.participantId === participant._id);
                         return (
-                          <div key={participant._id} style={{
+                        <div key={participant._id} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '12px',
+                          backgroundColor: '#f8fafc',
+                          borderRadius: '8px',
+                          border: '1px solid #e2e8f0',
+                          marginBottom: '8px',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}>
+                          <div style={{
+                            width: '28px',
+                            height: '28px',
+                            backgroundColor: '#e9ecef',
+                            borderRadius: '50%',
                             display: 'flex',
                             alignItems: 'center',
-                            padding: '12px',
-                            backgroundColor: '#f8fafc',
-                            borderRadius: '8px',
-                            border: '1px solid #e2e8f0',
-                            marginBottom: '8px',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            justifyContent: 'center',
+                            marginRight: '8px',
+                            fontSize: '12px',
+                            color: '#6c757d'
                           }}>
-                            <div style={{
-                              width: '28px',
-                              height: '28px',
-                              backgroundColor: '#e9ecef',
-                              borderRadius: '50%',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              marginRight: '8px',
-                              fontSize: '12px',
-                              color: '#6c757d'
-                            }}>
-                              👤
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <p style={{ margin: '0 0 2px 0', fontWeight: 'bold', fontSize: '12px', color: '#333' }}>
+                            👤
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <p style={{ margin: '0 0 2px 0', fontWeight: 'bold', fontSize: '12px', color: '#333' }}>
                                 {participant.displayName.split(' ')[1] || participant.displayName}
-                              </p>
-                              <p style={{ margin: 0, fontSize: '10px', color: '#6c757d' }}>
+                            </p>
+                            <p style={{ margin: 0, fontSize: '10px', color: '#6c757d' }}>
                                 {participant.email || 'No email'}
-                              </p>
-                            </div>
-                            <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
-                              {/* Mic Control */}
-                              <button 
+                            </p>
+                          </div>
+                          <div style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}>
+                            {/* Mic Control */}
+                            <button 
                                 onClick={() => handleForceMute(participant._id)}
-                                style={{
-                                  width: '28px',
-                                  height: '28px',
+                              style={{
+                                width: '28px',
+                                height: '28px',
                                   backgroundColor: participant.micState === 'MUTED' || participant.micState === 'MUTED_BY_HOST' ? '#fef2f2' : '#f0fdf4',
                                   color: participant.micState === 'MUTED' || participant.micState === 'MUTED_BY_HOST' ? '#ef4444' : '#10b981',
                                   border: participant.micState === 'MUTED' || participant.micState === 'MUTED_BY_HOST' ? '1px solid #fecaca' : '1px solid #bbf7d0',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  position: 'relative',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                  transition: 'all 0.2s ease'
-                                }}
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'all 0.2s ease'
+                              }}
                                 title={participant.micState === 'MUTED' || participant.micState === 'MUTED_BY_HOST' ? 'Unmute' : 'Force Mute'}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
-                                </svg>
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                              </svg>
                                 {(participant.micState === 'MUTED' || participant.micState === 'MUTED_BY_HOST') && (
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%) rotate(45deg)',
-                                    width: '16px',
-                                    height: '2px',
-                                    backgroundColor: '#dc3545',
-                                    zIndex: 1
-                                  }}></div>
-                                )}
-                              </button>
-                              
-                              {/* Camera Control */}
-                              <button 
-                                onClick={() => handleForceCameraOff(participant._id)}
-                                style={{
-                                  width: '28px',
-                                  height: '28px',
-                                  backgroundColor: participant.cameraState === 'ON' ? '#eff6ff' : '#fef2f2',
-                                  color: participant.cameraState === 'ON' ? '#3b82f6' : '#ef4444',
-                                  border: participant.cameraState === 'ON' ? '1px solid #bfdbfe' : '1px solid #fecaca',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  position: 'relative',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                title={participant.cameraState === 'ON' ? 'Camera Off' : 'Camera On'}
-                              >
-                                <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                                </svg>
-                                {participant.cameraState !== 'ON' && (
-                                  <div style={{
-                                    position: 'absolute',
-                                    top: '50%',
-                                    left: '50%',
-                                    transform: 'translate(-50%, -50%) rotate(45deg)',
-                                    width: '16px',
-                                    height: '2px',
-                                    backgroundColor: '#dc3545',
-                                    zIndex: 1
-                                  }}></div>
-                                )}
-                              </button>
-                              
-                              {/* Remove Button */}
-                              <button 
-                                onClick={() => handleRemoveParticipant(participant._id)}
-                                style={{
-                                  width: '28px',
-                                  height: '28px',
-                                  backgroundColor: '#fef2f2',
-                                  color: '#ef4444',
-                                  border: '1px solid #fecaca',
-                                  borderRadius: '6px',
-                                  cursor: 'pointer',
-                                  fontSize: '12px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                  transition: 'all 0.2s ease'
-                                }}
-                                title="Remove Participant"
-                              >
-                                🗑️
-                              </button>
-                              
-                              {/* Hand Control - Only show when raised */}
-                              {isHandRaised && (
-                                <button 
-                                  onClick={() => handleHostLowerHand(participant._id)}
-                                  style={{
-                                    width: '28px',
-                                    height: '28px',
-                                    backgroundColor: '#fef3c7',
-                                    color: '#d97706',
-                                    border: '1px solid #fde68a',
-                                    borderRadius: '6px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  title="Lower Hand"
-                                >
-                                  ✋
-                                </button>
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  left: '50%',
+                                  transform: 'translate(-50%, -50%) rotate(45deg)',
+                                  width: '16px',
+                                  height: '2px',
+                                  backgroundColor: '#dc3545',
+                                  zIndex: 1
+                                }}></div>
                               )}
-                            </div>
+                            </button>
+                            
+                            {/* Camera Control */}
+                            <button 
+                                onClick={() => handleForceCameraOff(participant._id)}
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                backgroundColor: participant.cameraState === 'ON' ? '#eff6ff' : '#fef2f2',
+                                color: participant.cameraState === 'ON' ? '#3b82f6' : '#ef4444',
+                                border: participant.cameraState === 'ON' ? '1px solid #bfdbfe' : '1px solid #fecaca',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                position: 'relative',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title={participant.cameraState === 'ON' ? 'Camera Off' : 'Camera On'}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                              </svg>
+                              {participant.cameraState !== 'ON' && (
+                                <div style={{
+                                  position: 'absolute',
+                                  top: '50%',
+                                  left: '50%',
+                                  transform: 'translate(-50%, -50%) rotate(45deg)',
+                                  width: '16px',
+                                  height: '2px',
+                                  backgroundColor: '#dc3545',
+                                  zIndex: 1
+                                }}></div>
+                              )}
+                            </button>
+                            
+                            {/* Remove Button */}
+                            <button 
+                                onClick={() => handleRemoveParticipant(participant._id)}
+                              style={{
+                                width: '28px',
+                                height: '28px',
+                                backgroundColor: '#fef2f2',
+                                color: '#ef4444',
+                                border: '1px solid #fecaca',
+                                borderRadius: '6px',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                transition: 'all 0.2s ease'
+                              }}
+                              title="Remove Participant"
+                            >
+                              🗑️
+                            </button>
+                            
+                            {/* Hand Control - Only show when raised */}
+                              {isHandRaised && (
+                              <button 
+                                  onClick={() => handleHostLowerHand(participant._id)}
+                                style={{
+                                  width: '28px',
+                                  height: '28px',
+                                  backgroundColor: '#fef3c7',
+                                  color: '#d97706',
+                                  border: '1px solid #fde68a',
+                                  borderRadius: '6px',
+                                  cursor: 'pointer',
+                                  fontSize: '12px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                                  transition: 'all 0.2s ease'
+                                }}
+                                title="Lower Hand"
+                              >
+                                ✋
+                              </button>
+                            )}
                           </div>
+                        </div>
                         );
                       })}
                     </div>
@@ -2230,13 +2230,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                             <button 
                               onClick={() => handleApproveParticipant(participant._id)}
                               style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#28a745',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                fontSize: '9px'
+                              padding: '4px 8px',
+                              backgroundColor: '#28a745',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '9px'
                               }}
                             >
                               ✅ Approve
@@ -2244,13 +2244,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                             <button 
                               onClick={() => handleRejectParticipant(participant._id)}
                               style={{
-                                padding: '4px 8px',
-                                backgroundColor: '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '3px',
-                                cursor: 'pointer',
-                                fontSize: '9px'
+                              padding: '4px 8px',
+                              backgroundColor: '#dc3545',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '3px',
+                              cursor: 'pointer',
+                              fontSize: '9px'
                               }}
                             >
                               ❌ Reject
@@ -2380,13 +2380,13 @@ const ProfessionalLiveStreamRoom: React.FC<ProfessionalLiveStreamRoomProps> = ({
                           setNewMessage('');
                         }}
                         style={{
-                          padding: '8px 12px',
-                          backgroundColor: '#007bff',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '6px',
-                          cursor: 'pointer',
-                          fontSize: '14px'
+                        padding: '8px 12px',
+                        backgroundColor: '#007bff',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                        fontSize: '14px'
                         }}
                       >
                         Send

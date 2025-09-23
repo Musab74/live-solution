@@ -8,6 +8,7 @@ import {
   ParticipantWithLoginInfo,
   ParticipantStats,
 } from '../../libs/DTO/participant/participant.query';
+import { MeetingAttendance } from '../../libs/DTO/meeting/meeting.query';
 import {
   CreateParticipantInput,
   UpdateParticipantInput,
@@ -248,6 +249,32 @@ export class ParticipantResolver {
     }
   }
 
+  @Mutation(() => ParticipantMessageResponse, { name: 'forceMuteParticipant' })
+  @UseGuards(AuthGuard)
+  async forceMuteParticipant(
+    @Args('input') forceMuteInput: ForceMuteInput,
+    @AuthMember() user: Member,
+  ) {
+    this.logger.log(
+      `[FORCE_MUTE_PARTICIPANT] Attempt - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}, Host ID: ${user._id}, Email: ${user.email}`,
+    );
+    try {
+      const result = await this.participantService.forceMuteParticipant(
+        forceMuteInput,
+        user._id,
+      );
+      this.logger.log(
+        `[FORCE_MUTE_PARTICIPANT] Success - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}`,
+      );
+      return result;
+    } catch (error) {
+      this.logger.error(
+        `[FORCE_MUTE_PARTICIPANT] Failed - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Error: ${error.message}`,
+      );
+      throw error;
+    }
+  }
+
   @Mutation(() => ParticipantMessageResponse, { name: 'forceCameraOff' })
   @UseGuards(AuthGuard)
   async forceCameraOff(
@@ -306,17 +333,13 @@ export class ParticipantResolver {
     return this.participantService.canBeHost(user._id);
   }
 
-  @Query(() => String, { name: 'getMeetingAttendance' })
+  @Query(() => MeetingAttendance, { name: 'getMeetingAttendance' })
   @UseGuards(AuthGuard)
   async getMeetingAttendance(
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    const attendance = await this.participantService.getMeetingAttendance(
-      meetingId,
-      user._id,
-    );
-    return JSON.stringify(attendance, null, 2);
+    return this.participantService.getMeetingAttendance(meetingId, user._id);
   }
 
   // ==================== SCREEN SHARING RESOLVERS ====================
@@ -484,7 +507,7 @@ export class ParticipantResolver {
     }
   }
 
-  @Mutation(() => [HandRaiseActionResponse], { name: 'lowerAllHands' })
+  @Mutation(() => HandRaiseActionResponse, { name: 'lowerAllHands' })
   @UseGuards(AuthGuard)
   async lowerAllHands(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -498,7 +521,12 @@ export class ParticipantResolver {
       this.logger.log(
         `[LOWER_ALL_HANDS] Success - Meeting ID: ${meetingId}, Lowered: ${result.length} hands`,
       );
-      return result;
+      return {
+        success: true,
+        message: `Lowered ${result.length} hands`,
+        meetingId,
+        loweredHandsCount: result.length
+      };
     } catch (error) {
       this.logger.error(
         `[LOWER_ALL_HANDS] Failed - Meeting ID: ${meetingId}, Error: ${error.message}`,

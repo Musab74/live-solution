@@ -69,3 +69,45 @@ export class RecordingInfoInput {
   @IsString()
   meetingId!: string;
 }
+
+// Additional input types for frontend compatibility
+@InputType()
+export class StartRecordingInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  quality?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  format?: string;
+}
+
+@InputType()
+export class StopRecordingInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}
+
+@InputType()
+export class PauseRecordingInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+}

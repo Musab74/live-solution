@@ -55,3 +55,28 @@ export class GetScreenShareStatusInput {
   @IsString()
   participantId?: string; // If not provided, get all participants' screen status
 }
+
+@InputType()
+export class ForceScreenShareControlInput {
+  @Field(() => ID)
+  @IsString()
+  meetingId!: string;
+
+  @Field(() => ID)
+  @IsString()
+  participantId!: string;
+
+  @Field(() => MediaState)
+  @IsEnum(MediaState)
+  screenState!: MediaState;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  reason?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  screenShareInfo?: string;
+}

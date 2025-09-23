@@ -15,6 +15,7 @@ import {
   RecordingResponse,
   MeetingRecordingInfo,
   RecordingStats,
+  RecordingInfo,
 } from '../../libs/DTO/recording/recording.query';
 
 @Resolver()

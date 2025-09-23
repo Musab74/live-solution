@@ -11,6 +11,7 @@ import {
 } from '../../schemas/Chat.message.model';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
 import { Member, MemberDocument } from '../../schemas/Member.model';
+import { Participant, ParticipantDocument } from '../../schemas/Participant.model';
 import {
   ChatHistoryInput,
   ChatSearchInput,
@@ -25,6 +26,7 @@ export class ChatService {
     private chatMessageModel: Model<ChatMessageDocument>,
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
+    @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
   ) {}
 
   async getChatHistory(
@@ -43,9 +45,10 @@ export class ChatService {
     // Check if user has access to this meeting
     if (userRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
       // Check if user is a participant in this meeting
-      const isParticipant = await this.chatMessageModel.findOne({
+      const isParticipant = await this.participantModel.findOne({
         meetingId: new Types.ObjectId(meetingId),
         userId: new Types.ObjectId(userId),
+        status: { $in: ['WAITING', 'APPROVED', 'ADMITTED'] }
       });
 
       if (!isParticipant) {
@@ -324,9 +327,10 @@ export class ChatService {
     // Check if user has access to this meeting
     if (userRole !== SystemRole.ADMIN && meeting.hostId.toString() !== userId) {
       // Check if user is a participant in this meeting
-      const isParticipant = await this.chatMessageModel.findOne({
+      const isParticipant = await this.participantModel.findOne({
         meetingId: message.meetingId,
         userId: new Types.ObjectId(userId),
+        status: { $in: ['WAITING', 'APPROVED', 'ADMITTED'] }
       });
 
       if (!isParticipant) {

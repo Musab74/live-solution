@@ -36,3 +36,15 @@ export class VodDto {
   @Field()
   updatedAt!: Date;
 }
+
+@ObjectType()
+export class VodResponse {
+  @Field()
+  success!: boolean;
+
+  @Field()
+  message!: string;
+
+  @Field(() => VodDto, { nullable: true })
+  vod?: VodDto;
+}

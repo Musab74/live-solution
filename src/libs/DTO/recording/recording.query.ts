@@ -1,5 +1,6 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, InputType } from '@nestjs/graphql';
 import { RecordingStatus } from '../../enums/enums';
+import { IsMongoId } from 'class-validator';
 
 @ObjectType()
 export class MeetingRecordingInfo {
@@ -105,4 +106,77 @@ export class RecordingStats {
 
   @Field()
   averageRecordingDuration!: number; // in seconds
+}
+
+@ObjectType()
+export class RecordingInfo {
+  @Field()
+  meetingId: string;
+
+  @Field()
+  isRecording: boolean;
+
+  @Field({ nullable: true })
+  recordingId?: string;
+
+  @Field({ nullable: true })
+  recordingUrl?: string;
+
+  @Field({ nullable: true })
+  recordingStartedAt?: string;
+
+  @Field({ nullable: true })
+  recordingEndedAt?: string;
+
+  @Field({ nullable: true })
+  recordingPausedAt?: string;
+
+  @Field({ nullable: true })
+  recordingResumedAt?: string;
+
+  @Field()
+  recordingDuration: number;
+
+  @Field()
+  recordingStatus: string;
+
+  @Field()
+  quality: string;
+
+  @Field()
+  format: string;
+
+  @Field()
+  status: string;
+
+  @Field()
+  recordingType: string;
+
+  @Field({ nullable: true })
+  startedAt?: string;
+
+  @Field({ nullable: true })
+  stoppedAt?: string;
+
+  @Field({ nullable: true })
+  pausedAt?: string;
+
+  @Field({ nullable: true })
+  resumedAt?: string;
+
+  @Field()
+  durationSec: number;
+
+  @Field()
+  fileSize: number;
+
+  @Field({ nullable: true })
+  downloadUrl?: string;
+}
+
+@InputType()
+export class GetRecordingInput {
+  @Field()
+  @IsMongoId()
+  meetingId: string;
 }

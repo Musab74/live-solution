@@ -18,22 +18,10 @@ import {
   MeetingWithHost,
   MeetingListResponse,
   MeetingStats,
+  MeetingResponse,
 } from '../../libs/DTO/meeting/meeting.query';
 
-@ObjectType()
-export class MeetingResponse {
-  @Field()
-  success: boolean;
-
-  @Field()
-  message: string;
-
-  @Field({ nullable: true })
-  meetingId?: string;
-
-  @Field({ nullable: true })
-  inviteCode?: string;
-}
+// MeetingResponse is now imported from DTO
 
 @ObjectType()
 export class JoinMeetingResponse {
@@ -45,6 +33,72 @@ export class JoinMeetingResponse {
 
   @Field(() => MeetingWithHost, { nullable: true })
   meeting?: any;
+
+  @Field(() => Member, { nullable: true })
+  user?: Member;
+}
+
+@ObjectType()
+export class SimpleMeetingInfo {
+  @Field(() => ID)
+  _id: string;
+
+  @Field()
+  title: string;
+
+  @Field()
+  status: string;
+
+  @Field()
+  inviteCode: string;
+
+  @Field({ nullable: true })
+  isPrivate?: boolean;
+
+  @Field({ nullable: true })
+  isLocked?: boolean;
+
+  @Field({ nullable: true })
+  scheduledFor?: string;
+
+  @Field({ nullable: true })
+  actualStartAt?: string;
+
+  @Field({ nullable: true })
+  endedAt?: string;
+
+  @Field({ nullable: true })
+  durationMin?: number;
+
+  @Field({ nullable: true })
+  notes?: string;
+
+  @Field()
+  participantCount: number;
+
+  @Field()
+  createdAt: string;
+
+  @Field()
+  updatedAt: string;
+
+  @Field()
+  hostId: string;
+
+  @Field(() => Member, { nullable: true })
+  host?: Member;
+}
+
+@ObjectType()
+export class SimpleJoinMeetingResponse {
+  @Field()
+  success: boolean;
+
+  @Field()
+  message: string;
+
+  @Field(() => SimpleMeetingInfo, { nullable: true })
+  meeting?: SimpleMeetingInfo;
 
   @Field(() => Member, { nullable: true })
   user?: Member;
@@ -106,6 +160,20 @@ export class MeetingResolver {
       this.logger.error(
         `[GET_MEETING_BY_ID] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,
       );
+      
+      // If it's a permission error, try to get meeting without user check
+      if (error.message?.includes('You can only view meetings')) {
+        this.logger.warn(`[GET_MEETING_BY_ID] Permission denied, trying public access for meeting ${meetingId}`);
+        try {
+          const result = await this.meetingService.getMeetingByIdPublic(meetingId);
+          this.logger.log(`[GET_MEETING_BY_ID] Public access success - Meeting ID: ${meetingId}, Title: ${result.title}`);
+          return result;
+        } catch (publicError) {
+          this.logger.error(`[GET_MEETING_BY_ID] Public access also failed - Meeting ID: ${meetingId}, Error: ${publicError.message}`);
+          throw publicError;
+        }
+      }
+      
       throw error;
     }
   }
@@ -187,7 +255,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => JoinMeetingResponse, { name: 'joinMeetingByCode' })
+  @Mutation(() => SimpleJoinMeetingResponse, { name: 'joinMeetingByCode' })
   @UseGuards(AuthGuard)
   async joinMeetingByCode(
     @Args('input') joinInput: JoinMeetingInput,
@@ -204,10 +272,31 @@ export class MeetingResolver {
       this.logger.log(
         `[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${result.meeting._id}, User: ${user.email}`,
       );
+      
+      // Transform to SimpleMeetingInfo
+      const simpleMeeting = {
+        _id: result.meeting._id,
+        title: result.meeting.title,
+        status: result.meeting.status,
+        inviteCode: result.meeting.inviteCode,
+        isPrivate: result.meeting.isPrivate,
+        isLocked: result.meeting.isLocked,
+        scheduledFor: result.meeting.scheduledFor,
+        actualStartAt: result.meeting.actualStartAt,
+        endedAt: result.meeting.endedAt,
+        durationMin: result.meeting.durationMin,
+        notes: result.meeting.notes,
+        participantCount: result.meeting.participantCount,
+        createdAt: result.meeting.createdAt,
+        updatedAt: result.meeting.updatedAt,
+        hostId: result.meeting.hostId,
+        host: result.meeting.host,
+      };
+      
       return {
         success: true,
         message: result.message,
-        meeting: result.meeting,
+        meeting: simpleMeeting,
         user: result.user,
       };
     } catch (error) {
@@ -267,7 +356,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'deleteMeeting' })
+  @Mutation(() => MeetingWithHost, { name: 'deleteMeeting' })
   @UseGuards(AuthGuard)
   async deleteMeeting(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -291,7 +380,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'rotateInviteCode' })
+  @Mutation(() => MeetingWithHost, { name: 'rotateInviteCode' })
   @UseGuards(AuthGuard)
   async rotateInviteCode(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -308,12 +397,7 @@ export class MeetingResolver {
       this.logger.log(
         `[ROTATE_INVITE_CODE] Success - Meeting ID: ${meetingId}, New Code: ${result.inviteCode}`,
       );
-      return {
-        success: true,
-        message: result.message,
-        meetingId: result._id,
-        inviteCode: result.inviteCode,
-      };
+      return result;
     } catch (error) {
       this.logger.error(
         `[ROTATE_INVITE_CODE] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,
@@ -322,7 +406,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'lockRoom' })
+  @Mutation(() => MeetingWithHost, { name: 'lockRoom' })
   @UseGuards(AuthGuard)
   async lockRoom(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -336,11 +420,7 @@ export class MeetingResolver {
       this.logger.log(
         `[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`,
       );
-      return {
-        success: true,
-        message: result.message,
-        meetingId: result._id,
-      };
+      return result;
     } catch (error) {
       this.logger.error(
         `[LOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,
@@ -349,7 +429,7 @@ export class MeetingResolver {
     }
   }
 
-  @Mutation(() => MeetingResponse, { name: 'unlockRoom' })
+  @Mutation(() => MeetingWithHost, { name: 'unlockRoom' })
   @UseGuards(AuthGuard)
   async unlockRoom(
     @Args('meetingId', { type: () => ID }) meetingId: string,
@@ -363,11 +443,7 @@ export class MeetingResolver {
       this.logger.log(
         `[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`,
       );
-      return {
-        success: true,
-        message: result.message,
-        meetingId: result._id,
-      };
+      return result;
     } catch (error) {
       this.logger.error(
         `[UNLOCK_ROOM] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,

@@ -55,21 +55,21 @@ export class LivekitResolver {
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
-  @Mutation(() => Boolean)
+  @Mutation(() => String, { name: 'endLivekitRoom' })
   async endLivekitRoom(@Args('meetingId') meetingId: string) {
     await this.lk.deleteRoom(meetingId);
-    return true;
+    return JSON.stringify({ success: true, message: 'Room ended successfully' });
   }
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN)
-  @Mutation(() => Boolean)
+  @Mutation(() => String, { name: 'kickLivekitParticipant' })
   async kickLivekitParticipant(
     @Args('meetingId') meetingId: string,
     @Args('identity') identity: string,
   ) {
     await this.lk.removeParticipant(meetingId, identity);
-    return true;
+    return JSON.stringify({ success: true, message: 'Participant kicked successfully' });
   }
 
   // Recording mutations
@@ -102,7 +102,7 @@ export class LivekitResolver {
 
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
-  @Mutation(() => Boolean, { name: 'stopRecording' })
+  @Mutation(() => String, { name: 'stopRecording' })
   async stopRecording(
     @Args('input') input: StopRecordingInput,
     @AuthMember() me: any,
@@ -115,7 +115,7 @@ export class LivekitResolver {
       this.logger.log(
         `[STOP_RECORDING] Success - Recording ID: ${input.recordingSid}, User ID: ${me._id}`,
       );
-      return true;
+      return JSON.stringify({ success: true, message: 'Recording stopped successfully' });
     } catch (error) {
       this.logger.error(
         `[STOP_RECORDING] Failed - Recording ID: ${input.recordingSid}, User ID: ${me._id}, Error: ${error.message}`,
