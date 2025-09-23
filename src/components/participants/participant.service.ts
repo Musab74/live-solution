@@ -73,15 +73,23 @@ export class ParticipantService {
     meetingId: string,
     userId: string,
   ): Promise<any[]> {
-    // Verify the meeting exists
-    const meeting = await this.meetingModel.findById(meetingId);
+    // Verify the meeting exists and populate hostId
+    const meeting = await this.meetingModel.findById(meetingId).populate('hostId');
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId.toString() === userId;
+    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId:`, JSON.stringify(meeting.hostId));
+    console.log(`[DEBUG] getParticipantsByMeeting - userId:`, userId);
+    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId._id:`, meeting.hostId?._id);
+    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId._id.toString():`, meeting.hostId?._id?.toString());
+    console.log(`[DEBUG] getParticipantsByMeeting - comparison:`, meeting.hostId?._id?.toString() === userId.toString());
+    
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
     let isParticipant = false;
+
+    console.log(`[DEBUG] getParticipantsByMeeting - isHost: ${isHost}`);
 
     if (!isHost) {
       // Check if user is a participant in this meeting
@@ -91,13 +99,21 @@ export class ParticipantService {
         status: { $in: ['APPROVED', 'ADMITTED'] },
       });
       isParticipant = !!userParticipant;
+      console.log(`[DEBUG] getParticipantsByMeeting - isParticipant: ${isParticipant}`);
     }
 
+    console.log(`[DEBUG] getParticipantsByMeeting - Final check: isHost=${isHost}, isParticipant=${isParticipant}`);
+
+    // Allow hosts to view participants even if they haven't joined as participants yet
+    // This is common in stream rooms where hosts wait alone for participants
     if (!isHost && !isParticipant) {
+      console.log(`[DEBUG] getParticipantsByMeeting - THROWING FORBIDDEN EXCEPTION`);
       throw new ForbiddenException(
         'You must be the host or a participant in this meeting to view participants',
       );
     }
+
+    console.log(`[DEBUG] getParticipantsByMeeting - Authorization passed, fetching participants...`);
 
     // Get all participants for this meeting with populated user data
     const participants = await this.participantModel
@@ -159,7 +175,7 @@ export class ParticipantService {
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId.toString() === userId;
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
     let isParticipant = false;
 
     if (!isHost) {
@@ -349,7 +365,7 @@ export class ParticipantService {
 
     // Verify the user is the host or the participant themselves
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId.toString() === userId;
+    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -433,7 +449,7 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId.toString() === userId;
+    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -470,7 +486,7 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId.toString() === userId;
+    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -569,7 +585,7 @@ export class ParticipantService {
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId.toString() === userId;
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
     let isParticipant = false;
 
     if (!isHost) {
@@ -734,7 +750,7 @@ export class ParticipantService {
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId.toString() === userId;
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
     let isParticipant = false;
 
     if (!isHost) {
@@ -1248,7 +1264,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host or a participant in the meeting
-    const isHost = meeting.hostId.toString() === userId;
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
     if (!isHost) {
       // Check if user is a participant in this meeting
       const userParticipant = await this.participantModel.findOne({
@@ -1492,7 +1508,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host or a participant in the meeting
-    const isHost = meeting.hostId.toString() === userId;
+    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
     if (!isHost) {
       // Check if user is a participant in this meeting
       const userParticipant = await this.participantModel.findOne({

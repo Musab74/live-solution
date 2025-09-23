@@ -89,7 +89,7 @@ export class MeetingResolver {
   async getMeetingById(
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
-  ) {
+  ): Promise<any> {
     this.logger.log(
       `[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
     );
