@@ -9,6 +9,7 @@ import {
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
+import { LivekitService } from '../signaling/livekit.service'; // Add this
 
 @Module({
   imports: [
@@ -19,7 +20,7 @@ import { AuthModule } from '../auth/auth.module';
     ]),
     AuthModule,
   ],
-  providers: [ParticipantService, ParticipantResolver],
+  providers: [ParticipantService, ParticipantResolver, LivekitService], // Add LivekitService
   exports: [ParticipantService],
 })
 export class ParticipantModule {}

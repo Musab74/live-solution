@@ -4,6 +4,7 @@ import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Member } from '../../schemas/Member.model';
+import { ParticipantStatus } from '../../libs/enums/enums';
 import {
   ParticipantWithLoginInfo,
   ParticipantStats,
@@ -67,22 +68,31 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<any[]> {
-    this.logger.log(
-      `[GET_PARTICIPANTS_BY_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
+    console.log('🔍 BACKEND GET_PARTICIPANTS: Query called', {
+      meetingId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
     try {
       const result = await this.participantService.getParticipantsByMeeting(
         meetingId,
         user._id,
       );
-      this.logger.log(
-        `[GET_PARTICIPANTS_BY_MEETING] Success - Meeting ID: ${meetingId}, Count: ${result.length}`,
-      );
+      console.log('✅ BACKEND GET_PARTICIPANTS: Success', {
+        meetingId,
+        count: result.length,
+        participants: result.map(p => ({
+          _id: p._id,
+          displayName: p.displayName,
+          realDisplayName: (p.userId as any)?.displayName || p.displayName,
+          role: p.role,
+          userId: p.userId?._id
+        }))
+      });
       return result;
     } catch (error) {
-      this.logger.error(
-        `[GET_PARTICIPANTS_BY_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`,
-      );
+      console.error('❌ BACKEND GET_PARTICIPANTS: Error', error);
       throw error;
     }
   }
@@ -138,7 +148,25 @@ export class ParticipantResolver {
     @Args('input') joinInput: JoinParticipantInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.joinMeeting(joinInput, user._id);
+    console.log('🚀 BACKEND JOIN_MEETING: Mutation called', {
+      input: joinInput,
+      userId: user._id,
+      userEmail: user.email,
+      userDisplayName: user.displayName
+    });
+    
+    try {
+      const result = await this.participantService.joinMeeting(joinInput, user._id);
+      console.log('✅ BACKEND JOIN_MEETING: Success', {
+        participantId: result._id,
+        displayName: result.displayName,
+        role: result.role
+      });
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND JOIN_MEETING: Error', error);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'leaveMeeting' })
@@ -148,6 +176,94 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     return this.participantService.leaveMeeting(leaveInput, user._id);
+  }
+
+  @Mutation(() => ParticipantResponse, { name: 'updateParticipantMediaState' })
+  @UseGuards(AuthGuard)
+  async updateParticipantMediaState(
+    @Args('participantId', { type: () => ID }) participantId: string,
+    @AuthMember() user: Member,
+    @Args('micState', { nullable: true }) micState?: string,
+    @Args('cameraState', { nullable: true }) cameraState?: string,
+  ) {
+    console.log('🎤 BACKEND UPDATE_MEDIA_STATE: Mutation called', {
+      participantId,
+      micState,
+      cameraState,
+      userId: user._id
+    });
+    
+    try {
+      const result = await this.participantService.updateParticipantMediaState(participantId, {
+        micState: micState as any,
+        cameraState: cameraState as any
+      });
+      console.log('✅ BACKEND UPDATE_MEDIA_STATE: Success', result);
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND UPDATE_MEDIA_STATE: Error', error);
+      throw error;
+    }
+  }
+
+  @Query(() => ParticipantWithLoginInfo, { name: 'getParticipantByUserAndMeeting' })
+  @UseGuards(AuthGuard)
+  async getParticipantByUserAndMeeting(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('🔍 BACKEND GET_PARTICIPANT_BY_USER_MEETING: Query called', {
+      meetingId,
+      userId: user._id
+    });
+    
+    try {
+      const result = await this.participantService.getParticipantByUserAndMeeting(
+        user._id,
+        meetingId
+      );
+      console.log('✅ BACKEND GET_PARTICIPANT_BY_USER_MEETING: Success', result);
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND GET_PARTICIPANT_BY_USER_MEETING: Error', error);
+      throw error;
+    }
+  }
+
+  @Mutation(() => String, { name: 'forceLeaveMeeting' })
+  @UseGuards(AuthGuard)
+  async forceLeaveMeeting(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Mutation called', {
+      meetingId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      // Find the participant for this user in this meeting
+      const participant = await this.participantService.getParticipantByUserAndMeeting(
+        user._id,
+        meetingId
+      );
+      
+      if (!participant) {
+        console.log('🚪 BACKEND FORCE_LEAVE_MEETING: No participant found');
+        return 'No participant found for this meeting';
+      }
+      
+      // Set status to LEFT
+      participant.status = ParticipantStatus.LEFT;
+      await participant.save();
+      
+      console.log('✅ BACKEND FORCE_LEAVE_MEETING: Success - Participant status set to LEFT');
+      return `Successfully left meeting ${meetingId}`;
+    } catch (error) {
+      console.error('❌ BACKEND FORCE_LEAVE_MEETING: Error', error);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'updateSession' })
