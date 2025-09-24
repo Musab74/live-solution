@@ -278,7 +278,9 @@ export class MeetingService {
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id: ${meeting.hostId?._id}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - comparison: ${meeting.hostId?._id?.toString()} === ${userId.toString()} = ${meeting.hostId?._id?.toString() === userId.toString()}`);
       
-      const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
+      // Fix: Proper ObjectId comparison
+      const isHost = meeting.hostId && 
+        (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId.toString();
       const isAdmin = user.systemRole === SystemRole.ADMIN;
       
       this.logger.log(`[GET_MEETING_BY_ID] Debug - isHost: ${isHost}, isAdmin: ${isAdmin}`);
@@ -619,10 +621,14 @@ export class MeetingService {
       console.log(`[DEBUG] startMeeting - comparison:`, meeting.hostId._id.toString() === userId.toString());
       console.log(`[DEBUG] startMeeting - user.systemRole:`, user.systemRole);
       
-      if (
-        user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId._id.toString() !== userId.toString()
-      ) {
+      // Fix: Proper ObjectId comparison
+      const isHost = meeting.hostId && 
+        (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId.toString();
+      const isAdmin = user.systemRole === SystemRole.ADMIN;
+
+      console.log(`[DEBUG] startMeeting - isHost: ${isHost}, isAdmin: ${isAdmin}`);
+
+      if (!isAdmin && !isHost) {
         console.log(`[DEBUG] startMeeting - THROWING FORBIDDEN EXCEPTION`);
         throw new ForbiddenException(
           'Only the meeting host can start the meeting',
