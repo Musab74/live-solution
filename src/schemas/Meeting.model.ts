@@ -26,9 +26,9 @@ export class Meeting {
   @Prop({ type: Types.ObjectId, ref: 'Member', required: true, index: true })
   hostId!: Types.ObjectId;
 
-  @Field()
-  @Prop({ required: true, unique: true, index: true, trim: true })
-  inviteCode!: string;
+  @Field({ nullable: true })
+  @Prop({ required: false, unique: true, index: true, trim: true })
+  inviteCode?: string;
 
   @Field({ nullable: true })
   @Prop()

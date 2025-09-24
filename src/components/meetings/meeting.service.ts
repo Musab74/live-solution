@@ -18,6 +18,7 @@ import {
 } from '../../libs/DTO/meeting/meeting.input';
 import { SystemRole, MeetingStatus } from '../../libs/enums/enums';
 import { Logger } from '@nestjs/common';
+import { LivekitService } from '../signaling/livekit.service';
 
 @Injectable()
 export class MeetingService {
@@ -27,6 +28,7 @@ export class MeetingService {
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
     @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
+    private readonly livekitService: LivekitService,
   ) {}
 
   // CREATE MEETING
@@ -278,7 +280,9 @@ export class MeetingService {
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id: ${meeting.hostId?._id}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - comparison: ${meeting.hostId?._id?.toString()} === ${userId.toString()} = ${meeting.hostId?._id?.toString() === userId.toString()}`);
       
-      const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
+      // Fix: Proper ObjectId comparison
+      const isHost = meeting.hostId && 
+        (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId;
       const isAdmin = user.systemRole === SystemRole.ADMIN;
       
       this.logger.log(`[GET_MEETING_BY_ID] Debug - isHost: ${isHost}, isAdmin: ${isAdmin}`);
@@ -406,14 +410,14 @@ export class MeetingService {
         inviteCode: meeting.inviteCode || inviteCode, // Use the original inviteCode from input if meeting.inviteCode is null
         isPrivate: meeting.isPrivate || false,
         isLocked: meeting.isLocked || false,
-        scheduledFor: meeting.scheduledFor || null,
-        actualStartAt: meeting.actualStartAt || null,
-        endedAt: meeting.endedAt || null,
-        durationMin: meeting.durationMin || null,
-        notes: meeting.notes || null,
+        scheduledFor: meeting.scheduledFor?.toISOString(),
+        actualStartAt: meeting.actualStartAt?.toISOString(),
+        endedAt: meeting.endedAt?.toISOString(),
+        durationMin: meeting.durationMin || 0,
+        notes: meeting.notes || '',
         participantCount: meeting.participantCount || 0,
-        createdAt: meeting.createdAt || new Date(),
-        updatedAt: meeting.updatedAt || new Date(),
+        createdAt: meeting.createdAt?.toISOString() || new Date().toISOString(),
+        updatedAt: meeting.updatedAt?.toISOString() || new Date().toISOString(),
         hostId: (meeting.hostId as any)._id.toString(),
         host: {
           _id: (meeting.hostId as any)._id.toString(),
@@ -633,6 +637,72 @@ export class MeetingService {
       meeting.status = MeetingStatus.LIVE;
       meeting.actualStartAt = new Date();
       await meeting.save();
+
+      // Fix: Clear any fake participant data when meeting starts
+      try {
+        const deletedCount = await this.participantModel.deleteMany({ 
+          meetingId: new Types.ObjectId(meetingId) 
+        });
+        this.logger.log(`[START_MEETING] Cleared ${deletedCount.deletedCount} fake participants for meeting ${meetingId}`);
+        
+        // Reset participant count
+        await this.meetingModel.findByIdAndUpdate(meetingId, {
+          participantCount: 0
+        });
+      } catch (error) {
+        this.logger.error(`[START_MEETING] Failed to clear fake participants: ${error.message}`);
+      }
+
+      // Fix: Also cleanup any duplicates using direct database operations
+      try {
+        // Find all participants for this meeting
+        const participants = await this.participantModel.find({ 
+          meetingId: new Types.ObjectId(meetingId) 
+        });
+        
+        // Group by userId and remove duplicates
+        const groupedByUserId = participants.reduce((acc, participant) => {
+          const userId = participant.userId ? participant.userId.toString() : 'anonymous';
+          if (!acc[userId]) {
+            acc[userId] = [];
+          }
+          acc[userId].push(participant);
+          return acc;
+        }, {});
+        
+        let duplicateCount = 0;
+        for (const [userId, userParticipants] of Object.entries(groupedByUserId)) {
+          const participants = userParticipants as any[];
+          if (participants.length > 1) {
+            // Sort by createdAt, keep the most recent
+            const sorted = participants.sort((a, b) => 
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            
+            // Delete all but the first (most recent)
+            const toDelete = sorted.slice(1);
+            for (const duplicate of toDelete) {
+              await this.participantModel.findByIdAndDelete(duplicate._id);
+              duplicateCount++;
+            }
+          }
+        }
+        
+        if (duplicateCount > 0) {
+          this.logger.log(`[START_MEETING] Cleaned up ${duplicateCount} duplicate participants for meeting ${meetingId}`);
+        }
+      } catch (error) {
+        this.logger.error(`[START_MEETING] Failed to cleanup duplicates: ${error.message}`);
+      }
+
+      // Fix: Create LiveKit room when meeting starts
+      try {
+        await this.livekitService.createRoom(meetingId, 50); // Create room with max 50 participants
+        this.logger.log(`[START_MEETING] LiveKit room created for meeting ${meetingId}`);
+      } catch (error) {
+        this.logger.error(`[START_MEETING] Failed to create LiveKit room: ${error.message}`);
+        // Don't fail the meeting start if LiveKit fails
+      }
 
       this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}`);
 

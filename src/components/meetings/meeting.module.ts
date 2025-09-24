@@ -6,6 +6,7 @@ import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
 import { Participant, ParticipantSchema } from '../../schemas/Participant.model';
 import { AuthModule } from '../auth/auth.module';
+import { LivekitService } from '../signaling/livekit.service';
 
 @Module({
   imports: [
@@ -16,7 +17,7 @@ import { AuthModule } from '../auth/auth.module';
     ]),
     AuthModule,
   ],
-  providers: [MeetingService, MeetingResolver],
+  providers: [MeetingService, MeetingResolver, LivekitService],
   exports: [MeetingService],
 })
 export class MeetingModule {}

@@ -400,10 +400,16 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      if (
-        user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
-      ) {
+      
+      console.log(`[GET_RECORDING_INFO] Debug - Meeting hostId: ${meeting.hostId}, User ID: ${userId}`);
+      console.log(`[GET_RECORDING_INFO] Debug - Are they equal? ${meeting.hostId.toString() === userId}`);
+      console.log(`[GET_RECORDING_INFO] Debug - User role: ${user.systemRole}`);
+      
+      // Fix: Use proper string comparison
+      const isHost = meeting.hostId && meeting.hostId.toString() === userId;
+      const isAdmin = user.systemRole === SystemRole.ADMIN;
+      
+      if (!isHost && !isAdmin) {
         throw new ForbiddenException(
           'Only the meeting host can view recording info',
         );
