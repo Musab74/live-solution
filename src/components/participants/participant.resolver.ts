@@ -138,7 +138,20 @@ export class ParticipantResolver {
     @Args('input') joinInput: JoinParticipantInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.joinMeeting(joinInput, user._id);
+    console.log('🚀 BACKEND JOIN_MEETING: Mutation called', {
+      input: joinInput,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      const result = await this.participantService.joinMeeting(joinInput, user._id);
+      console.log('✅ BACKEND JOIN_MEETING: Success', result);
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND JOIN_MEETING: Error', error);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'leaveMeeting' })
@@ -148,6 +161,42 @@ export class ParticipantResolver {
     @AuthMember() user: Member,
   ) {
     return this.participantService.leaveMeeting(leaveInput, user._id);
+  }
+
+  @Mutation(() => String, { name: 'clearFakeParticipants' })
+  @UseGuards(AuthGuard)
+  async clearFakeParticipants(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log(`[CLEAR_FAKE_PARTICIPANTS] Resolver called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
+    
+    try {
+      const deletedCount = await this.participantService.clearFakeParticipants(meetingId);
+      console.log(`[CLEAR_FAKE_PARTICIPANTS] Success - Deleted ${deletedCount} participants`);
+      return `Successfully cleared ${deletedCount} fake participants from meeting ${meetingId}`;
+    } catch (error) {
+      console.error(`[CLEAR_FAKE_PARTICIPANTS] Error:`, error);
+      throw error;
+    }
+  }
+
+  @Mutation(() => String, { name: 'cleanupDuplicateParticipants' })
+  @UseGuards(AuthGuard)
+  async cleanupDuplicateParticipants(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log(`[CLEANUP_DUPLICATES] Resolver called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
+    
+    try {
+      const deletedCount = await this.participantService.cleanupDuplicateParticipants(meetingId);
+      console.log(`[CLEANUP_DUPLICATES] Success - Deleted ${deletedCount} duplicates`);
+      return `Successfully cleaned up ${deletedCount} duplicate participants from meeting ${meetingId}`;
+    } catch (error) {
+      console.error(`[CLEANUP_DUPLICATES] Error:`, error);
+      throw error;
+    }
   }
 
   @Mutation(() => ParticipantMessageResponse, { name: 'updateSession' })
