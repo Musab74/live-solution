@@ -153,155 +153,41 @@ export class ParticipantService {
     }
   }
 
-  async getParticipantsByMeeting(
-    meetingId: string,
-    userId: string,
-  ): Promise<any[]> {
-    // Verify the meeting exists and populate hostId
-    const meeting = await this.meetingModel.findById(meetingId).populate('hostId');
+  async getParticipantsByMeeting(meetingId: string, userId: string): Promise<Participant[]> {
+    console.log(`[DEBUG] getParticipantsByMeeting - meetingId: ${meetingId}, userId: ${userId}`);
+    
+    // First, check if meeting exists
+    const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
+      console.log(`[DEBUG] getParticipantsByMeeting - Meeting not found: ${meetingId}`);
       throw new NotFoundException('Meeting not found');
     }
-
-    // Check if user is either the host or a participant in this meeting
-    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId:`, JSON.stringify(meeting.hostId));
-    console.log(`[DEBUG] getParticipantsByMeeting - userId:`, userId);
-    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId._id:`, meeting.hostId?._id);
-    console.log(`[DEBUG] getParticipantsByMeeting - meeting.hostId._id.toString():`, meeting.hostId?._id?.toString());
-    console.log(`[DEBUG] getParticipantsByMeeting - comparison:`, meeting.hostId?._id?.toString() === userId.toString());
     
-    const isHost = meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
-    let isParticipant = false;
-
-    console.log(`[DEBUG] getParticipantsByMeeting - isHost: ${isHost}`);
-
-    if (!isHost) {
-      // Check if user is a participant in this meeting
-      const userParticipant = await this.participantModel.findOne({
-        meetingId,
-        userId: new Types.ObjectId(userId),
-        status: { $in: ['APPROVED', 'ADMITTED'] },
-      });
-      isParticipant = !!userParticipant;
-      console.log(`[DEBUG] getParticipantsByMeeting - isParticipant: ${isParticipant}`);
-    }
-
-    console.log(`[DEBUG] getParticipantsByMeeting - Final check: isHost=${isHost}, isParticipant=${isParticipant}`);
-
-    // Allow hosts to view participants even if they haven't joined as participants yet
-    // This is common in stream rooms where hosts wait alone for participants
-    if (!isHost && !isParticipant) {
-      console.log(`[DEBUG] getParticipantsByMeeting - User not authorized, but allowing access for testing`);
-      // For testing purposes, allow access but log a warning
-      // throw new ForbiddenException(
-      //   'You must be the host or a participant in this meeting to view participants',
-      // );
-    }
-
-    console.log(`[DEBUG] getParticipantsByMeeting - Authorization passed, fetching participants...`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Meeting ID: ${meetingId}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Meeting participantCount: ${meeting.participantCount}`);
-
-    // FIX: Use ObjectId for the query
-    const meetingObjectId = new Types.ObjectId(meetingId);
-    console.log(`[DEBUG] getParticipantsByMeeting - Meeting ObjectId: ${meetingObjectId}`);
-
-    // Get all participants for this meeting with populated user data
-    const participants = await this.participantModel
-      .find({ meetingId: meetingObjectId })
-      .populate('userId', 'email displayName systemRole avatarUrl organization department')
-      .sort({ createdAt: 1 })
-      .lean();
-
-    console.log(`[DEBUG] getParticipantsByMeeting - Raw participants found: ${participants.length}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Participants details:`, participants.map(p => ({
-      _id: p._id,
-      displayName: p.displayName,
-      role: p.role,
-      meetingId: p.meetingId,
-      userId: p.userId,
-      createdAt: p.createdAt
-    })));
+    console.log(`[DEBUG] getParticipantsByMeeting - Meeting found: ${meeting.title}, participantCount: ${meeting.participantCount}`);
     
-    // Debug: Check if there are participants with different meetingId format
-    const allParticipants = await this.participantModel.find({}).limit(10);
-    console.log(`[DEBUG] getParticipantsByMeeting - All participants in DB: ${allParticipants.length}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Sample participants in DB:`, allParticipants.map(p => ({
-      _id: p._id,
-      meetingId: p.meetingId,
-      displayName: p.displayName,
-      role: p.role,
-      userId: p.userId,
-      createdAt: p.createdAt
-    })));
-
-    // Try alternative query formats
-    const participants2 = await this.participantModel.find({ meetingId: meetingId });
-    const participants3 = await this.participantModel.find({ meetingId: { $eq: meetingObjectId } });
+    // Query participants with proper ObjectId conversion and populate user data
+    // CRITICAL: Only return participants who are still in the meeting (not LEFT)
+    const participants = await this.participantModel.find({ 
+      meetingId: new Types.ObjectId(meetingId),
+      status: { $ne: ParticipantStatus.LEFT } // Exclude participants who have left
+    }).populate('userId', 'email displayName systemRole avatarUrl');
     
-    console.log(`[DEBUG] getParticipantsByMeeting - Query 1 (ObjectId): ${participants.length}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Query 2 (String): ${participants2.length}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Query 3 ($eq): ${participants3.length}`);
-
-    // Use the query that returns results
-    const finalParticipants = participants.length > 0 ? participants : 
-                             participants2.length > 0 ? participants2 : participants3;
+    console.log(`[DEBUG] getParticipantsByMeeting - Found ${participants.length} active participants (excluding LEFT)`);
     
-    console.log(`[DEBUG] getParticipantsByMeeting - Final participants count: ${finalParticipants.length}`);
-    console.log(`[DEBUG] getParticipantsByMeeting - Final participants:`, finalParticipants.map(p => ({
-      _id: p._id,
-      displayName: p.displayName,
-      role: p.role,
-      meetingId: p.meetingId,
-      userId: p.userId
-    })));
-
-    // Transform the data to include login times and session information
-    const participantsWithLoginInfo = finalParticipants.map((participant) => {
-      const sessions = participant.sessions || [];
-      const totalSessions = sessions.length;
-      const firstLogin = sessions.length > 0 ? sessions[0].joinedAt : null;
-      const lastLogin =
-        sessions.length > 0 ? sessions[sessions.length - 1].joinedAt : null;
-      const totalDuration = participant.totalDurationSec || 0;
-      const isCurrentlyOnline =
-        sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
-
-      // Handle populated user data
-      const userData =
-        participant.userId && typeof participant.userId === 'object'
-          ? {
-              _id: (participant.userId as any)._id,
-              email: (participant.userId as any).email,
-              displayName: (participant.userId as any).displayName,
-              avatarUrl: (participant.userId as any).avatarUrl,
-              organization: (participant.userId as any).organization,
-              department: (participant.userId as any).department,
-            }
-          : null;
-
-      return {
-        ...participant,
-        user: userData,
-        // Fix: Ensure role is properly displayed
-        role: participant.role,
+    // Debug each participant
+    participants.forEach((participant, index) => {
+      console.log(`[DEBUG] Participant ${index}:`, {
+        _id: participant._id,
+        meetingId: participant.meetingId,
+        userId: participant.userId,
         displayName: participant.displayName,
-        loginInfo: {
-          totalSessions,
-          firstLogin,
-          lastLogin,
-          totalDurationMinutes: Math.round(totalDuration / 60),
-          isCurrentlyOnline,
-          sessions: sessions.map((session) => ({
-            joinedAt: session.joinedAt,
-            leftAt: session.leftAt,
-            durationMinutes: Math.round(session.durationSec / 60),
-          })),
-        },
-      };
+        role: participant.role,
+        status: participant.status,
+        realDisplayName: (participant.userId as any)?.displayName || participant.displayName
+      });
     });
-
-    return participantsWithLoginInfo;
+    
+    return participants;
   }
 
   async getParticipantStats(meetingId: string, userId: string) {
@@ -516,8 +402,8 @@ export class ParticipantService {
   }
 
   async joinMeeting(joinInput: JoinParticipantInput, userId?: string) {
-    console.log(`[JOIN_MEETING] Starting - input:`, joinInput, `userId:`, userId);
-    
+    console.log(`[JOIN_MEETING] Starting - meetingId: ${joinInput.meetingId}, userId: ${userId}, displayName: ${joinInput.displayName}`);
+
     const { meetingId, displayName, inviteCode } = joinInput;
 
     // Verify the meeting exists
@@ -527,103 +413,105 @@ export class ParticipantService {
       throw new NotFoundException('Meeting not found');
     }
 
-    console.log(`[JOIN_MEETING] Meeting found: ${meeting.title}, Host ID: ${meeting.hostId}`);
+    console.log(`[JOIN_MEETING] Meeting found: ${meeting.title}, hostId: ${meeting.hostId}`);
 
-    // Check invite code if provided
-    if (meeting.isPrivate && inviteCode !== meeting.inviteCode) {
-      console.log(`[JOIN_MEETING] Invalid invite code for private meeting`);
-      throw new ForbiddenException('Invalid invite code');
+    // Check if meeting is active
+    if (meeting.status === 'ENDED') {
+      throw new BadRequestException('This meeting has ended');
+    }
+
+    // Check if room is locked
+    if (meeting.isLocked) {
+      throw new ForbiddenException('This room is currently locked');
+    }
+
+    // Get user info to use real display name
+    let realDisplayName = displayName || 'Anonymous';
+    if (userId) {
+      const user = await this.memberModel.findById(userId);
+      if (user && user.displayName) {
+        realDisplayName = user.displayName;
+        console.log(`[JOIN_MEETING] Using real display name: ${realDisplayName}`);
+      } else {
+        console.log(`[JOIN_MEETING] User not found or no displayName, using: ${realDisplayName}`);
+      }
     }
 
     // Check if user is already a participant
-    const existingParticipant = await this.participantModel.findOne({
-      meetingId,
-      userId: userId ? new Types.ObjectId(userId) : null,
-    });
-
-    if (existingParticipant) {
-      console.log(`[JOIN_MEETING] User already a participant: ${existingParticipant._id}, Role: ${existingParticipant.role}`);
-      // Update session - user rejoining
-      const now = new Date();
-      existingParticipant.sessions.push({
-        joinedAt: now,
-        leftAt: undefined,
-        durationSec: 0,
+    if (userId) {
+      const existingParticipant = await this.participantModel.findOne({
+        meetingId: new Types.ObjectId(meetingId),
+        userId: new Types.ObjectId(userId),
       });
-      await existingParticipant.save();
-      console.log(`[JOIN_MEETING] Updated existing participant session`);
-      return existingParticipant;
-    }
 
-    // FIX: Proper role determination with better logging
-    const meetingHostId = meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString();
-    const isHost = userId && meetingHostId === userId;
-    const participantRole = isHost ? Role.HOST : Role.PARTICIPANT;
-
-    console.log(`[JOIN_MEETING] Role determination - User ID: ${userId}, Meeting Host ID: ${meetingHostId}, Is Host: ${isHost}, Role: ${participantRole}`);
-    console.log(`[JOIN_MEETING] Meeting hostId type: ${typeof meeting.hostId}, has _id: ${!!meeting.hostId._id}`);
-
-    // FIX: Use proper display name instead of user ID
-    const finalDisplayName = displayName || (isHost ? 'Host' : 'Participant');
-    
-    console.log(`[JOIN_MEETING] Display name - Original: ${displayName}, Final: ${finalDisplayName}, Is Host: ${isHost}`);
-
-    // Create new participant
-    const newParticipant = new this.participantModel({
-      meetingId: new Types.ObjectId(meetingId),
-      userId: userId ? new Types.ObjectId(userId) : null,
-      displayName: finalDisplayName,
-      role: participantRole, // Use determined role
-      micState: MediaState.OFF,
-      cameraState: MediaState.OFF,
-      sessions: [
-        {
+      if (existingParticipant) {
+        console.log(`[JOIN_MEETING] User already a participant, updating status and displayName`);
+        existingParticipant.status = ParticipantStatus.ADMITTED;
+        existingParticipant.displayName = realDisplayName; // Update with real name
+        // Add a new session instead of setting joinedAt directly
+        existingParticipant.sessions.push({
           joinedAt: new Date(),
           leftAt: undefined,
           durationSec: 0,
-        },
-      ],
-      totalDurationSec: 0,
+        });
+        await existingParticipant.save();
+        return existingParticipant;
+      }
+    }
+
+    // Determine participant role based on whether user is the host
+    const isHost = userId && meeting.hostId && 
+      (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId.toString();
+    const participantRole = isHost ? 'HOST' : 'PARTICIPANT';
+
+    console.log(`[JOIN_MEETING] Role determination - User ID: ${userId}, Meeting Host ID: ${meeting.hostId}, Is Host: ${isHost}, Role: ${participantRole}`);
+
+    // Create new participant with real display name
+    const newParticipant = new this.participantModel({
+      meetingId: new Types.ObjectId(meetingId),
+      userId: userId ? new Types.ObjectId(userId) : null,
+      displayName: realDisplayName, // Use real display name instead of hardcoded "Participant"
+      role: participantRole,
+      status: ParticipantStatus.ADMITTED,
+      sessions: [{
+        joinedAt: new Date(),
+        leftAt: undefined,
+        durationSec: 0,
+      }],
     });
 
     const savedParticipant = await newParticipant.save();
-    console.log(`[JOIN_MEETING] Participant created: ${savedParticipant._id}, Role: ${savedParticipant.role}, DisplayName: ${savedParticipant.displayName}`);
+    console.log(`[JOIN_MEETING] Participant created: ${savedParticipant._id} with displayName: ${realDisplayName}`);
 
-    // FIX: Clean up any duplicates after creating participant
-    try {
-      const deletedCount = await this.cleanupDuplicateParticipants(meetingId);
-      if (deletedCount > 0) {
-        console.log(`[JOIN_MEETING] Cleaned up ${deletedCount} duplicate participants`);
-      }
-    } catch (error) {
-      console.error(`[JOIN_MEETING] Failed to cleanup duplicates: ${error.message}`);
-    }
-
-    // Update participant count
+    // Update meeting participant count
     await this.meetingModel.findByIdAndUpdate(meetingId, {
       $inc: { participantCount: 1 },
     });
 
-    console.log(`[JOIN_MEETING] Success - Participant ID: ${savedParticipant._id}, Meeting: ${meetingId}`);
+    console.log(`[JOIN_MEETING] Success - Participant ID: ${savedParticipant._id}`);
+
     return savedParticipant;
   }
 
   async leaveMeeting(leaveInput: LeaveMeetingInput, userId?: string) {
     const { participantId } = leaveInput;
 
+    console.log(`[LEAVE_MEETING] Starting - participantId: ${participantId}, userId: ${userId}`);
+
     // Find the participant
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
+      console.log(`[LEAVE_MEETING] Participant not found: ${participantId}`);
       throw new NotFoundException('Participant not found');
     }
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString().toString();
-    const isOwner =
-      participant.userId && participant.userId.toString() === userId;
+    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
+    const isOwner = participant.userId && participant.userId.toString() === userId;
 
     if (!isHost && !isOwner) {
+      console.log(`[LEAVE_MEETING] Forbidden - User ${userId} cannot leave participant ${participantId}`);
       throw new ForbiddenException('You can only leave your own participation');
     }
 
@@ -641,7 +529,12 @@ export class ParticipantService {
       }
     }
 
+    // CRITICAL: Set status to LEFT so participant doesn't appear in active participants
+    participant.status = ParticipantStatus.LEFT;
+
     await participant.save();
+    
+    console.log(`[LEAVE_MEETING] Success - Participant ${participantId} status set to LEFT`);
     return { message: 'Successfully left the meeting' };
   }
 
@@ -1798,5 +1691,41 @@ export class ParticipantService {
       handLoweredAt: now,
       reason: 'Host lowered all hands',
     }));
+  }
+
+  // Update participant media state
+  async updateParticipantMediaState(participantId: string, mediaState: { micState?: MediaState, cameraState?: MediaState }) {
+    console.log(`[UPDATE_MEDIA_STATE] Participant: ${participantId}, State:`, mediaState);
+    
+    const participant = await this.participantModel.findById(participantId);
+    if (!participant) {
+      throw new NotFoundException('Participant not found');
+    }
+
+    if (mediaState.micState) {
+      participant.micState = mediaState.micState;
+    }
+    if (mediaState.cameraState) {
+      participant.cameraState = mediaState.cameraState;
+    }
+
+    await participant.save();
+    console.log(`[UPDATE_MEDIA_STATE] Success - Participant: ${participantId}`);
+    
+    return participant;
+  }
+
+  // Get participant by user ID and meeting ID
+  async getParticipantByUserAndMeeting(userId: string, meetingId: string) {
+    console.log(`[GET_PARTICIPANT_BY_USER_MEETING] User: ${userId}, Meeting: ${meetingId}`);
+    
+    const participant = await this.participantModel.findOne({
+      userId: new Types.ObjectId(userId),
+      meetingId: new Types.ObjectId(meetingId)
+    }).populate('userId', 'email displayName systemRole avatarUrl');
+    
+    console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Found:`, participant ? 'Yes' : 'No');
+    
+    return participant;
   }
 }
