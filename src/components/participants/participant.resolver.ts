@@ -345,7 +345,20 @@ export class ParticipantResolver {
     @Args('input') approveInput: ApproveParticipantInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.approveParticipant(approveInput, user._id);
+    // Use the simplified method
+    const result = await this.participantService.approveParticipant(approveInput.participantId, user._id);
+    return {
+      message: `Participant ${result.displayName} has been approved`,
+      success: true,
+      participant: {
+        _id: result._id.toString(),
+        displayName: result.displayName,
+        status: result.status,
+        joinedAt: result.createdAt,
+        micState: result.micState,
+        cameraState: result.cameraState,
+      },
+    };
   }
 
   @Mutation(() => WaitingRoomResponse, { name: 'rejectParticipant' })
@@ -354,7 +367,12 @@ export class ParticipantResolver {
     @Args('input') rejectInput: RejectParticipantInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.rejectParticipant(rejectInput, user._id);
+    // Use the simplified method
+    const result = await this.participantService.rejectParticipant(rejectInput.participantId, user._id);
+    return {
+      message: `Participant ${result.displayName} has been rejected`,
+      success: true,
+    };
   }
 
   @Mutation(() => WaitingRoomResponse, { name: 'admitParticipant' })
@@ -363,7 +381,122 @@ export class ParticipantResolver {
     @Args('input') admitInput: AdmitParticipantInput,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.admitParticipant(admitInput, user._id);
+    // Use the simplified method - this is the same as approve
+    const result = await this.participantService.approveParticipant(admitInput.participantId, user._id);
+    return {
+      message: `Participant ${result.displayName} has been admitted to the meeting`,
+      success: true,
+      participant: {
+        _id: result._id.toString(),
+        displayName: result.displayName,
+        status: result.status,
+        joinedAt: result.createdAt,
+        micState: result.micState,
+        cameraState: result.cameraState,
+      },
+    };
+  }
+
+  // ==================== SIMPLIFIED WAITING ROOM RESOLVERS ====================
+
+  @Query(() => [ParticipantWithLoginInfo], { name: 'getWaitingParticipantsSimple' })
+  @UseGuards(AuthGuard)
+  async getWaitingParticipantsSimple(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('⏳ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Query called', {
+      meetingId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      const result = await this.participantService.getWaitingParticipants(meetingId, user._id);
+      console.log('✅ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Success', {
+        meetingId,
+        count: result.length,
+        participants: result.map(p => ({ _id: p._id, displayName: p.displayName, status: p.status }))
+      });
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Error', error);
+      throw error;
+    }
+  }
+
+  @Mutation(() => ParticipantResponse, { name: 'approveParticipantSimple' })
+  @UseGuards(AuthGuard)
+  async approveParticipantSimple(
+    @Args('participantId', { type: () => ID }) participantId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('✅ BACKEND APPROVE_PARTICIPANT_SIMPLE: Mutation called', {
+      participantId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      const result = await this.participantService.approveParticipant(participantId, user._id);
+      console.log('✅ BACKEND APPROVE_PARTICIPANT_SIMPLE: Success', {
+        participantId: result._id,
+        displayName: result.displayName,
+        status: result.status
+      });
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND APPROVE_PARTICIPANT_SIMPLE: Error', error);
+      throw error;
+    }
+  }
+
+  @Mutation(() => ParticipantResponse, { name: 'rejectParticipantSimple' })
+  @UseGuards(AuthGuard)
+  async rejectParticipantSimple(
+    @Args('participantId', { type: () => ID }) participantId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('❌ BACKEND REJECT_PARTICIPANT_SIMPLE: Mutation called', {
+      participantId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      const result = await this.participantService.rejectParticipant(participantId, user._id);
+      console.log('✅ BACKEND REJECT_PARTICIPANT_SIMPLE: Success', {
+        participantId: result._id,
+        displayName: result.displayName,
+        status: result.status
+      });
+      return result;
+    } catch (error) {
+      console.error('❌ BACKEND REJECT_PARTICIPANT_SIMPLE: Error', error);
+      throw error;
+    }
+  }
+
+  @Mutation(() => String, { name: 'admitAllWaitingParticipantsSimple' })
+  @UseGuards(AuthGuard)
+  async admitAllWaitingParticipantsSimple(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log('🚀 BACKEND ADMIT_ALL_WAITING_SIMPLE: Mutation called', {
+      meetingId,
+      userId: user._id,
+      userEmail: user.email
+    });
+    
+    try {
+      const result = await this.participantService.admitAllWaitingParticipants(meetingId, user._id);
+      console.log('✅ BACKEND ADMIT_ALL_WAITING_SIMPLE: Success', result);
+      return result.message;
+    } catch (error) {
+      console.error('❌ BACKEND ADMIT_ALL_WAITING_SIMPLE: Error', error);
+      throw error;
+    }
   }
 
   // ===== DEVICE TESTING FUNCTIONALITY =====

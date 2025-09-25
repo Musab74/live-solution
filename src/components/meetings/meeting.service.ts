@@ -282,7 +282,7 @@ export class MeetingService {
       
       // Fix: Proper ObjectId comparison
       const isHost = meeting.hostId && 
-        (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId.toString();
+        meeting.hostId.toString() === userId.toString();
       const isAdmin = user.systemRole === SystemRole.ADMIN;
       
       this.logger.log(`[GET_MEETING_BY_ID] Debug - isHost: ${isHost}, isAdmin: ${isAdmin}`);
@@ -625,7 +625,7 @@ export class MeetingService {
       
       // Fix: Proper ObjectId comparison
       const isHost = meeting.hostId && 
-        (meeting.hostId._id ? meeting.hostId._id.toString() : meeting.hostId.toString()) === userId.toString();
+        meeting.hostId.toString() === userId.toString();
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
       console.log(`[DEBUG] startMeeting - isHost: ${isHost}, isAdmin: ${isAdmin}`);
