@@ -92,7 +92,10 @@ export class ParticipantService {
     // Query participants with proper ObjectId conversion and populate user data
     // For hosts: return all participants (including WAITING) for management
     // For participants: only return admitted participants
-    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
+    const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+    const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
     const statusFilter = isHost
       ? { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] } // Host sees all active participants
       : { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] }; // Participants only see admitted ones
@@ -360,8 +363,10 @@ export class ParticipantService {
     }
 
     // Determine if participant should go to waiting room
-    // 🔍 FIX: Use MeetingUtils for consistent host ID comparison
-    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
+    const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+    const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
 
     // Hosts always get admitted directly, others go to waiting room if meeting not started
     const shouldGoToWaitingRoom =
@@ -531,7 +536,12 @@ export class ParticipantService {
 
     await participant.save();
 
-    console.log(`[LEAVE_MEETING] Success - Participant ${participantId} status set to LEFT`);
+    console.log(`[LEAVE_MEETING] Success - Participant ${participantId} (${participant.displayName}) status set to LEFT`);
+    
+    // 🔧 DEBUG: Verify the status was actually saved
+    const updatedParticipant = await this.participantModel.findById(participantId);
+    console.log(`[LEAVE_MEETING] Verification - Participant status after save: ${updatedParticipant?.status}`);
+    
     return { message: 'Successfully left the meeting' };
   }
 
@@ -944,10 +954,21 @@ export class ParticipantService {
       found: !!newHostParticipant,
       participantId: newHostParticipant?._id,
       participantUserId: newHostParticipant?.userId,
-      participantRole: newHostParticipant?.role
+      participantRole: newHostParticipant?.role,
+      participantStatus: newHostParticipant?.status
     });
     
     if (!newHostParticipant) throw new NotFoundException('New host participant not found');
+    
+    // 🔧 FIX: Validate that the new host participant is active (not LEFT)
+    if (newHostParticipant.status === ParticipantStatus.LEFT) {
+      throw new BadRequestException('Cannot transfer host role to a participant who has left the meeting');
+    }
+    
+    // 🔧 FIX: Validate that the new host participant is admitted/approved
+    if (![ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED].includes(newHostParticipant.status)) {
+      throw new BadRequestException('Cannot transfer host role to a participant who is not actively in the meeting');
+    }
 
     const newHostUser = await this.memberModel.findById(newHostParticipant.userId);
     if (!newHostUser) throw new ForbiddenException('New host user not found');
@@ -968,8 +989,11 @@ export class ParticipantService {
     }
     await this.participantModel.findByIdAndUpdate(newHostParticipantId, { role: Role.HOST });
 
-    // Update meeting host (Member id)
-    await this.meetingModel.findByIdAndUpdate(meetingId, { hostId: newHostParticipant.userId });
+    // 🔧 SOLUTION 1: Update currentHostId instead of hostId to preserve original tutor
+    // hostId remains as original tutor, currentHostId tracks current meeting host
+    await this.meetingModel.findByIdAndUpdate(meetingId, { 
+      currentHostId: newHostParticipant.userId 
+    });
 
     // (Optional) Publish a subscription event here so clients refresh the host badge
 

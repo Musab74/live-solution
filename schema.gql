@@ -85,6 +85,7 @@ type ParticipantWithLoginInfo {
   user: ParticipantUserInfo
   displayName: String!
   role: String!
+  status: String!
   micState: String!
   cameraState: String!
   socketId: String
@@ -121,6 +122,7 @@ type MeetingWithHost {
   title: String!
   status: String!
   hostId: ID!
+  currentHostId: ID
   inviteCode: String
   isPrivate: Boolean
   isLocked: Boolean

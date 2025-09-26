@@ -24,7 +24,11 @@ export class Meeting {
 
   @Field(() => ID)
   @Prop({ type: Types.ObjectId, ref: 'Member', required: true, index: true })
-  hostId!: Types.ObjectId;
+  hostId!: Types.ObjectId; // Original tutor/creator (never changes)
+
+  @Field(() => ID, { nullable: true })
+  @Prop({ type: Types.ObjectId, ref: 'Member', required: false, index: true })
+  currentHostId?: Types.ObjectId; // Current host for meeting management (can change)
 
   @Field({ nullable: true })
   @Prop({ required: false, unique: true, index: true, trim: true })
