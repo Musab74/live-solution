@@ -30,12 +30,8 @@ export class MeetingService {
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
     @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
-<<<<<<< HEAD
     private readonly livekitService: LivekitService,
   ) {}
-=======
-  ) { }
->>>>>>> origin
 
   // CREATE MEETING
   async createMeeting(createInput: CreateMeetingInput, userId: string) {
@@ -646,7 +642,6 @@ export class MeetingService {
       meeting.actualStartAt = new Date();
       await meeting.save();
 
-<<<<<<< HEAD
       // Fix: Clear any fake participant data when meeting starts
       try {
         const deletedCount = await this.participantModel.deleteMany({ 
@@ -704,14 +699,6 @@ export class MeetingService {
         this.logger.error(`[START_MEETING] Failed to cleanup duplicates: ${error.message}`);
       }
 
-      // Fix: Create LiveKit room when meeting starts
-      try {
-        await this.livekitService.createRoom(meetingId, 50); // Create room with max 50 participants
-        this.logger.log(`[START_MEETING] LiveKit room created for meeting ${meetingId}`);
-      } catch (error) {
-        this.logger.error(`[START_MEETING] Failed to create LiveKit room: ${error.message}`);
-        // Don't fail the meeting start if LiveKit fails
-=======
       // Admit all waiting participants when meeting starts
       try {
         const waitingParticipants = await this.participantModel.find({
@@ -744,7 +731,15 @@ export class MeetingService {
       } catch (error) {
         this.logger.warn(`[START_MEETING] Failed to admit waiting participants: ${error.message}`);
         // Don't fail the meeting start if participant admission fails
->>>>>>> origin
+      }
+
+      // Fix: Create LiveKit room when meeting starts
+      try {
+        await this.livekitService.createRoom(meetingId, 50); // Create room with max 50 participants
+        this.logger.log(`[START_MEETING] LiveKit room created for meeting ${meetingId}`);
+      } catch (error) {
+        this.logger.error(`[START_MEETING] Failed to create LiveKit room: ${error.message}`);
+        // Don't fail the meeting start if LiveKit fails
       }
 
       this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}`);

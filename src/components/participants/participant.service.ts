@@ -1763,4 +1763,68 @@ export class ParticipantService {
       admittedCount: waitingParticipants.length
     };
   }
+
+  // Clear fake participants method
+  async clearFakeParticipants(meetingId: string): Promise<number> {
+    try {
+      const result = await this.participantModel.deleteMany({
+        meetingId: new Types.ObjectId(meetingId),
+        // Add any criteria to identify fake participants
+        $or: [
+          { displayName: { $regex: /^fake|test|dummy/i } },
+          { userId: { $exists: false } },
+          { userId: null }
+        ]
+      });
+      
+      this.logger.log(`[CLEAR_FAKE_PARTICIPANTS] Cleared ${result.deletedCount} fake participants for meeting ${meetingId}`);
+      return result.deletedCount;
+    } catch (error) {
+      this.logger.error(`[CLEAR_FAKE_PARTICIPANTS] Error: ${error.message}`);
+      return 0;
+    }
+  }
+
+  // Cleanup duplicate participants method
+  async cleanupDuplicateParticipants(meetingId: string): Promise<number> {
+    try {
+      const participants = await this.participantModel.find({
+        meetingId: new Types.ObjectId(meetingId)
+      });
+      
+      // Group by userId and remove duplicates
+      const groupedByUserId = participants.reduce((acc, participant) => {
+        const userId = participant.userId ? participant.userId.toString() : 'anonymous';
+        if (!acc[userId]) {
+          acc[userId] = [];
+        }
+        acc[userId].push(participant);
+        return acc;
+      }, {});
+      
+      let duplicateCount = 0;
+      for (const [userId, userParticipants] of Object.entries(groupedByUserId)) {
+        const participants = userParticipants as any[];
+        if (participants.length > 1) {
+          // Sort by createdAt, keep the most recent
+          const sorted = participants.sort((a, b) => 
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+          );
+          
+          // Delete all but the first (most recent)
+          const toDelete = sorted.slice(1);
+          for (const duplicate of toDelete) {
+            await this.participantModel.findByIdAndDelete(duplicate._id);
+            duplicateCount++;
+          }
+        }
+      }
+      
+      this.logger.log(`[CLEANUP_DUPLICATE_PARTICIPANTS] Cleaned up ${duplicateCount} duplicate participants for meeting ${meetingId}`);
+      return duplicateCount;
+    } catch (error) {
+      this.logger.error(`[CLEANUP_DUPLICATE_PARTICIPANTS] Error: ${error.message}`);
+      return 0;
+    }
+  }
 }

@@ -9,12 +9,8 @@ import {
 import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
-<<<<<<< HEAD
-import { LivekitService } from '../signaling/livekit.service';
-=======
 import { MeetingModule } from '../meetings/meeting.module';
-import { LivekitService } from '../signaling/livekit.service'; // Add this
->>>>>>> origin
+import { LivekitService } from '../signaling/livekit.service';
 
 @Module({
   imports: [
