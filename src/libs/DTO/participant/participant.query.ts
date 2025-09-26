@@ -72,6 +72,9 @@ export class ParticipantWithLoginInfo {
   role: string;
 
   @Field()
+  status: string; // 🔧 FIX: Add status field for frontend filtering
+
+  @Field()
   micState: string;
 
   @Field()

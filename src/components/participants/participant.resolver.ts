@@ -97,6 +97,7 @@ export class ParticipantResolver {
         } : null,
         displayName: p.displayName,
         role: p.role,
+        status: p.status, // 🔧 FIX: Include status field for frontend filtering
         micState: p.micState,
         cameraState: p.cameraState,
         socketId: p.socketId,

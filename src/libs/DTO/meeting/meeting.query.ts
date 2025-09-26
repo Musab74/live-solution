@@ -37,7 +37,10 @@ export class MeetingWithHost {
   status: string;
 
   @Field(() => ID)
-  hostId: string;
+  hostId: string; // Original tutor/creator (never changes)
+
+  @Field(() => ID, { nullable: true })
+  currentHostId?: string; // Current host for meeting management (can change)
 
   @Field({ nullable: true })
   inviteCode?: string;

@@ -57,6 +57,38 @@ export class MeetingUtils {
   }
 
   /**
+   * Check if user is the current meeting host (for meeting management)
+   * This checks both hostId (original tutor) and currentHostId (current host)
+   * @param meeting - The meeting document with hostId and currentHostId
+   * @param userId - The user ID to compare
+   * @returns boolean
+   */
+  static isCurrentMeetingHost(meeting: any, userId: any): boolean {
+    if (!meeting || !userId) return false;
+    
+    // Check if user is the original tutor (hostId)
+    const isOriginalHost = this.isMeetingHost(meeting.hostId, userId);
+    
+    // Check if user is the current host (currentHostId)
+    const isCurrentHost = meeting.currentHostId ? 
+      this.isMeetingHost(meeting.currentHostId, userId) : false;
+    
+    // User is a host if they are either the original tutor OR the current host
+    return isOriginalHost || isCurrentHost;
+  }
+
+  /**
+   * Check if user is the original tutor/creator of the meeting
+   * @param meeting - The meeting document
+   * @param userId - The user ID to compare
+   * @returns boolean
+   */
+  static isOriginalTutor(meeting: any, userId: any): boolean {
+    if (!meeting || !userId) return false;
+    return this.isMeetingHost(meeting.hostId, userId);
+  }
+
+  /**
    * Check if user is admin
    * @param userSystemRole - The user's system role
    * @returns boolean

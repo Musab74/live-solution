@@ -81,7 +81,8 @@ export class MeetingService {
         scheduledFor: parsedScheduledFor,
         durationMin: duration,
         maxParticipants: maxParticipants ?? 100,
-        hostId: new Types.ObjectId(userId),
+        hostId: new Types.ObjectId(userId), // Original tutor/creator (never changes)
+        currentHostId: new Types.ObjectId(userId), // Initially same as hostId
         inviteCode,
         status: parsedScheduledFor
           ? MeetingStatus.SCHEDULED
@@ -145,27 +146,79 @@ export class MeetingService {
       if (hostId) {
         filter.hostId = new Types.ObjectId(hostId);
       } else {
-        // All users (MEMBER, TUTOR, ADMIN) can see all meetings
-        // No additional filtering needed - show all meetings
+        // 🔧 FIX: Show meetings where user is either original host (hostId) or current host (currentHostId)
+        filter.$or = [
+          { hostId: new Types.ObjectId(userId) }, // Original tutor/creator
+          { currentHostId: new Types.ObjectId(userId) } // Current host
+        ];
         this.logger.log(
-          `[GET_MEETINGS] Showing all meetings for user role: ${userId}`,
+          `[GET_MEETINGS] Showing meetings for user ${userId} (original host or current host)`,
         );
       }
 
       if (search) {
-        filter.$or = [
-          { title: { $regex: search, $options: 'i' } },
-          { notes: { $regex: search, $options: 'i' } },
-        ];
+        // Handle search filter without conflicting with host filter
+        const searchFilter = {
+          $or: [
+            { title: { $regex: search, $options: 'i' } },
+            { notes: { $regex: search, $options: 'i' } },
+          ]
+        };
+        
+        if (filter.$or) {
+          // If we already have host filter, combine them
+          filter.$and = [
+            { $or: filter.$or },
+            searchFilter
+          ];
+          delete filter.$or;
+        } else {
+          filter.$or = searchFilter.$or;
+        }
       }
 
       // Get meetings with pagination
       const meetings = await this.meetingModel
         .find(filter)
         .populate('hostId', 'email displayName systemRole avatarUrl')
+        .populate('currentHostId', 'email displayName systemRole avatarUrl')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit);
+
+      // 🔧 FIX: Handle existing meetings without currentHostId
+      // For meetings created before the currentHostId field was added
+      const meetingsToUpdate = meetings.filter(meeting => !meeting.currentHostId);
+      
+      if (meetingsToUpdate.length > 0) {
+        this.logger.log(`[GET_MEETINGS] Found ${meetingsToUpdate.length} meetings without currentHostId, updating...`);
+        
+        // Batch update all meetings without currentHostId
+        const updatePromises = meetingsToUpdate.map(meeting => 
+          this.meetingModel.findByIdAndUpdate(meeting._id, {
+            currentHostId: meeting.hostId
+          })
+        );
+        
+        await Promise.all(updatePromises);
+        
+        // Update the in-memory objects
+        meetingsToUpdate.forEach(meeting => {
+          meeting.currentHostId = meeting.hostId;
+        });
+        
+        this.logger.log(`[GET_MEETINGS] Updated ${meetingsToUpdate.length} meetings with currentHostId = hostId`);
+      }
+
+      // 🔧 DEBUG: Log the filter and results for dashboard debugging
+      this.logger.log(`[GET_MEETINGS] Filter applied:`, JSON.stringify(filter, null, 2));
+      this.logger.log(`[GET_MEETINGS] Found ${meetings.length} meetings:`, meetings.map(m => ({
+        _id: m._id,
+        title: m.title,
+        status: m.status,
+        hostId: m.hostId,
+        currentHostId: m.currentHostId
+      })));
 
       // Get total count
       const total = await this.meetingModel.countDocuments(filter);
@@ -274,19 +327,32 @@ export class MeetingService {
       // Check access permissions
       const user = await this.memberModel.findById(userId);
 
+      // 🔧 FIX: Handle missing currentHostId for existing meetings
+      if (!meeting.currentHostId) {
+        // Set currentHostId to hostId for existing meetings
+        await this.meetingModel.findByIdAndUpdate(meetingId, {
+          currentHostId: meeting.hostId
+        });
+        meeting.currentHostId = meeting.hostId;
+        this.logger.log(`[GET_MEETING_BY_ID] Updated meeting ${meetingId} with currentHostId = hostId`);
+      }
+
       // Debug logging
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId: ${JSON.stringify(meeting.hostId)}`);
+      this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.currentHostId: ${JSON.stringify(meeting.currentHostId)}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - userId type: ${typeof userId}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - user.systemRole: ${user.systemRole}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id: ${meeting.hostId?._id}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - comparison: ${meeting.hostId?._id?.toString()} === ${userId.toString()} = ${meeting.hostId?._id?.toString() === userId.toString()}`);
 
-      // Fix: Proper ObjectId comparison
-      const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+      // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
+      const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+      const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+      const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - isHost: ${isHost}, isAdmin: ${isAdmin}`);
+      this.logger.log(`[GET_MEETING_BY_ID] Debug - isOriginalHost: ${isOriginalHost}, isCurrentHost: ${isCurrentHost}, isHost: ${isHost}, isAdmin: ${isAdmin}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id.toString(): ${meeting.hostId?._id?.toString()}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - Are they equal? ${meeting.hostId?._id?.toString() === userId}`);
@@ -624,11 +690,13 @@ export class MeetingService {
       console.log(`[DEBUG] startMeeting - comparison:`, meeting.hostId._id.toString() === userId.toString());
       console.log(`[DEBUG] startMeeting - user.systemRole:`, user.systemRole);
 
-      // Fix: Proper ObjectId comparison
-      const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+      // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
+      const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+      const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
+      const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
-      console.log(`[DEBUG] startMeeting - isHost: ${isHost}, isAdmin: ${isAdmin}`);
+      console.log(`[DEBUG] startMeeting - isOriginalHost: ${isOriginalHost}, isCurrentHost: ${isCurrentHost}, isHost: ${isHost}, isAdmin: ${isAdmin}`);
 
       if (!isAdmin && !isHost) {
         console.log(`[DEBUG] startMeeting - THROWING FORBIDDEN EXCEPTION`);
@@ -642,62 +710,11 @@ export class MeetingService {
       meeting.actualStartAt = new Date();
       await meeting.save();
 
-      // Fix: Clear any fake participant data when meeting starts
-      try {
-        const deletedCount = await this.participantModel.deleteMany({ 
-          meetingId: new Types.ObjectId(meetingId) 
-        });
-        this.logger.log(`[START_MEETING] Cleared ${deletedCount.deletedCount} fake participants for meeting ${meetingId}`);
-        
-        // Reset participant count
-        await this.meetingModel.findByIdAndUpdate(meetingId, {
-          participantCount: 0
-        });
-      } catch (error) {
-        this.logger.error(`[START_MEETING] Failed to clear fake participants: ${error.message}`);
-      }
+      // 🔧 FIX: Don't delete participants when meeting starts!
+      // This was causing participants to disappear from the list
+      this.logger.log(`[START_MEETING] Meeting ${meetingId} started successfully without clearing participants`);
 
-      // Fix: Also cleanup any duplicates using direct database operations
-      try {
-        // Find all participants for this meeting
-        const participants = await this.participantModel.find({ 
-          meetingId: new Types.ObjectId(meetingId) 
-        });
-        
-        // Group by userId and remove duplicates
-        const groupedByUserId = participants.reduce((acc, participant) => {
-          const userId = participant.userId ? participant.userId.toString() : 'anonymous';
-          if (!acc[userId]) {
-            acc[userId] = [];
-          }
-          acc[userId].push(participant);
-          return acc;
-        }, {});
-        
-        let duplicateCount = 0;
-        for (const [userId, userParticipants] of Object.entries(groupedByUserId)) {
-          const participants = userParticipants as any[];
-          if (participants.length > 1) {
-            // Sort by createdAt, keep the most recent
-            const sorted = participants.sort((a, b) => 
-              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-            );
-            
-            // Delete all but the first (most recent)
-            const toDelete = sorted.slice(1);
-            for (const duplicate of toDelete) {
-              await this.participantModel.findByIdAndDelete(duplicate._id);
-              duplicateCount++;
-            }
-          }
-        }
-        
-        if (duplicateCount > 0) {
-          this.logger.log(`[START_MEETING] Cleaned up ${duplicateCount} duplicate participants for meeting ${meetingId}`);
-        }
-      } catch (error) {
-        this.logger.error(`[START_MEETING] Failed to cleanup duplicates: ${error.message}`);
-      }
+      // 🔧 FIX: Removed duplicate cleanup to prevent participant deletion issues
 
       // Admit all waiting participants when meeting starts
       try {
