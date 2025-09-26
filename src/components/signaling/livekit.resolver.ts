@@ -7,7 +7,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { SystemRole } from '../../libs/enums/enums';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import {
-  StartRecordingInput,
+  StartLivekitRecordingInput,
   StopRecordingInput,
 } from '../../libs/DTO/signaling/livekit.input';
 import { RecordingInfo } from '../../libs/DTO/signaling/livekit.query';
@@ -77,7 +77,7 @@ export class LivekitResolver {
   @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   @Mutation(() => String, { name: 'startRecording' })
   async startRecording(
-    @Args('input') input: StartRecordingInput,
+    @Args('input') input: StartLivekitRecordingInput,
     @AuthMember() me: any,
   ) {
     this.logger.log(

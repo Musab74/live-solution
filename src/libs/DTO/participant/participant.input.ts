@@ -38,7 +38,7 @@ export class ParticipantSummaryInput {
 }
 
 @InputType()
-export class JoinMeetingInput {
+export class JoinMeetingParticipantInput {
   @Field()
   @IsString()
   meetingId!: string;
@@ -78,7 +78,7 @@ export class UpdateParticipantInput {
 }
 
 @InputType()
-export class KickParticipantInput {
+export class KickParticipantMeetingInput {
   @Field()
   @IsString()
   participantId!: string;

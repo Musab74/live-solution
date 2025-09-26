@@ -1,0 +1,870 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type Member {
+  _id: ID!
+  email: String!
+  displayName: String!
+  avatarUrl: String
+  organization: String
+  department: String
+  phone: String
+  language: String
+  timezone: String
+  systemRole: String!
+  lastSeenAt: DateTime
+  isBlocked: Boolean!
+  blockedAt: DateTime
+  blockedBy: String
+  blockReason: String
+  unblockedAt: DateTime
+  unblockedBy: String
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type AuthResponse {
+  token: String!
+  user: Member!
+}
+
+type MessageResponse {
+  message: String!
+}
+
+type LogoutResponse {
+  success: Boolean!
+  message: String!
+  timestamp: String!
+}
+
+type ImageUploadResponse {
+  success: Boolean!
+  message: String!
+  avatarUrl: String
+  user: Member!
+}
+
+type Session {
+  joinedAt: DateTime!
+  leftAt: DateTime
+  durationSec: Float!
+}
+
+type SessionInfo {
+  joinedAt: DateTime!
+  leftAt: DateTime
+  durationMinutes: Float!
+}
+
+type LoginInfo {
+  totalSessions: Float!
+  firstLogin: DateTime
+  lastLogin: DateTime
+  totalDurationMinutes: Float!
+  isCurrentlyOnline: Boolean!
+  sessions: [SessionInfo!]!
+}
+
+type ParticipantUserInfo {
+  _id: ID!
+  email: String!
+  displayName: String!
+  avatarUrl: String
+  organization: String
+  department: String
+}
+
+type ParticipantWithLoginInfo {
+  _id: ID!
+  meetingId: ID!
+  user: ParticipantUserInfo
+  displayName: String!
+  role: String!
+  micState: String!
+  cameraState: String!
+  socketId: String
+  loginInfo: LoginInfo!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ParticipantStats {
+  totalParticipants: Float!
+  currentlyOnline: Float!
+  totalSessions: Float!
+  averageSessionDuration: Float!
+  totalMeetingDuration: Float!
+  activeParticipants: Float!
+  mutedParticipants: Float!
+  cameraOffParticipants: Float!
+  raisedHandsCount: Float!
+  screenSharersCount: Float!
+}
+
+type HostInfo {
+  _id: ID!
+  email: String!
+  displayName: String!
+  systemRole: String!
+  avatarUrl: String
+  organization: String
+  department: String
+}
+
+type MeetingWithHost {
+  _id: ID!
+  title: String!
+  status: String!
+  hostId: ID!
+  inviteCode: String
+  isPrivate: Boolean
+  isLocked: Boolean
+  scheduledFor: DateTime
+  actualStartAt: DateTime
+  endedAt: DateTime
+  durationMin: Float
+  duration: Float
+  maxParticipants: Float
+  notes: String
+  participantCount: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  host: HostInfo
+}
+
+type MeetingStats {
+  totalMeetings: Float!
+  activeMeetings: Float!
+  scheduledMeetings: Float!
+  completedMeetings: Float!
+  totalParticipants: Float!
+  averageMeetingDuration: Float!
+}
+
+type MeetingListResponse {
+  meetings: [MeetingWithHost!]!
+  total: Float!
+  page: Float!
+  limit: Float!
+  offset: Float!
+  hasMore: Boolean!
+}
+
+type ParticipantAttendance {
+  _id: String!
+  displayName: String!
+  joinedAt: String!
+  leftAt: String
+  totalTime: Float!
+  status: String!
+}
+
+type MeetingAttendance {
+  meetingId: String!
+  totalParticipants: Float!
+  presentParticipants: Float!
+  absentParticipants: Float!
+  averageAttendanceTime: Float!
+  attendanceRate: Float!
+  participants: [ParticipantAttendance!]!
+}
+
+type ParticipantResponse {
+  _id: ID!
+  meetingId: ID!
+  userId: ID
+  displayName: String!
+  role: String!
+  micState: String!
+  cameraState: String!
+  status: String!
+  socketId: String
+  sessions: [Session!]!
+  totalDurationSec: Float!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type ParticipantMessageResponse {
+  success: Boolean!
+  message: String!
+  newHostId: ID
+  newHostParticipantId: ID
+}
+
+type ScreenShareInfo {
+  participantId: ID!
+  displayName: String!
+  screenState: MediaState!
+  screenShareInfo: String
+  screenShareStartedAt: DateTime
+  screenShareDuration: Float
+  isCurrentlySharing: Boolean!
+}
+
+"""Media state for audio/video controls"""
+enum MediaState {
+  ON
+  OFF
+  MUTED
+  MUTED_BY_HOST
+  OFF_BY_HOST
+}
+
+type ScreenShareStatusResponse {
+  participants: [ScreenShareInfo!]!
+  totalParticipants: Float!
+  currentlySharingCount: Float!
+  meetingId: String!
+}
+
+type ScreenShareControlResponse {
+  success: Boolean!
+  message: String!
+  participantId: ID
+  screenState: MediaState
+  screenShareInfo: String
+}
+
+type HandRaiseInfo {
+  participantId: ID!
+  displayName: String!
+  hasHandRaised: Boolean!
+  handRaisedAt: DateTime
+  handLoweredAt: DateTime
+  handRaiseDuration: Float
+  reason: String
+  isWaitingForResponse: Boolean!
+}
+
+type RaisedHandsResponse {
+  raisedHands: [HandRaiseInfo!]!
+  totalRaisedHands: Float!
+  meetingId: String!
+  timestamp: DateTime!
+}
+
+type HandRaiseActionResponse {
+  success: Boolean!
+  message: String!
+  participantId: ID!
+  hasHandRaised: Boolean!
+  handRaisedAt: DateTime
+  handLoweredAt: DateTime
+  reason: String
+}
+
+type DeviceTestResult {
+  deviceType: String!
+  isWorking: Boolean!
+  errorMessage: String
+  deviceName: String
+  volumeLevel: Float
+}
+
+type WaitingParticipant {
+  _id: ID!
+  displayName: String!
+  status: String!
+  joinedAt: DateTime!
+  email: String
+  avatarUrl: String
+  micState: String!
+  cameraState: String!
+  socketId: String
+}
+
+type WaitingRoomStats {
+  totalWaiting: Float!
+  totalApproved: Float!
+  totalRejected: Float!
+  totalAdmitted: Float!
+}
+
+type WaitingRoomResponse {
+  message: String!
+  success: Boolean
+  participant: WaitingParticipant
+}
+
+type SimpleMeetingInfo {
+  _id: ID!
+  title: String!
+  status: String!
+  inviteCode: String!
+  isPrivate: Boolean
+  isLocked: Boolean
+  scheduledFor: String
+  actualStartAt: String
+  endedAt: String
+  durationMin: Float
+  notes: String
+  participantCount: Float!
+  createdAt: String!
+  updatedAt: String!
+  hostId: String!
+  host: Member
+}
+
+type SimpleJoinMeetingResponse {
+  success: Boolean!
+  message: String!
+  meeting: SimpleMeetingInfo
+  user: Member
+}
+
+type MeetingInfo {
+  _id: ID!
+  title: String!
+  status: String!
+  inviteCode: String!
+}
+
+type VodWithMeeting {
+  _id: ID!
+  title: String!
+  meetingId: ID
+  source: String!
+  storageKey: String
+  sizeBytes: Float
+  url: String
+  durationSec: Float
+  notes: String
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  meeting: MeetingInfo
+}
+
+type VodListResponse {
+  vods: [VodWithMeeting!]!
+  total: Float!
+  limit: Float!
+  offset: Float!
+  hasMore: Boolean!
+}
+
+type VodStats {
+  totalVods: Float!
+  fileVods: Float!
+  urlVods: Float!
+  totalSizeBytes: Float!
+  averageDuration: Float!
+}
+
+type VodUploadResponse {
+  vodId: ID!
+  title: String!
+  storageKey: String!
+  sizeBytes: Float!
+  message: String!
+}
+
+type VodUrlResponse {
+  vodId: ID!
+  title: String!
+  url: String!
+  message: String!
+}
+
+type ChatUserInfo {
+  _id: ID!
+  displayName: String!
+  avatarUrl: String
+}
+
+type ReplyInfo {
+  _id: ID!
+  text: String!
+  displayName: String!
+  createdAt: DateTime!
+}
+
+type ChatMessageWithDetails {
+  _id: ID!
+  meetingId: ID!
+  userId: ID
+  displayName: String!
+  text: String!
+  replyToMessageId: ID
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  user: ChatUserInfo
+  replyToMessage: ReplyInfo
+}
+
+type ChatHistoryResponse {
+  messages: [ChatMessageWithDetails!]!
+  hasMore: Boolean!
+  total: Float!
+  limit: Float!
+  nextCursor: String
+}
+
+type ChatSearchResponse {
+  messages: [ChatMessageWithDetails!]!
+  total: Float!
+  limit: Float!
+  offset: Float!
+  hasMore: Boolean!
+  query: String!
+}
+
+type ChatStats {
+  totalMessages: Float!
+  messagesToday: Float!
+  activeUsers: Float!
+  averageMessagesPerUser: Float!
+}
+
+type ChatMessageResponse {
+  success: Boolean!
+  message: String!
+  messageId: ID
+}
+
+type ParticipantInfo {
+  identity: String!
+  name: String!
+  joinedAt: Float!
+  isPublisher: Boolean!
+  isSubscriber: Boolean!
+  isMuted: Boolean!
+  isCameraEnabled: Boolean!
+  metadata: String
+}
+
+type RecordingInfo {
+  sid: String!
+  roomName: String!
+  status: String!
+  startTime: Float!
+  endTime: Float
+  duration: Float!
+  filePath: String!
+  fileSize: Float!
+}
+
+type MeetingRecordingInfo {
+  meetingId: ID!
+  isRecording: Boolean!
+  recordingId: String
+  recordingUrl: String
+  recordingStartedAt: DateTime
+  recordingEndedAt: DateTime
+  recordingPausedAt: DateTime
+  recordingResumedAt: DateTime
+  recordingDuration: Float
+  recordingStatus: RecordingStatus
+  quality: String
+  format: String
+  status: RecordingStatus
+  recordingType: String
+  startedAt: DateTime
+  stoppedAt: DateTime
+  pausedAt: DateTime
+  resumedAt: DateTime
+  durationSec: Float
+  fileSize: Float
+  downloadUrl: String
+}
+
+"""Recording status for meetings"""
+enum RecordingStatus {
+  RECORDING
+  PAUSED
+  STOPPED
+  PROCESSING
+  FAILED
+}
+
+type RecordingResponse {
+  success: Boolean!
+  message: String!
+  meetingId: ID!
+  recordingId: String
+  recordingUrl: String
+  recording: MeetingRecordingInfo
+}
+
+type RecordingStats {
+  totalRecordings: Float!
+  activeRecordings: Float!
+  pausedRecordings: Float!
+  totalRecordingTime: Float!
+  averageRecordingDuration: Float!
+}
+
+type Query {
+  me: Member!
+  members: [Member!]!
+  getParticipantsByMeeting(meetingId: ID!): [ParticipantWithLoginInfo!]!
+  getParticipantStats(meetingId: ID!): ParticipantStats!
+  getParticipantById(participantId: ID!): ParticipantWithLoginInfo!
+  getParticipantByUserAndMeeting(meetingId: ID!): ParticipantWithLoginInfo!
+  getWaitingParticipants(meetingId: ID!): [WaitingParticipant!]!
+  getWaitingRoomStats(meetingId: ID!): WaitingRoomStats!
+  getWaitingParticipantsSimple(meetingId: ID!): [ParticipantWithLoginInfo!]!
+  testDevice(input: DeviceTestInput!): DeviceTestResult!
+  canBeHost: Boolean!
+  getMeetingAttendance(meetingId: ID!): MeetingAttendance!
+  getScreenShareStatus(input: GetScreenShareStatusInput!): ScreenShareStatusResponse!
+  getActiveScreenSharers(meetingId: ID!): [ScreenShareControlResponse!]!
+  getRaisedHands(input: GetRaisedHandsInput!): RaisedHandsResponse!
+  getParticipantHandStatus(participantId: ID!): HandRaiseActionResponse!
+  getMeetings(input: MeetingQueryInput!): MeetingListResponse!
+  getMeetingById(meetingId: ID!): MeetingWithHost!
+  getMeetingStats: MeetingStats!
+  getAllVods(input: VodQueryInput): VodListResponse!
+  getVodById(vodId: ID!): VodWithMeeting!
+  getVodStats: VodStats!
+  getChatHistory(input: ChatHistoryInput!): ChatHistoryResponse!
+  searchChatMessages(input: ChatSearchInput!): ChatSearchResponse!
+  getChatStats(meetingId: ID!): ChatStats!
+  getChatMessageById(messageId: ID!): ChatMessageWithDetails!
+  getRecording(recordingSid: String!): RecordingInfo!
+  listRecordings(roomName: String): [RecordingInfo!]!
+  health: String!
+  getRecordingInfo(input: GetRecordingInput!): MeetingRecordingInfo!
+  getRecordingStats: RecordingStats!
+}
+
+input DeviceTestInput {
+  deviceType: String!
+  deviceId: String
+}
+
+input GetScreenShareStatusInput {
+  meetingId: ID!
+  participantId: ID
+}
+
+input GetRaisedHandsInput {
+  meetingId: ID!
+  includeLowered: Boolean
+}
+
+input MeetingQueryInput {
+  status: String
+  hostId: String
+  search: String
+  page: Float
+  limit: Float
+}
+
+input VodQueryInput {
+  q: String
+  source: String
+  meetingId: String
+  limit: Float
+  offset: Float
+}
+
+input ChatHistoryInput {
+  meetingId: String!
+  before: String
+  limit: Float
+  offset: Float
+  cursor: String
+}
+
+input ChatSearchInput {
+  meetingId: String!
+  q: String!
+  limit: Float
+  offset: Float
+}
+
+input GetRecordingInput {
+  meetingId: ID!
+}
+
+type Mutation {
+  signup(input: MemberInput!): AuthResponse!
+  login(email: String!, password: String!): AuthResponse!
+  updateProfile(input: UpdateMemberInput!): Member!
+  changePassword(input: ChangePasswordInputType!): MessageResponse!
+  deleteMember(userId: ID!): MessageResponse!
+  logout: LogoutResponse!
+  uploadProfileImage(file: String!): ImageUploadResponse!
+  deleteProfileImage: ImageUploadResponse!
+  promoteUserRole(userId: ID!, newRole: String!): ImageUploadResponse!
+  deleteUser(userId: ID!): MessageResponse!
+  blockUser(userId: ID!, reason: String): ImageUploadResponse!
+  unblockUser(userId: ID!): ImageUploadResponse!
+  createFirstAdmin(input: MemberInput!): AuthResponse!
+  tutorLogin(input: LoginInput!): AuthResponse!
+  adminLogin(input: LoginInput!): AuthResponse!
+  tutorSignup(input: MemberInput!): AuthResponse!
+  createParticipant(input: CreateParticipantInput!): ParticipantResponse!
+  updateParticipant(input: UpdateParticipantInput!): ParticipantResponse!
+  removeParticipant(participantId: ID!): ParticipantMessageResponse!
+  joinMeeting(input: JoinParticipantInput!): ParticipantResponse!
+  leaveMeeting(input: LeaveMeetingInput!): ParticipantMessageResponse!
+  updateParticipantMediaState(participantId: ID!, micState: String, cameraState: String): ParticipantResponse!
+  forceLeaveMeeting(meetingId: ID!): String!
+  updateSession(input: UpdateSessionInput!): ParticipantMessageResponse!
+  preMeetingSetup(input: PreMeetingSetupInput!): WaitingRoomResponse!
+  approveParticipant(input: ApproveParticipantInput!): WaitingRoomResponse!
+  rejectParticipant(input: RejectParticipantInput!): WaitingRoomResponse!
+  admitParticipant(input: AdmitParticipantInput!): WaitingRoomResponse!
+  approveParticipantSimple(participantId: ID!): ParticipantResponse!
+  rejectParticipantSimple(participantId: ID!): ParticipantResponse!
+  admitAllWaitingParticipantsSimple(meetingId: ID!): String!
+  forceMute(input: ForceMuteInput!): ParticipantMessageResponse!
+  forceMuteParticipant(input: ForceMuteInput!): ParticipantMessageResponse!
+  forceCameraOff(input: ForceCameraOffInput!): ParticipantMessageResponse!
+  transferHost(input: TransferHostInput!): ParticipantMessageResponse!
+  forceScreenShareControl(input: ForceScreenShareInput!): ScreenShareControlResponse!
+  updateScreenShareInfo(input: UpdateScreenShareInfoInput!): ScreenShareControlResponse!
+  raiseHand(input: RaiseHandInput!): HandRaiseActionResponse!
+  lowerHand(input: LowerHandInput!): HandRaiseActionResponse!
+  hostLowerHand(input: HostLowerHandInput!): HandRaiseActionResponse!
+  lowerAllHands(meetingId: ID!): HandRaiseActionResponse!
+  createMeeting(input: CreateMeetingInput!): MeetingWithHost!
+  updateMeeting(meetingId: ID!, input: UpdateMeetingInput!): MeetingWithHost!
+  joinMeetingByCode(input: JoinMeetingInput!): SimpleJoinMeetingResponse!
+  startMeeting(meetingId: ID!): MeetingWithHost!
+  endMeeting(meetingId: ID!): MeetingWithHost!
+  deleteMeeting(meetingId: ID!): MeetingWithHost!
+  rotateInviteCode(meetingId: ID!): MeetingWithHost!
+  lockRoom(meetingId: ID!): MeetingWithHost!
+  unlockRoom(meetingId: ID!): MeetingWithHost!
+  uploadVodFile(input: CreateVodFileInput!, file: String!): VodUploadResponse!
+  createVodUrl(input: CreateVodUrlInput!): VodUrlResponse!
+  createVOD(input: CreateVodFileInput!): VodWithMeeting!
+  updateVod(input: UpdateVodInput!): VodWithMeeting!
+  deleteVod(vodId: ID!): ParticipantMessageResponse!
+  deleteChatMessage(input: DeleteMessageInput!): ChatMessageResponse!
+  createLivekitToken(meetingId: String!): String!
+  endLivekitRoom(meetingId: String!): String!
+  kickLivekitParticipant(meetingId: String!, identity: String!): String!
+  startRecording(input: StartLivekitRecordingInput!): String!
+  stopRecording(input: StopRecordingInput!): String!
+  startMeetingRecording(input: StartMeetingRecordingInput!): RecordingResponse!
+  stopMeetingRecording(input: StopMeetingRecordingInput!): RecordingResponse!
+  pauseMeetingRecording(input: PauseMeetingRecordingInput!): RecordingResponse!
+  resumeMeetingRecording(input: ResumeRecordingInput!): RecordingResponse!
+}
+
+input MemberInput {
+  email: String!
+  password: String!
+  displayName: String!
+  department: String
+  phone: String
+}
+
+input UpdateMemberInput {
+  displayName: String
+  avatarUrl: String
+  department: String
+  phone: String
+  language: String
+  timezone: String
+}
+
+input ChangePasswordInputType {
+  currentPassword: String!
+  newPassword: String!
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+input CreateParticipantInput {
+  meetingId: ID!
+  userId: ID
+  displayName: String!
+  role: String
+}
+
+input UpdateParticipantInput {
+  participantId: ID!
+  displayName: String
+  role: String
+  micState: String
+  cameraState: String
+}
+
+input JoinParticipantInput {
+  meetingId: ID!
+  displayName: String!
+  role: String
+  inviteCode: String
+}
+
+input LeaveMeetingInput {
+  participantId: ID!
+}
+
+input UpdateSessionInput {
+  participantId: ID!
+  action: String!
+}
+
+input PreMeetingSetupInput {
+  meetingId: ID!
+  displayName: String!
+  inviteCode: String
+  joinWithCameraOff: Boolean
+  joinWithMicOff: Boolean
+  joinWithSpeakerOff: Boolean
+}
+
+input ApproveParticipantInput {
+  participantId: ID!
+  message: String
+}
+
+input RejectParticipantInput {
+  participantId: ID!
+  reason: String
+}
+
+input AdmitParticipantInput {
+  participantId: ID!
+  message: String
+}
+
+input ForceMuteInput {
+  meetingId: ID!
+  participantId: ID!
+  track: MediaTrack! = MIC
+  reason: String
+}
+
+"""Media track types for force mute operations"""
+enum MediaTrack {
+  MIC
+  CAMERA
+  SCREEN
+}
+
+input ForceCameraOffInput {
+  meetingId: ID!
+  participantId: ID!
+  reason: String
+}
+
+input TransferHostInput {
+  meetingId: ID!
+  newHostParticipantId: ID!
+  reason: String
+}
+
+input ForceScreenShareInput {
+  meetingId: ID!
+  participantId: ID!
+  screenState: MediaState!
+  reason: String
+  screenShareInfo: String
+}
+
+input UpdateScreenShareInfoInput {
+  participantId: ID!
+  screenShareInfo: String
+  screenState: MediaState
+}
+
+input RaiseHandInput {
+  participantId: ID!
+  reason: String
+}
+
+input LowerHandInput {
+  participantId: ID!
+  reason: String
+}
+
+input HostLowerHandInput {
+  meetingId: ID!
+  participantId: ID!
+  reason: String
+}
+
+input CreateMeetingInput {
+  title: String!
+  notes: String
+  isPrivate: Boolean
+  scheduledFor: String
+  duration: Float
+  maxParticipants: Float
+}
+
+input UpdateMeetingInput {
+  title: String
+  notes: String
+  isPrivate: Boolean
+  scheduledFor: String
+  duration: Float
+  maxParticipants: Float
+}
+
+input JoinMeetingInput {
+  inviteCode: String!
+  passcode: String
+}
+
+input CreateVodFileInput {
+  title: String!
+  notes: String
+  meetingId: String
+  durationSec: Float
+}
+
+input CreateVodUrlInput {
+  title: String!
+  url: String!
+  notes: String
+  meetingId: String
+  durationSec: Float
+}
+
+input UpdateVodInput {
+  vodId: String!
+  title: String
+  notes: String
+  durationSec: Float
+}
+
+input DeleteMessageInput {
+  messageId: String!
+  reason: String
+}
+
+input StartLivekitRecordingInput {
+  roomName: String!
+  outputPath: String
+}
+
+input StopRecordingInput {
+  recordingSid: String!
+}
+
+input StartMeetingRecordingInput {
+  meetingId: ID!
+  quality: String
+  format: String
+}
+
+input StopMeetingRecordingInput {
+  meetingId: ID!
+  reason: String
+}
+
+input PauseMeetingRecordingInput {
+  meetingId: ID!
+  reason: String
+}
+
+input ResumeRecordingInput {
+  meetingId: ID!
+  reason: String
+}

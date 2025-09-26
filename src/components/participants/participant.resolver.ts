@@ -1,10 +1,11 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { ParticipantService } from './participant.service';
+import { MeetingService } from '../meetings/meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { UseGuards, Logger } from '@nestjs/common';
 import { Member } from '../../schemas/Member.model';
-import { ParticipantStatus } from '../../libs/enums/enums';
+import { ParticipantStatus, Role } from '../../libs/enums/enums';
 import {
   ParticipantWithLoginInfo,
   ParticipantStats,
@@ -60,7 +61,10 @@ import {
 export class ParticipantResolver {
   private readonly logger = new Logger(ParticipantResolver.name);
 
-  constructor(private readonly participantService: ParticipantService) {}
+  constructor(
+    private readonly participantService: ParticipantService,
+    private readonly meetingService: MeetingService,
+  ) { }
 
   @Query(() => [ParticipantWithLoginInfo], { name: 'getParticipantsByMeeting' })
   @UseGuards(AuthGuard)
@@ -73,24 +77,48 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
       const result = await this.participantService.getParticipantsByMeeting(
         meetingId,
         user._id,
       );
+
+      // Transform the data to match ParticipantWithLoginInfo type
+      const transformedResult = result.map(p => ({
+        _id: p._id.toString(),
+        meetingId: p.meetingId.toString(),
+        user: p.userId ? {
+          _id: p.userId._id.toString(),
+          email: (p.userId as any).email,
+          displayName: (p.userId as any).displayName,
+          systemRole: (p.userId as any).systemRole,
+          avatarUrl: (p.userId as any).avatarUrl
+        } : null,
+        displayName: p.displayName,
+        role: p.role,
+        micState: p.micState,
+        cameraState: p.cameraState,
+        socketId: p.socketId,
+        loginInfo: {
+          joinedAt: p.createdAt,
+          lastSeen: p.updatedAt
+        },
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      }));
+
       console.log('✅ BACKEND GET_PARTICIPANTS: Success', {
         meetingId,
-        count: result.length,
-        participants: result.map(p => ({
+        count: transformedResult.length,
+        participants: transformedResult.map(p => ({
           _id: p._id,
           displayName: p.displayName,
-          realDisplayName: (p.userId as any)?.displayName || p.displayName,
           role: p.role,
-          userId: p.userId?._id
+          userId: p.user?._id
         }))
       });
-      return result;
+      return transformedResult;
     } catch (error) {
       console.error('❌ BACKEND GET_PARTICIPANTS: Error', error);
       throw error;
@@ -152,9 +180,10 @@ export class ParticipantResolver {
       input: joinInput,
       userId: user._id,
       userEmail: user.email,
-      userDisplayName: user.displayName
+      userDisplayName: user.displayName,
+      userObject: user
     });
-    
+
     try {
       const result = await this.participantService.joinMeeting(joinInput, user._id);
       console.log('✅ BACKEND JOIN_MEETING: Success', {
@@ -210,7 +239,7 @@ export class ParticipantResolver {
       cameraState,
       userId: user._id
     });
-    
+
     try {
       const result = await this.participantService.updateParticipantMediaState(participantId, {
         micState: micState as any,
@@ -252,7 +281,7 @@ export class ParticipantResolver {
       meetingId,
       userId: user._id
     });
-    
+
     try {
       const result = await this.participantService.getParticipantByUserAndMeeting(
         user._id,
@@ -277,23 +306,42 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
-      // Find the participant for this user in this meeting
       const participant = await this.participantService.getParticipantByUserAndMeeting(
         user._id,
         meetingId
       );
-      
+
       if (!participant) {
         console.log('🚪 BACKEND FORCE_LEAVE_MEETING: No participant found');
         return 'No participant found for this meeting';
       }
-      
-      // Set status to LEFT
+
+      // 🔍 DEBUG: Log participant role and Role.HOST for comparison
+      console.log('🔍 BACKEND FORCE_LEAVE_MEETING: Role comparison debug', {
+        participantRole: participant.role,
+        roleHost: Role.HOST,
+        isEqual: participant.role === Role.HOST,
+        roleType: typeof participant.role,
+        hostType: typeof Role.HOST
+      });
+
       participant.status = ParticipantStatus.LEFT;
       await participant.save();
-      
+
+      // 👇 FIXED: Always try to end meeting if user is the meeting host (by checking meeting.hostId)
+      // This bypasses the role check issue and ensures host can always end meeting
+      console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Attempting to end meeting for all participants');
+      try {
+        await this.meetingService.endMeeting(meetingId, user._id);
+        console.log('✅ BACKEND FORCE_LEAVE_MEETING: Meeting ended successfully');
+      } catch (error) {
+        console.error('❌ BACKEND FORCE_LEAVE_MEETING: Failed to end meeting', error);
+        // Don't throw error here - participant is already marked as LEFT
+        // Just log the error and continue
+      }
+
       console.log('✅ BACKEND FORCE_LEAVE_MEETING: Success - Participant status set to LEFT');
       return `Successfully left meeting ${meetingId}`;
     } catch (error) {
@@ -301,6 +349,7 @@ export class ParticipantResolver {
       throw error;
     }
   }
+
 
   @Mutation(() => ParticipantMessageResponse, { name: 'updateSession' })
   @UseGuards(AuthGuard)
@@ -410,7 +459,7 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
       const result = await this.participantService.getWaitingParticipants(meetingId, user._id);
       console.log('✅ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Success', {
@@ -436,7 +485,7 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
       const result = await this.participantService.approveParticipant(participantId, user._id);
       console.log('✅ BACKEND APPROVE_PARTICIPANT_SIMPLE: Success', {
@@ -462,7 +511,7 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
       const result = await this.participantService.rejectParticipant(participantId, user._id);
       console.log('✅ BACKEND REJECT_PARTICIPANT_SIMPLE: Success', {
@@ -488,7 +537,7 @@ export class ParticipantResolver {
       userId: user._id,
       userEmail: user.email
     });
-    
+
     try {
       const result = await this.participantService.admitAllWaitingParticipants(meetingId, user._id);
       console.log('✅ BACKEND ADMIT_ALL_WAITING_SIMPLE: Success', result);
@@ -595,6 +644,16 @@ export class ParticipantResolver {
     this.logger.log(
       `[TRANSFER_HOST] Attempt - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}, Current Host ID: ${user._id}, Email: ${user.email}`,
     );
+    
+    // 🔍 ADDITIONAL DEBUG: Log detailed user information
+    this.logger.debug(`[TRANSFER_HOST] User details:`, {
+      userId: user._id,
+      userIdType: typeof user._id,
+      userEmail: user.email,
+      userSystemRole: user.systemRole,
+      userDisplayName: user.displayName
+    });
+    
     try {
       const result = await this.participantService.transferHost(
         transferHostInput,

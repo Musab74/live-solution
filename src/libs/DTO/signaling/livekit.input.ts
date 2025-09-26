@@ -103,7 +103,7 @@ export class UpdateParticipantMetadataInput {
 }
 
 @InputType()
-export class StartRecordingInput {
+export class StartLivekitRecordingInput {
   @Field()
   @IsString()
   roomName!: string;
