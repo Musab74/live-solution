@@ -4,7 +4,10 @@ import {
   ForbiddenException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
+import { HostValidationUtil } from '../../utils/host-validation.util';
+import { MeetingUtils } from '../../utils/meeting-utils';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -59,39 +62,50 @@ import {
   ParticipantStatus,
   MediaTrack,
   SystemRole,
+  MeetingStatus,
 } from '../../libs/enums/enums';
 
 @Injectable()
 export class ParticipantService {
+  private readonly logger = new Logger(ParticipantService.name);
+
   constructor(
     @InjectModel(Participant.name)
     private participantModel: Model<ParticipantDocument>,
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
     private readonly livekitService: LivekitService, // Add this
-  ) {}
+  ) { }
 
   async getParticipantsByMeeting(meetingId: string, userId: string): Promise<Participant[]> {
     console.log(`[DEBUG] getParticipantsByMeeting - meetingId: ${meetingId}, userId: ${userId}`);
-    
+
     // First, check if meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       console.log(`[DEBUG] getParticipantsByMeeting - Meeting not found: ${meetingId}`);
       throw new NotFoundException('Meeting not found');
     }
-    
+
     console.log(`[DEBUG] getParticipantsByMeeting - Meeting found: ${meeting.title}, participantCount: ${meeting.participantCount}`);
-    
+
     // Query participants with proper ObjectId conversion and populate user data
-    // CRITICAL: Only return participants who are admitted to the meeting (not waiting, rejected, or left)
-    const participants = await this.participantModel.find({ 
+    // For hosts: return all participants (including WAITING) for management
+    // For participants: only return admitted participants
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    const statusFilter = isHost
+      ? { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] } // Host sees all active participants
+      : { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] }; // Participants only see admitted ones
+
+    console.log(`[DEBUG] getParticipantsByMeeting - Host detection: meeting.hostId:`, meeting.hostId, 'userId:', userId, 'isHost:', isHost);
+
+    const participants = await this.participantModel.find({
       meetingId: new Types.ObjectId(meetingId),
-      status: { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] } // Only admitted participants
+      status: statusFilter
     }).populate('userId', 'email displayName systemRole avatarUrl');
-    
+
     console.log(`[DEBUG] getParticipantsByMeeting - Found ${participants.length} active participants (excluding LEFT)`);
-    
+
     // Debug each participant
     participants.forEach((participant, index) => {
       console.log(`[DEBUG] Participant ${index}:`, {
@@ -104,7 +118,7 @@ export class ParticipantService {
         realDisplayName: (participant.userId as any)?.displayName || participant.displayName
       });
     });
-    
+
     return participants;
   }
 
@@ -116,7 +130,7 @@ export class ParticipantService {
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
     let isParticipant = false;
 
     if (!isHost) {
@@ -154,10 +168,10 @@ export class ParticipantService {
         const sessions = p.sessions || [];
         return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
       }).length,
-      mutedParticipants: participants.filter((p) => 
+      mutedParticipants: participants.filter((p) =>
         p.micState === 'OFF' || p.micState === 'MUTED' || p.micState === 'MUTED_BY_HOST'
       ).length,
-      cameraOffParticipants: participants.filter((p) => 
+      cameraOffParticipants: participants.filter((p) =>
         p.cameraState === 'OFF' || p.cameraState === 'OFF_BY_HOST'
       ).length,
       raisedHandsCount: participants.filter((p) => p.hasHandRaised).length,
@@ -201,7 +215,7 @@ export class ParticipantService {
       throw new NotFoundException('Meeting not found');
     }
 
-    if (meeting.hostId.toString() !== hostId) {
+    if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException(
         'Only the meeting host can add participants',
       );
@@ -251,7 +265,7 @@ export class ParticipantService {
 
     // Verify the user is the host of the meeting
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    if (!meeting || meeting.hostId.toString() !== hostId) {
+    if (!meeting || !MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException(
         'Only the meeting host can update participants',
       );
@@ -276,7 +290,7 @@ export class ParticipantService {
 
     // Verify the user is the host of the meeting
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    if (!meeting || meeting.hostId.toString() !== hostId) {
+    if (!meeting || !MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException(
         'Only the meeting host can remove participants',
       );
@@ -306,7 +320,7 @@ export class ParticipantService {
 
     // Verify the user is the host or the participant themselves
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = meeting && MeetingUtils.isMeetingHost(meeting.hostId, userId);
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -323,6 +337,7 @@ export class ParticipantService {
     const { meetingId, displayName, inviteCode } = joinInput;
 
     console.log(`[JOIN_MEETING] Starting - meetingId: ${meetingId}, userId: ${userId}, displayName: ${displayName}`);
+    console.log(`[JOIN_MEETING] userId type: ${typeof userId}, is null: ${userId === null}, is undefined: ${userId === undefined}`);
 
     // Verify the meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
@@ -344,12 +359,14 @@ export class ParticipantService {
     }
 
     // Determine if participant should go to waiting room
-    const isHost = userId && meeting.hostId && 
-      meeting.hostId.toString() === userId.toString();
-    
+    // 🔍 FIX: Use MeetingUtils for consistent host ID comparison
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
+
     // Hosts always get admitted directly, others go to waiting room if meeting not started
-    const shouldGoToWaitingRoom = !isHost && meeting.status !== 'LIVE';
-    
+    const shouldGoToWaitingRoom =
+      !isHost && meeting.status !== MeetingStatus.LIVE;
+
+
     console.log(`[JOIN_MEETING] Waiting room check - User ID: ${userId}, Meeting Host ID: ${meeting.hostId}, Is Host: ${isHost}, Meeting Status: ${meeting.status}, Should Wait: ${shouldGoToWaitingRoom}`);
 
     // Get user info to use real display name
@@ -365,6 +382,7 @@ export class ParticipantService {
     }
 
     // Check if user is already a participant
+    // Check if user is already a participant
     if (userId) {
       const existingParticipant = await this.participantModel.findOne({
         meetingId: new Types.ObjectId(meetingId),
@@ -373,37 +391,53 @@ export class ParticipantService {
 
       if (existingParticipant) {
         console.log(`[JOIN_MEETING] User already a participant, updating status and displayName`);
-        
-        // Update display name
+
+        // Always refresh display name
         existingParticipant.displayName = realDisplayName;
-        
-        // If host, always admit directly
+
+        const prevStatus = existingParticipant.status;
+
         if (isHost) {
+          // Host joins immediately
           existingParticipant.status = ParticipantStatus.ADMITTED;
           existingParticipant.sessions.push({
             joinedAt: new Date(),
             leftAt: undefined,
             durationSec: 0,
           });
+
+          // Increment count if they weren't already admitted
+          if (prevStatus !== ParticipantStatus.ADMITTED) {
+            await this.meetingModel.findByIdAndUpdate(meetingId, { $inc: { participantCount: 1 } });
+          }
         } else {
-          // Non-host: check if they should be in waiting room
-          if (shouldGoToWaitingRoom && existingParticipant.status !== ParticipantStatus.ADMITTED) {
+          // Non-host behavior
+          if (meeting.status !== MeetingStatus.LIVE) {
+            // Meeting not started => force waiting even if they were previously admitted
             existingParticipant.status = ParticipantStatus.WAITING;
-            console.log(`[JOIN_MEETING] Participant ${existingParticipant._id} sent to waiting room`);
-          } else if (!shouldGoToWaitingRoom) {
+            console.log(`[JOIN_MEETING] Participant ${existingParticipant._id} forced to WAITING (meeting not LIVE)`);
+            // IMPORTANT: do NOT create a session while waiting
+          } else {
+            // Meeting is live => admit and start a session
             existingParticipant.status = ParticipantStatus.ADMITTED;
             existingParticipant.sessions.push({
               joinedAt: new Date(),
               leftAt: undefined,
               durationSec: 0,
             });
+
+            // Increment count if they weren't already admitted
+            if (prevStatus !== ParticipantStatus.ADMITTED) {
+              await this.meetingModel.findByIdAndUpdate(meetingId, { $inc: { participantCount: 1 } });
+            }
           }
         }
-        
+
         await existingParticipant.save();
         return existingParticipant;
       }
     }
+
 
     // Determine participant role based on whether user is the host
     const participantRole = isHost ? 'HOST' : 'PARTICIPANT';
@@ -412,7 +446,7 @@ export class ParticipantService {
 
     // Determine initial status based on waiting room logic
     const initialStatus = shouldGoToWaitingRoom ? ParticipantStatus.WAITING : ParticipantStatus.ADMITTED;
-    
+
     console.log(`[JOIN_MEETING] Initial status - ${initialStatus} (shouldGoToWaitingRoom: ${shouldGoToWaitingRoom})`);
 
     // Create new participant with appropriate status
@@ -461,19 +495,27 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId && meeting.hostId._id && meeting.hostId._id.toString() === userId.toString();
-    const isOwner = participant.userId && participant.userId.toString() === userId;
+    const hostId = meeting?.hostId?._id ? meeting.hostId._id.toString() : meeting?.hostId?.toString();
+    const isHost = meeting && hostId && hostId === userId?.toString();
 
-    if (!isHost && !isOwner) {
-      console.log(`[LEAVE_MEETING] Forbidden - User ${userId} cannot leave participant ${participantId}`);
+    // Fix: check both by userId (Member) and participantId (Participant doc)
+    const isOwner =
+      participant.userId && participant.userId.toString() === userId?.toString();
+    const isSelf = participant._id.toString() === participantId.toString();
+
+    if (!isHost && !isOwner && !isSelf) {
+      console.log(
+        `[LEAVE_MEETING] Forbidden - User ${userId} cannot leave participant ${participantId}`
+      );
       throw new ForbiddenException('You can only leave your own participation');
     }
+
 
     // Update the last session with leave time
     const sessions = participant.sessions || [];
     if (sessions.length > 0) {
       const lastSession = sessions[sessions.length - 1];
-      if (!lastSession.leftAt) {
+      if (!lastSession.leftAt && lastSession.joinedAt) {
         const now = new Date();
         lastSession.leftAt = now;
         lastSession.durationSec = Math.floor(
@@ -487,7 +529,7 @@ export class ParticipantService {
     participant.status = ParticipantStatus.LEFT;
 
     await participant.save();
-    
+
     console.log(`[LEAVE_MEETING] Success - Participant ${participantId} status set to LEFT`);
     return { message: 'Successfully left the meeting' };
   }
@@ -503,7 +545,7 @@ export class ParticipantService {
 
     // Verify the user owns this participant or is the host
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = meeting && MeetingUtils.isMeetingHost(meeting.hostId, userId);
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
@@ -527,7 +569,7 @@ export class ParticipantService {
       // Update last session
       if (sessions.length > 0) {
         const lastSession = sessions[sessions.length - 1];
-        if (!lastSession.leftAt) {
+        if (!lastSession.leftAt && lastSession.joinedAt) {
           lastSession.leftAt = now;
           lastSession.durationSec = Math.floor(
             (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
@@ -603,7 +645,7 @@ export class ParticipantService {
     }
 
     // Check if user is either the host or a participant in this meeting
-    const isHost = meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
     let isParticipant = false;
 
     if (!isHost) {
@@ -716,10 +758,11 @@ export class ParticipantService {
 
     // Verify host is authorized (host or co-host)
     const hostParticipant = await this.participantModel.findOne({
-      meetingId,
-      userId: hostId,
+      meetingId: new Types.ObjectId(meetingId),
+      userId: new Types.ObjectId(hostId),
       role: { $in: [Role.HOST, Role.CO_HOST] },
     });
+
 
     if (!hostParticipant) {
       throw new ForbiddenException(
@@ -838,69 +881,105 @@ export class ParticipantService {
   async transferHost(
     input: TransferHostInput,
     currentHostId: string,
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<{ success: boolean; message: string; newHostId: string; newHostParticipantId: string }> {
     const { meetingId, newHostParticipantId, reason } = input;
 
-    // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
-    if (!meeting) {
-      throw new NotFoundException('Meeting not found');
+    if (!meeting) throw new NotFoundException('Meeting not found');
+
+    // 🔍 IMPROVED: Use comprehensive host validation utility
+    const user = await this.memberModel.findById(currentHostId);
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    // Verify current user is the host
-    const currentHostParticipant = await this.participantModel.findOne({
-      meetingId,
-      userId: currentHostId,
-      role: Role.HOST,
+    // 🔍 ADDITIONAL DEBUG: Log detailed comparison data
+    this.logger.debug(`[TRANSFER_HOST] Detailed comparison data:`, {
+      meetingHostId: meeting.hostId,
+      meetingHostIdType: typeof meeting.hostId,
+      meetingHostIdString: meeting.hostId?.toString(),
+      currentHostId: currentHostId,
+      currentHostIdType: typeof currentHostId,
+      currentHostIdString: currentHostId?.toString(),
+      userFromDB: user,
+      userFromDBId: user._id,
+      userFromDBIdType: typeof user._id,
+      userFromDBIdString: user._id?.toString()
     });
 
-    if (!currentHostParticipant) {
-      throw new ForbiddenException(
-        'Only the current host can transfer host role',
-      );
-    }
+    // 🔍 CRITICAL DEBUG: Test the comparison logic directly
+    const directComparison = meeting.hostId?.toString() === currentHostId?.toString();
+    const utilityComparison = MeetingUtils.isMeetingHost(meeting.hostId, currentHostId);
+    
+    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Direct comparison: ${directComparison}`);
+    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Utility comparison: ${utilityComparison}`);
+    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Meeting hostId: ${meeting.hostId?.toString()}`);
+    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Current hostId: ${currentHostId?.toString()}`);
+    this.logger.warn(`[TRANSFER_HOST] CRITICAL DEBUG - Are they equal? ${meeting.hostId?.toString() === currentHostId?.toString()}`);
 
-    // Find new host participant
-    const newHostParticipant = await this.participantModel.findOne({
-      _id: newHostParticipantId,
-      meetingId,
-    });
-
-    if (!newHostParticipant) {
-      throw new NotFoundException('New host participant not found');
-    }
-
-    // Verify new host has appropriate system role (TUTOR or ADMIN)
-    const newHostUser = await this.memberModel.findById(
-      newHostParticipant.userId,
+    const hostValidation = await HostValidationUtil.validateHost(
+      meeting.hostId,
+      currentHostId,
+      user.systemRole,
+      this.participantModel,
+      meetingId
     );
-    if (
-      !newHostUser ||
-      (newHostUser.systemRole !== SystemRole.TUTOR &&
-        newHostUser.systemRole !== SystemRole.ADMIN)
-    ) {
-      throw new ForbiddenException('Only tutors and admins can be hosts');
+
+    this.logger.debug(`[TRANSFER_HOST] Host validation result:`, hostValidation);
+    
+    if (!hostValidation.isAuthorized) {
+      this.logger.warn(`[TRANSFER_HOST] Failed - User ${currentHostId} is not authorized to transfer host role. Reason: ${hostValidation.reason}`);
+      throw new ForbiddenException('Only the current host can transfer host role');
     }
 
-    // Transfer host role
-    await this.participantModel.findByIdAndUpdate(currentHostParticipant._id, {
-      role: Role.PARTICIPANT,
-    });
+    this.logger.debug(`[TRANSFER_HOST] Looking for new host participant - meetingId: ${meetingId}, newHostParticipantId: ${newHostParticipantId}`);
 
-    await this.participantModel.findByIdAndUpdate(newHostParticipantId, {
+    const newHostParticipant = await this.participantModel.findOne({
+      _id: new Types.ObjectId(newHostParticipantId),
+      meetingId: new Types.ObjectId(meetingId),
+    });
+    
+    this.logger.debug(`[TRANSFER_HOST] New host participant search result:`, {
+      found: !!newHostParticipant,
+      participantId: newHostParticipant?._id,
+      participantUserId: newHostParticipant?.userId,
+      participantRole: newHostParticipant?.role
+    });
+    
+    if (!newHostParticipant) throw new NotFoundException('New host participant not found');
+
+    const newHostUser = await this.memberModel.findById(newHostParticipant.userId);
+    if (!newHostUser) throw new ForbiddenException('New host user not found');
+
+    // Find current host participant to demote
+    const currentHostParticipant = await this.participantModel.findOne({
+      meetingId: new Types.ObjectId(meetingId),
+      $or: [
+        { userId: new Types.ObjectId(currentHostId) },
+        { 'userId._id': new Types.ObjectId(currentHostId) }
+      ],
       role: Role.HOST,
     });
 
-    // Update meeting host
-    await this.meetingModel.findByIdAndUpdate(meetingId, {
-      hostId: newHostParticipant.userId,
-    });
+    // Demote current host, promote new host
+    if (currentHostParticipant) {
+      await this.participantModel.findByIdAndUpdate(currentHostParticipant._id, { role: Role.PARTICIPANT });
+    }
+    await this.participantModel.findByIdAndUpdate(newHostParticipantId, { role: Role.HOST });
+
+    // Update meeting host (Member id)
+    await this.meetingModel.findByIdAndUpdate(meetingId, { hostId: newHostParticipant.userId });
+
+    // (Optional) Publish a subscription event here so clients refresh the host badge
 
     return {
       success: true,
       message: 'Host role transferred successfully',
+      newHostId: newHostParticipant.userId?.toString(),
+      newHostParticipantId: newHostParticipant._id.toString(),
     };
   }
+
 
   // Check if user can be host (TUTOR or ADMIN only)
   async canBeHost(userId: string): Promise<boolean> {
@@ -954,7 +1033,7 @@ export class ParticipantService {
       const totalDuration = sessions.reduce((total, session) => {
         const sessionDuration = session.leftAt
           ? new Date(session.leftAt).getTime() -
-            new Date(session.joinedAt).getTime()
+          new Date(session.joinedAt).getTime()
           : Date.now() - new Date(session.joinedAt).getTime();
         return total + Math.floor(sessionDuration / 1000);
       }, 0);
@@ -962,12 +1041,12 @@ export class ParticipantService {
       const userData =
         participant.userId && typeof participant.userId === 'object'
           ? {
-              _id: (participant.userId as any)._id,
-              email: (participant.userId as any).email,
-              displayName: (participant.userId as any).displayName,
-              firstName: (participant.userId as any).firstName,
-              lastName: (participant.userId as any).lastName,
-            }
+            _id: (participant.userId as any)._id,
+            email: (participant.userId as any).email,
+            displayName: (participant.userId as any).displayName,
+            firstName: (participant.userId as any).firstName,
+            lastName: (participant.userId as any).lastName,
+          }
           : null;
 
       return {
@@ -991,13 +1070,13 @@ export class ParticipantService {
           leftAt: session.leftAt,
           duration: session.leftAt
             ? Math.floor(
-                (new Date(session.leftAt).getTime() -
-                  new Date(session.joinedAt).getTime()) /
-                  1000,
-              )
+              (new Date(session.leftAt).getTime() -
+                new Date(session.joinedAt).getTime()) /
+              1000,
+            )
             : Math.floor(
-                (Date.now() - new Date(session.joinedAt).getTime()) / 1000,
-              ),
+              (Date.now() - new Date(session.joinedAt).getTime()) / 1000,
+            ),
         })),
       };
     });
@@ -1029,7 +1108,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host
-    if (meeting.hostId.toString() !== hostId) {
+    if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException('Only the meeting host can control screen sharing');
     }
 
@@ -1117,7 +1196,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host or a participant in the meeting
-    const isHost = meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
     if (!isHost) {
       // Check if user is a participant in this meeting
       const userParticipant = await this.participantModel.findOne({
@@ -1148,7 +1227,7 @@ export class ParticipantService {
       screenState: p.screenState as MediaState,
       screenShareInfo: p.screenShareInfo,
       screenShareStartedAt: p.screenState === MediaState.ON ? p.createdAt : undefined,
-      screenShareDuration: p.screenState === MediaState.ON ? 
+      screenShareDuration: p.screenState === MediaState.ON ?
         Math.floor((Date.now() - p.createdAt.getTime()) / 1000) : undefined,
       isCurrentlySharing: p.screenState === MediaState.ON,
     }));
@@ -1313,7 +1392,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host
-    if (meeting.hostId.toString() !== hostId) {
+    if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException('Only the meeting host can lower participants\' hands');
     }
 
@@ -1361,7 +1440,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host or a participant in the meeting
-    const isHost = meeting.hostId && meeting.hostId.toString() === userId.toString();
+    const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
     if (!isHost) {
       // Check if user is a participant in this meeting
       const userParticipant = await this.participantModel.findOne({
@@ -1388,7 +1467,7 @@ export class ParticipantService {
 
     // Transform to hand raise info
     const raisedHands: HandRaiseInfo[] = participants.map((p) => {
-      const handRaiseDuration = p.handRaisedAt && !p.handLoweredAt ? 
+      const handRaiseDuration = p.handRaisedAt && !p.handLoweredAt ?
         Math.floor((Date.now() - p.handRaisedAt.getTime()) / 1000) : undefined;
 
       return {
@@ -1423,7 +1502,7 @@ export class ParticipantService {
       throw new NotFoundException('Participant not found');
     }
 
-    const handRaiseDuration = participant.handRaisedAt && !participant.handLoweredAt ? 
+    const handRaiseDuration = participant.handRaisedAt && !participant.handLoweredAt ?
       Math.floor((Date.now() - participant.handRaisedAt.getTime()) / 1000) : undefined;
 
     return {
@@ -1446,7 +1525,7 @@ export class ParticipantService {
     }
 
     // Verify the user is the host
-    if (meeting.hostId.toString() !== hostId) {
+    if (!MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
       throw new ForbiddenException('Only the meeting host can lower all hands');
     }
 
@@ -1463,10 +1542,10 @@ export class ParticipantService {
     // Lower all hands
     const now = new Date();
     const participantIds = participantsWithRaisedHands.map(p => p._id);
-    
+
     await this.participantModel.updateMany(
       { _id: { $in: participantIds } },
-      { 
+      {
         hasHandRaised: false,
         handLoweredAt: now,
       }
@@ -1486,7 +1565,7 @@ export class ParticipantService {
   // Update participant media state
   async updateParticipantMediaState(participantId: string, mediaState: { micState?: MediaState, cameraState?: MediaState }) {
     console.log(`[UPDATE_MEDIA_STATE] Participant: ${participantId}, State:`, mediaState);
-    
+
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
@@ -1501,21 +1580,21 @@ export class ParticipantService {
 
     await participant.save();
     console.log(`[UPDATE_MEDIA_STATE] Success - Participant: ${participantId}`);
-    
+
     return participant;
   }
 
   // Get participant by user ID and meeting ID
   async getParticipantByUserAndMeeting(userId: string, meetingId: string) {
     console.log(`[GET_PARTICIPANT_BY_USER_MEETING] User: ${userId}, Meeting: ${meetingId}`);
-    
+
     const participant = await this.participantModel.findOne({
       userId: new Types.ObjectId(userId),
       meetingId: new Types.ObjectId(meetingId)
     }).populate('userId', 'email displayName systemRole avatarUrl');
-    
+
     console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Found:`, participant ? 'Yes' : 'No');
-    
+
     return participant;
   }
 
@@ -1524,20 +1603,20 @@ export class ParticipantService {
   // Get all participants in waiting room for a meeting
   async getWaitingParticipants(meetingId: string, hostUserId: string) {
     console.log(`[GET_WAITING_PARTICIPANTS] Meeting: ${meetingId}, Host: ${hostUserId}`);
-    
+
     // Verify the user is the host
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-    
-    const isHost = meeting.hostId && 
+
+    const isHost = meeting.hostId &&
       meeting.hostId.toString() === hostUserId.toString();
-    
+
     if (!isHost) {
       throw new ForbiddenException('Only the meeting host can view waiting participants');
     }
-    
+
     const waitingParticipants = await this.participantModel
       .find({
         meetingId: new Types.ObjectId(meetingId),
@@ -1545,39 +1624,39 @@ export class ParticipantService {
       })
       .populate('userId', 'email displayName systemRole avatarUrl')
       .sort({ createdAt: 1 });
-    
+
     console.log(`[GET_WAITING_PARTICIPANTS] Found ${waitingParticipants.length} waiting participants`);
-    
+
     return waitingParticipants;
   }
 
   // Approve a participant from waiting room
   async approveParticipant(participantId: string, hostUserId: string) {
     console.log(`[APPROVE_PARTICIPANT] Participant: ${participantId}, Host: ${hostUserId}`);
-    
+
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
     }
-    
+
     // Verify the user is the host of this meeting
     const meeting = await this.meetingModel.findById(participant.meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-    
-    const isHost = meeting.hostId && 
+
+    const isHost = meeting.hostId &&
       meeting.hostId.toString() === hostUserId.toString();
-    
+
     if (!isHost) {
       throw new ForbiddenException('Only the meeting host can approve participants');
     }
-    
+
     // Check if participant is in waiting room
     if (participant.status !== ParticipantStatus.WAITING) {
       throw new BadRequestException('Participant is not in waiting room');
     }
-    
+
     // Approve the participant
     participant.status = ParticipantStatus.ADMITTED;
     participant.sessions.push({
@@ -1585,80 +1664,80 @@ export class ParticipantService {
       leftAt: undefined,
       durationSec: 0,
     });
-    
+
     await participant.save();
-    
+
     // Update meeting participant count
     await this.meetingModel.findByIdAndUpdate(participant.meetingId, {
       $inc: { participantCount: 1 },
     });
-    
+
     console.log(`[APPROVE_PARTICIPANT] Success - Participant ${participantId} approved and admitted`);
-    
+
     return participant;
   }
 
   // Reject a participant from waiting room
   async rejectParticipant(participantId: string, hostUserId: string) {
     console.log(`[REJECT_PARTICIPANT] Participant: ${participantId}, Host: ${hostUserId}`);
-    
+
     const participant = await this.participantModel.findById(participantId);
     if (!participant) {
       throw new NotFoundException('Participant not found');
     }
-    
+
     // Verify the user is the host of this meeting
     const meeting = await this.meetingModel.findById(participant.meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-    
-    const isHost = meeting.hostId && 
+
+    const isHost = meeting.hostId &&
       meeting.hostId.toString() === hostUserId.toString();
-    
+
     if (!isHost) {
       throw new ForbiddenException('Only the meeting host can reject participants');
     }
-    
+
     // Check if participant is in waiting room
     if (participant.status !== ParticipantStatus.WAITING) {
       throw new BadRequestException('Participant is not in waiting room');
     }
-    
+
     // Reject the participant
     participant.status = ParticipantStatus.REJECTED;
     await participant.save();
-    
+
     console.log(`[REJECT_PARTICIPANT] Success - Participant ${participantId} rejected`);
-    
+
     return participant;
   }
 
   // Admit all waiting participants (bulk approve)
   async admitAllWaitingParticipants(meetingId: string, hostUserId: string) {
     console.log(`[ADMIT_ALL_WAITING] Meeting: ${meetingId}, Host: ${hostUserId}`);
-    
+
     // Verify the user is the host
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
       throw new NotFoundException('Meeting not found');
     }
-    
-    const isHost = meeting.hostId && 
+
+    const isHost = meeting.hostId &&
       meeting.hostId.toString() === hostUserId.toString();
-    
+
     if (!isHost) {
       throw new ForbiddenException('Only the meeting host can admit all participants');
     }
-    
+
     // Find all waiting participants
     const waitingParticipants = await this.participantModel.find({
       meetingId: new Types.ObjectId(meetingId),
       status: ParticipantStatus.WAITING
     });
-    
+
     console.log(`[ADMIT_ALL_WAITING] Found ${waitingParticipants.length} waiting participants`);
-    
+
     // Admit all waiting participants
     const now = new Date();
     for (const participant of waitingParticipants) {
@@ -1670,14 +1749,14 @@ export class ParticipantService {
       });
       await participant.save();
     }
-    
+
     // Update meeting participant count
     await this.meetingModel.findByIdAndUpdate(meetingId, {
       $inc: { participantCount: waitingParticipants.length },
     });
-    
+
     console.log(`[ADMIT_ALL_WAITING] Success - Admitted ${waitingParticipants.length} participants`);
-    
+
     return {
       message: `Successfully admitted ${waitingParticipants.length} participants`,
       admittedCount: waitingParticipants.length

@@ -28,7 +28,7 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     }),
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: true,
+      autoSchemaFile: 'schema.gql',
       playground: true,
       introspection: true,
     }),
