@@ -5,6 +5,8 @@ import {
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
+import { HostValidationUtil } from '../../utils/host-validation.util';
+import { MeetingUtils } from '../../utils/meeting-utils';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
@@ -16,7 +18,7 @@ import {
   JoinMeetingInput,
   MeetingQueryInput,
 } from '../../libs/DTO/meeting/meeting.input';
-import { SystemRole, MeetingStatus } from '../../libs/enums/enums';
+import { SystemRole, MeetingStatus, ParticipantStatus } from '../../libs/enums/enums';
 import { Logger } from '@nestjs/common';
 import { LivekitService } from '../signaling/livekit.service';
 
@@ -28,8 +30,12 @@ export class MeetingService {
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
     @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
+<<<<<<< HEAD
     private readonly livekitService: LivekitService,
   ) {}
+=======
+  ) { }
+>>>>>>> origin
 
   // CREATE MEETING
   async createMeeting(createInput: CreateMeetingInput, userId: string) {
@@ -88,10 +94,10 @@ export class MeetingService {
       });
 
       const savedMeeting = await newMeeting.save();
-      
+
       // Store the original hostId before populating
       const originalHostId = savedMeeting.hostId;
-      
+
       await savedMeeting.populate('hostId', 'email displayName systemRole');
 
       this.logger.log(
@@ -179,15 +185,15 @@ export class MeetingService {
         // Check if hostId is populated (has email property) or just an ObjectId
         const hostData =
           meetingObj.hostId &&
-          typeof meetingObj.hostId === 'object' &&
-          'email' in meetingObj.hostId
+            typeof meetingObj.hostId === 'object' &&
+            'email' in meetingObj.hostId
             ? {
-                _id: meetingObj.hostId._id,
-                email: meetingObj.hostId.email,
-                displayName: (meetingObj.hostId as any).displayName,
-                systemRole: (meetingObj.hostId as any).systemRole,
-                avatarUrl: (meetingObj.hostId as any).avatarUrl,
-              }
+              _id: meetingObj.hostId._id,
+              email: meetingObj.hostId.email,
+              displayName: (meetingObj.hostId as any).displayName,
+              systemRole: (meetingObj.hostId as any).systemRole,
+              avatarUrl: (meetingObj.hostId as any).avatarUrl,
+            }
             : null;
 
         return {
@@ -221,7 +227,7 @@ export class MeetingService {
   async getMeetingByIdPublic(meetingId: string): Promise<any> {
     try {
       this.logger.log(`[GET_MEETING_BY_ID_PUBLIC] Attempt - Meeting ID: ${meetingId}`);
-      
+
       const meeting = await this.meetingModel
         .findById(meetingId)
         .populate('hostId', 'email displayName systemRole avatarUrl')
@@ -271,7 +277,7 @@ export class MeetingService {
 
       // Check access permissions
       const user = await this.memberModel.findById(userId);
-      
+
       // Debug logging
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId: ${JSON.stringify(meeting.hostId)}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
@@ -279,30 +285,29 @@ export class MeetingService {
       this.logger.log(`[GET_MEETING_BY_ID] Debug - user.systemRole: ${user.systemRole}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id: ${meeting.hostId?._id}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - comparison: ${meeting.hostId?._id?.toString()} === ${userId.toString()} = ${meeting.hostId?._id?.toString() === userId.toString()}`);
-      
+
       // Fix: Proper ObjectId comparison
-      const isHost = meeting.hostId && 
-        meeting.hostId.toString() === userId.toString();
+      const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
       const isAdmin = user.systemRole === SystemRole.ADMIN;
-      
+
       this.logger.log(`[GET_MEETING_BY_ID] Debug - isHost: ${isHost}, isAdmin: ${isAdmin}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id.toString(): ${meeting.hostId?._id?.toString()}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - Are they equal? ${meeting.hostId?._id?.toString() === userId}`);
-      
+
       // Debug character codes to find hidden characters
       const hostIdStr = meeting.hostId?._id?.toString() || '';
       const userIdStr = String(userId || '');
       this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.length: ${hostIdStr.length}, userIdStr.length: ${userIdStr.length}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.charCodeAt(0): ${hostIdStr.charCodeAt(0)}, userIdStr.charCodeAt(0): ${userIdStr.charCodeAt(0)}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.charCodeAt(23): ${hostIdStr.charCodeAt(23)}, userIdStr.charCodeAt(23): ${userIdStr.charCodeAt(23)}`);
-      
+
       // Try different comparison methods
       this.logger.log(`[GET_MEETING_BY_ID] Debug - === comparison: ${hostIdStr === userIdStr}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - == comparison: ${hostIdStr == userIdStr}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - trim() comparison: ${hostIdStr.trim() === userIdStr.trim()}`);
       this.logger.log(`[GET_MEETING_BY_ID] Debug - JSON.stringify comparison: ${JSON.stringify(hostIdStr) === JSON.stringify(userIdStr)}`);
-      
+
       if (!isAdmin && !isHost) {
         // Check if user is a participant in this meeting
         const participant = await this.participantModel.findOne({
@@ -310,7 +315,7 @@ export class MeetingService {
           userId: new Types.ObjectId(userId),
           status: { $in: ['APPROVED', 'ADMITTED'] },
         });
-        
+
         if (!participant) {
           // For testing purposes, allow access but log a warning
           this.logger.warn(`[GET_MEETING_BY_ID] User ${userId} not authorized to view meeting ${meetingId}, but allowing access for testing`);
@@ -389,7 +394,7 @@ export class MeetingService {
       this.logger.log(
         `[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${meeting._id}, User: ${user.email}`,
       );
-      
+
       // Debug the meeting object
       this.logger.log(`[JOIN_MEETING_BY_CODE] Debug - Meeting object:`, JSON.stringify({
         _id: meeting._id,
@@ -475,7 +480,7 @@ export class MeetingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        !MeetingUtils.isMeetingHost(meeting.hostId, userId)
       ) {
         throw new ForbiddenException('You can only update your own meetings');
       }
@@ -613,7 +618,7 @@ export class MeetingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      
+
       // Debug logging
       console.log(`[DEBUG] startMeeting - meeting.hostId:`, JSON.stringify(meeting.hostId));
       console.log(`[DEBUG] startMeeting - userId:`, userId);
@@ -622,10 +627,9 @@ export class MeetingService {
       console.log(`[DEBUG] startMeeting - userId.toString():`, userId.toString());
       console.log(`[DEBUG] startMeeting - comparison:`, meeting.hostId._id.toString() === userId.toString());
       console.log(`[DEBUG] startMeeting - user.systemRole:`, user.systemRole);
-      
+
       // Fix: Proper ObjectId comparison
-      const isHost = meeting.hostId && 
-        meeting.hostId.toString() === userId.toString();
+      const isHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
       console.log(`[DEBUG] startMeeting - isHost: ${isHost}, isAdmin: ${isAdmin}`);
@@ -642,6 +646,7 @@ export class MeetingService {
       meeting.actualStartAt = new Date();
       await meeting.save();
 
+<<<<<<< HEAD
       // Fix: Clear any fake participant data when meeting starts
       try {
         const deletedCount = await this.participantModel.deleteMany({ 
@@ -706,6 +711,40 @@ export class MeetingService {
       } catch (error) {
         this.logger.error(`[START_MEETING] Failed to create LiveKit room: ${error.message}`);
         // Don't fail the meeting start if LiveKit fails
+=======
+      // Admit all waiting participants when meeting starts
+      try {
+        const waitingParticipants = await this.participantModel.find({
+          meetingId: new Types.ObjectId(meetingId),
+          status: ParticipantStatus.WAITING
+        });
+
+        this.logger.log(`[START_MEETING] Found ${waitingParticipants.length} waiting participants`);
+
+        // Admit all waiting participants
+        const now = new Date();
+        for (const participant of waitingParticipants) {
+          participant.status = ParticipantStatus.ADMITTED;
+          participant.sessions.push({
+            joinedAt: now,
+            leftAt: undefined,
+            durationSec: 0,
+          });
+          await participant.save();
+        }
+
+        // Update participant count
+        if (waitingParticipants.length > 0) {
+          await this.meetingModel.findByIdAndUpdate(meetingId, {
+            $inc: { participantCount: waitingParticipants.length },
+          });
+        }
+
+        this.logger.log(`[START_MEETING] Admitted ${waitingParticipants.length} waiting participants for meeting ${meetingId}`);
+      } catch (error) {
+        this.logger.warn(`[START_MEETING] Failed to admit waiting participants: ${error.message}`);
+        // Don't fail the meeting start if participant admission fails
+>>>>>>> origin
       }
 
       this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}`);
@@ -737,52 +776,102 @@ export class MeetingService {
     }
   }
 
-  // END MEETING
+  // END MEETING (close all participants + sessions)
   async endMeeting(meetingId: string, userId: string) {
-    this.logger.log(
-      `[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
+    this.logger.log(`[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
 
     try {
-      // Validate ObjectId format
       if (!Types.ObjectId.isValid(meetingId)) {
         throw new BadRequestException(
-          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`,
+          `Invalid meeting ID format: ${meetingId}. Expected a valid MongoDB ObjectId.`
         );
       }
 
       const meeting = await this.meetingModel.findById(meetingId);
-      if (!meeting) {
-        throw new NotFoundException('Meeting not found');
-      }
+      if (!meeting) throw new NotFoundException('Meeting not found');
 
-      // Check permissions
+      // permissions: host or admin
       const user = await this.memberModel.findById(userId);
-      if (
-        user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
-      ) {
-        throw new ForbiddenException(
-          'Only the meeting host can end the meeting',
-        );
+      
+      // 🔍 IMPROVED: Use comprehensive host validation utility
+      const hostValidation = await HostValidationUtil.validateHost(
+        meeting.hostId,
+        userId,
+        user.systemRole,
+        this.participantModel,
+        meetingId
+      );
+
+      this.logger.debug(`[END_MEETING] Host validation result:`, hostValidation);
+      
+      // Allow end meeting if user is admin OR meeting host (not requiring host participant role for end meeting)
+      if (!hostValidation.isAdmin && !hostValidation.isMeetingHost) {
+        this.logger.warn(`[END_MEETING] Permission denied - userId: ${userId} is not authorized to end meeting. Reason: ${hostValidation.reason}`);
+        throw new ForbiddenException('Only the meeting host or admin can end the meeting');
       }
 
-      // Update meeting status
+      // 1) Mark meeting ENDED + compute duration
       meeting.status = MeetingStatus.ENDED;
       meeting.endedAt = new Date();
 
-      // Calculate duration if meeting was started
       if (meeting.actualStartAt) {
-        const durationMs =
-          meeting.endedAt.getTime() - meeting.actualStartAt.getTime();
+        const durationMs = meeting.endedAt.getTime() - meeting.actualStartAt.getTime();
         meeting.durationMin = Math.round(durationMs / (1000 * 60));
       }
+
+      this.logger.log(`[END_MEETING] Meeting status updated to ENDED - Meeting ID: ${meetingId}, Status: ${meeting.status}, EndedAt: ${meeting.endedAt}`);
+
+      // 2) Mark ALL participants as LEFT and close any open sessions
+      const now = new Date();
+      // Pull current participants first so we can compute totalDurationSec increments
+      const participants = await this.participantModel.find({
+        meetingId: new Types.ObjectId(meetingId),
+        status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED] }
+      });
+
+      // Close sessions in memory (to compute per-doc totals) then bulk persist
+      const updates = [];
+      for (const p of participants) {
+        let totalIncrement = 0;
+        const sessions = p.sessions || [];
+        if (sessions.length > 0) {
+          const last = sessions[sessions.length - 1];
+          if (!last.leftAt && last.joinedAt) {
+            last.leftAt = now;
+            last.durationSec = Math.floor((now.getTime() - last.joinedAt.getTime()) / 1000);
+            totalIncrement += last.durationSec;
+          }
+        }
+        p.totalDurationSec = (p.totalDurationSec || 0) + totalIncrement;
+        p.status = ParticipantStatus.LEFT;
+        updates.push({
+          updateOne: {
+            filter: { _id: p._id },
+            update: {
+              $set: {
+                status: ParticipantStatus.LEFT,
+                sessions: sessions,
+                totalDurationSec: p.totalDurationSec
+              }
+            }
+          }
+        });
+      }
+      if (updates.length) {
+        await this.participantModel.bulkWrite(updates);
+      }
+
+      // 3) Reset participantCount to 0 (since everyone is LEFT)
+      meeting.participantCount = 0;
 
       await meeting.save();
 
       this.logger.log(
-        `[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${meeting.durationMin} minutes`,
+        `[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${meeting.durationMin ?? 0} minutes, Closed participants: ${updates.length}`
       );
+
+      // 4) (Optional) publish subscriptions so UIs react immediately
+      // await this.pubSub.publish('meetingUpdated', { meetingUpdated: { _id: meeting._id, status: meeting.status, endedAt: meeting.endedAt, durationMin: meeting.durationMin, participantCount: meeting.participantCount } });
 
       return {
         _id: meeting._id,
@@ -793,11 +882,12 @@ export class MeetingService {
       };
     } catch (error) {
       this.logger.error(
-        `[END_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`,
+        `[END_MEETING] Failed - Meeting ID: ${meetingId}, User ID: ${userId}, Error: ${error.message}`
       );
       throw error;
     }
   }
+
 
   // DELETE MEETING
   async deleteMeeting(meetingId: string, userId: string) {
@@ -822,7 +912,7 @@ export class MeetingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        !MeetingUtils.isMeetingHost(meeting.hostId, userId)
       ) {
         throw new ForbiddenException('You can only delete your own meetings');
       }
@@ -866,7 +956,7 @@ export class MeetingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        !MeetingUtils.isMeetingHost(meeting.hostId, userId)
       ) {
         throw new ForbiddenException(
           'Only the meeting host can rotate the invite code',
@@ -976,7 +1066,7 @@ export class MeetingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        !MeetingUtils.isMeetingHost(meeting.hostId, userId)
       ) {
         throw new ForbiddenException('Only the meeting host can lock the room');
       }
@@ -1030,7 +1120,7 @@ export class MeetingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        !MeetingUtils.isMeetingHost(meeting.hostId, userId)
       ) {
         throw new ForbiddenException(
           'Only the meeting host can unlock the room',

@@ -204,8 +204,16 @@ export class ParticipantResponse {
 @ObjectType()
 export class ParticipantMessageResponse {
   @Field()
+  success: boolean;
+
+  @Field()
   message: string;
 
-  @Field({ nullable: true })
-  success?: boolean;
+  // add this
+  @Field(() => ID, { nullable: true })
+  newHostId?: string;
+
+  @Field(() => ID, { nullable: true })
+  newHostParticipantId?: string;
 }
+
