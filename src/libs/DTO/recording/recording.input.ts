@@ -72,7 +72,7 @@ export class RecordingInfoInput {
 
 // Additional input types for frontend compatibility
 @InputType()
-export class StartRecordingInput {
+export class StartRecordingMeetingInput {
   @Field(() => ID)
   @IsString()
   meetingId!: string;
@@ -86,18 +86,6 @@ export class StartRecordingInput {
   @IsOptional()
   @IsString()
   format?: string;
-}
-
-@InputType()
-export class StopRecordingInput {
-  @Field(() => ID)
-  @IsString()
-  meetingId!: string;
-
-  @Field({ nullable: true })
-  @IsOptional()
-  @IsString()
-  reason?: string;
 }
 
 @InputType()
