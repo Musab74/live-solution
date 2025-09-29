@@ -2,7 +2,7 @@ import { InputType, Field, ID } from '@nestjs/graphql';
 import { IsString, IsOptional, IsEnum } from 'class-validator';
 import { RecordingStatus } from '../../enums/enums';
 
-@InputType()
+@InputType('StartMeetingRecordingInput')
 export class StartMeetingRecordingInput {
   @Field(() => ID)
   @IsString()
@@ -71,22 +71,7 @@ export class RecordingInfoInput {
 }
 
 // Additional input types for frontend compatibility
-@InputType()
-export class StartRecordingMeetingInput {
-  @Field(() => ID)
-  @IsString()
-  meetingId!: string;
-
-  @Field({ nullable: true })
-  @IsOptional()
-  @IsString()
-  quality?: string;
-
-  @Field({ nullable: true })
-  @IsOptional()
-  @IsString()
-  format?: string;
-}
+// Note: StartRecordingMeetingInput removed to avoid duplicate with StartMeetingRecordingInput
 
 @InputType()
 export class PauseRecordingInput {

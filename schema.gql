@@ -373,62 +373,6 @@ type VodUrlResponse {
   message: String!
 }
 
-type ChatUserInfo {
-  _id: ID!
-  displayName: String!
-  avatarUrl: String
-}
-
-type ReplyInfo {
-  _id: ID!
-  text: String!
-  displayName: String!
-  createdAt: DateTime!
-}
-
-type ChatMessageWithDetails {
-  _id: ID!
-  meetingId: ID!
-  userId: ID
-  displayName: String!
-  text: String!
-  replyToMessageId: ID
-  createdAt: DateTime!
-  updatedAt: DateTime!
-  user: ChatUserInfo
-  replyToMessage: ReplyInfo
-}
-
-type ChatHistoryResponse {
-  messages: [ChatMessageWithDetails!]!
-  hasMore: Boolean!
-  total: Float!
-  limit: Float!
-  nextCursor: String
-}
-
-type ChatSearchResponse {
-  messages: [ChatMessageWithDetails!]!
-  total: Float!
-  limit: Float!
-  offset: Float!
-  hasMore: Boolean!
-  query: String!
-}
-
-type ChatStats {
-  totalMessages: Float!
-  messagesToday: Float!
-  activeUsers: Float!
-  averageMessagesPerUser: Float!
-}
-
-type ChatMessageResponse {
-  success: Boolean!
-  message: String!
-  messageId: ID
-}
-
 type ParticipantInfo {
   identity: String!
   name: String!
@@ -524,10 +468,6 @@ type Query {
   getAllVods(input: VodQueryInput): VodListResponse!
   getVodById(vodId: ID!): VodWithMeeting!
   getVodStats: VodStats!
-  getChatHistory(input: ChatHistoryInput!): ChatHistoryResponse!
-  searchChatMessages(input: ChatSearchInput!): ChatSearchResponse!
-  getChatStats(meetingId: ID!): ChatStats!
-  getChatMessageById(messageId: ID!): ChatMessageWithDetails!
   getRecording(recordingSid: String!): RecordingInfo!
   listRecordings(roomName: String): [RecordingInfo!]!
   health: String!
@@ -562,21 +502,6 @@ input VodQueryInput {
   q: String
   source: String
   meetingId: String
-  limit: Float
-  offset: Float
-}
-
-input ChatHistoryInput {
-  meetingId: String!
-  before: String
-  limit: Float
-  offset: Float
-  cursor: String
-}
-
-input ChatSearchInput {
-  meetingId: String!
-  q: String!
   limit: Float
   offset: Float
 }
@@ -644,7 +569,6 @@ type Mutation {
   createVOD(input: CreateVodFileInput!): VodWithMeeting!
   updateVod(input: UpdateVodInput!): VodWithMeeting!
   deleteVod(vodId: ID!): ParticipantMessageResponse!
-  deleteChatMessage(input: DeleteMessageInput!): ChatMessageResponse!
   createLivekitToken(meetingId: String!): String!
   endLivekitRoom(meetingId: String!): String!
   kickLivekitParticipant(meetingId: String!, identity: String!): String!
@@ -837,11 +761,6 @@ input UpdateVodInput {
   title: String
   notes: String
   durationSec: Float
-}
-
-input DeleteMessageInput {
-  messageId: String!
-  reason: String
 }
 
 input StartLivekitRecordingInput {

@@ -7,7 +7,12 @@ import { SignalingGateway } from './signaling.gateway';
 import { AuthModule } from '../auth/auth.module';
 import { MemberModule } from '../members/member.module';
 import { ParticipantModule } from '../participants/participant.module';
-import { ChatModule } from '../chat/chat.module';
+import { ChatService } from '../../services/chat.service';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ChatMessage, ChatMessageSchema } from '../../schemas/Chat.message.model';
+import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
+import { Member, MemberSchema } from '../../schemas/Member.model';
+import { Participant, ParticipantSchema } from '../../schemas/Participant.model';
 
 @Module({
   imports: [
@@ -20,12 +25,17 @@ import { ChatModule } from '../chat/chat.module';
       }),
       inject: [ConfigService],
     }),
+    MongooseModule.forFeature([
+      { name: ChatMessage.name, schema: ChatMessageSchema },
+      { name: Meeting.name, schema: MeetingSchema },
+      { name: Member.name, schema: MemberSchema },
+      { name: Participant.name, schema: ParticipantSchema },
+    ]),
     AuthModule,
     MemberModule,
     ParticipantModule,
-    ChatModule,
   ],
-  providers: [LivekitService, LivekitResolver, SignalingGateway],
-  exports: [LivekitService, SignalingGateway],
+  providers: [LivekitService, LivekitResolver, SignalingGateway, ChatService],
+  exports: [LivekitService, SignalingGateway, ChatService],
 })
 export class SignalingModule {}

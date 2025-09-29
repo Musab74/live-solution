@@ -102,7 +102,7 @@ export class UpdateParticipantMetadataInput {
   metadata!: string;
 }
 
-@InputType()
+@InputType('StartLivekitRecordingInput')
 export class StartLivekitRecordingInput {
   @Field()
   @IsString()
