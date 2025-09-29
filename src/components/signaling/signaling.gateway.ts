@@ -440,6 +440,175 @@ export class SignalingGateway
     client.emit('PONG', { timestamp: Date.now() });
   }
 
+  // ==================== HAND RAISE WEBSOCKET HANDLERS ====================
+
+  @SubscribeMessage('RAISE_HAND')
+  async handleRaiseHand(
+    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId, participantId, reason } = data;
+    console.log('✋ RAISE_HAND received:', { meetingId, participantId, reason, userId: client.user._id });
+
+    try {
+      // Use the existing service method
+      const result = await this.participantService.raiseHand(
+        { participantId, reason },
+        client.user._id
+      );
+
+      if (result.success) {
+        // Broadcast to all participants in the meeting
+        this.server.to(meetingId).emit('HAND_RAISED', {
+          participantId,
+          displayName: client.user.displayName,
+          userId: client.user._id,
+          reason,
+          raisedAt: result.handRaisedAt,
+          meetingId,
+        });
+
+        console.log(`✋ Hand raised by ${client.user.displayName} in meeting ${meetingId}`);
+      }
+
+      // Send confirmation to the user who raised their hand
+      client.emit('HAND_RAISE_SUCCESS', result);
+    } catch (error) {
+      console.error('❌ Error raising hand:', error);
+      client.emit('HAND_RAISE_ERROR', { 
+        message: error.message || 'Failed to raise hand',
+        participantId 
+      });
+    }
+  }
+
+  @SubscribeMessage('LOWER_HAND')
+  async handleLowerHand(
+    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId, participantId, reason } = data;
+    console.log('✋ LOWER_HAND received:', { meetingId, participantId, reason, userId: client.user._id });
+
+    try {
+      // Use the existing service method
+      const result = await this.participantService.lowerHand(
+        { participantId, reason },
+        client.user._id
+      );
+
+      if (result.success) {
+        // Broadcast to all participants in the meeting
+        this.server.to(meetingId).emit('HAND_LOWERED', {
+          participantId,
+          displayName: client.user.displayName,
+          userId: client.user._id,
+          reason,
+          loweredAt: result.handLoweredAt,
+          meetingId,
+        });
+
+        console.log(`✋ Hand lowered by ${client.user.displayName} in meeting ${meetingId}`);
+      }
+
+      // Send confirmation to the user who lowered their hand
+      client.emit('HAND_LOWER_SUCCESS', result);
+    } catch (error) {
+      console.error('❌ Error lowering hand:', error);
+      client.emit('HAND_LOWER_ERROR', { 
+        message: error.message || 'Failed to lower hand',
+        participantId 
+      });
+    }
+  }
+
+  @SubscribeMessage('HOST_LOWER_HAND')
+  async handleHostLowerHand(
+    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId, participantId, reason } = data;
+    console.log('✋ HOST_LOWER_HAND received:', { meetingId, participantId, reason, hostId: client.user._id });
+
+    try {
+      // Use the existing service method
+      const result = await this.participantService.hostLowerHand(
+        { meetingId, participantId, reason },
+        client.user._id
+      );
+
+      if (result.success) {
+        // Broadcast to all participants in the meeting
+        this.server.to(meetingId).emit('HAND_LOWERED_BY_HOST', {
+          participantId,
+          displayName: client.user.displayName,
+          hostId: client.user._id,
+          reason,
+          loweredAt: result.handLoweredAt,
+          meetingId,
+        });
+
+        console.log(`✋ Hand lowered by host ${client.user.displayName} for participant ${participantId} in meeting ${meetingId}`);
+      }
+
+      // Send confirmation to the host
+      client.emit('HOST_LOWER_HAND_SUCCESS', result);
+    } catch (error) {
+      console.error('❌ Error lowering hand as host:', error);
+      client.emit('HOST_LOWER_HAND_ERROR', { 
+        message: error.message || 'Failed to lower hand as host',
+        participantId 
+      });
+    }
+  }
+
+  @SubscribeMessage('LOWER_ALL_HANDS')
+  async handleLowerAllHands(
+    @MessageBody() data: { meetingId: string; reason?: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId, reason } = data;
+    console.log('✋ LOWER_ALL_HANDS received:', { meetingId, reason, hostId: client.user._id });
+
+    try {
+      // Use the existing service method
+      const results = await this.participantService.lowerAllHands(meetingId, client.user._id);
+
+      // Broadcast to all participants in the meeting
+      this.server.to(meetingId).emit('ALL_HANDS_LOWERED', {
+        hostId: client.user._id,
+        hostDisplayName: client.user.displayName,
+        reason,
+        loweredAt: new Date(),
+        meetingId,
+        loweredCount: results.length,
+      });
+
+      console.log(`✋ All hands lowered by host ${client.user.displayName} in meeting ${meetingId} (${results.length} hands lowered)`);
+
+      // Send confirmation to the host
+      client.emit('LOWER_ALL_HANDS_SUCCESS', { 
+        success: true,
+        message: `Successfully lowered ${results.length} hands`,
+        loweredCount: results.length 
+      });
+    } catch (error) {
+      console.error('❌ Error lowering all hands:', error);
+      client.emit('LOWER_ALL_HANDS_ERROR', { 
+        message: error.message || 'Failed to lower all hands',
+        meetingId 
+      });
+    }
+  }
+
   @SubscribeMessage('FORCE_MUTE')
   async handleForceMute(
     @MessageBody()

@@ -101,6 +101,9 @@ export class ParticipantResolver {
         micState: p.micState,
         cameraState: p.cameraState,
         socketId: p.socketId,
+        hasHandRaised: p.hasHandRaised,
+        handRaisedAt: p.handRaisedAt,
+        handLoweredAt: p.handLoweredAt,
         loginInfo: {
           joinedAt: p.createdAt,
           lastSeen: p.updatedAt
@@ -799,16 +802,26 @@ export class ParticipantResolver {
     @Args('input') input: RaiseHandInput,
     @AuthMember() user: Member,
   ) {
+    console.log('🔍 GRAPHQL RAISE_HAND RESOLVER CALLED:', {
+      participantId: input.participantId,
+      reason: input.reason,
+      userId: user._id,
+      userEmail: user.email,
+      userDisplayName: user.displayName
+    });
+    
     this.logger.log(
       `[RAISE_HAND] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
     );
     try {
       const result = await this.participantService.raiseHand(input, user._id);
+      console.log('✅ GRAPHQL RAISE_HAND SUCCESS:', result);
       this.logger.log(
         `[RAISE_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
       );
       return result;
     } catch (error) {
+      console.error('❌ GRAPHQL RAISE_HAND ERROR:', error);
       this.logger.error(
         `[RAISE_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
       );
