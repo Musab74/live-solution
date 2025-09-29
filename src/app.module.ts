@@ -10,6 +10,7 @@ import { ChatModule } from './components/chat/chat.module';
 import { SignalingModule } from './components/signaling/signaling.module';
 import { HealthModule } from './components/health/health.module';
 import { RecordingModule } from './components/recording/recording.module';
+import { SocketModule } from './socket/socket.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
@@ -42,6 +43,7 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     SignalingModule,
     HealthModule,
     RecordingModule,
+    SocketModule,
     MongooseModule.forFeature([
       { name: Member.name, schema: MemberSchema },
       { name: Meeting.name, schema: MeetingSchema },

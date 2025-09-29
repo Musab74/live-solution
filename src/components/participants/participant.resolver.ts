@@ -171,6 +171,16 @@ export class ParticipantResolver {
     return this.participantService.removeParticipant(participantId, user._id);
   }
 
+  @Mutation(() => ParticipantMessageResponse, { name: 'unbanParticipant' })
+  @UseGuards(AuthGuard)
+  async unbanParticipant(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @Args('userIdToUnban', { type: () => ID }) userIdToUnban: string,
+    @AuthMember() user: Member,
+  ) {
+    return this.participantService.unbanParticipant(meetingId, userIdToUnban, user._id);
+  }
+
   @Mutation(() => ParticipantResponse, { name: 'joinMeeting' })
   @UseGuards(AuthGuard)
   async joinMeeting(

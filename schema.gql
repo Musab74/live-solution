@@ -605,6 +605,7 @@ type Mutation {
   createParticipant(input: CreateParticipantInput!): ParticipantResponse!
   updateParticipant(input: UpdateParticipantInput!): ParticipantResponse!
   removeParticipant(participantId: ID!): ParticipantMessageResponse!
+  unbanParticipant(meetingId: ID!, userIdToUnban: ID!): ParticipantMessageResponse!
   joinMeeting(input: JoinParticipantInput!): ParticipantResponse!
   leaveMeeting(input: LeaveMeetingInput!): ParticipantMessageResponse!
   clearFakeParticipants(meetingId: ID!): String!

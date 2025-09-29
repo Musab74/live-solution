@@ -299,6 +299,19 @@ export class ParticipantService {
       );
     }
 
+    // Add user to ban list if they have a userId (not a guest)
+    if (participant.userId) {
+      const userId = participant.userId.toString();
+      const bannedUserIds = meeting.bannedUserIds || [];
+      
+      if (!bannedUserIds.includes(userId)) {
+        bannedUserIds.push(userId);
+        await this.meetingModel.findByIdAndUpdate(participant.meetingId, {
+          bannedUserIds: bannedUserIds,
+        });
+      }
+    }
+
     // Remove the participant
     await this.participantModel.findByIdAndDelete(participantId);
 
@@ -307,7 +320,33 @@ export class ParticipantService {
       $inc: { participantCount: -1 },
     });
 
-    return { message: 'Participant removed successfully' };
+    return { 
+      success: true, 
+      message: 'Participant removed and banned from rejoining' 
+    };
+  }
+
+  async unbanParticipant(meetingId: string, userIdToUnban: string, hostId: string) {
+    // Verify the user is the host of the meeting
+    const meeting = await this.meetingModel.findById(meetingId);
+    if (!meeting || !MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
+      throw new ForbiddenException(
+        'Only the meeting host can unban participants',
+      );
+    }
+
+    // Remove user from ban list
+    const bannedUserIds = meeting.bannedUserIds || [];
+    const updatedBannedUserIds = bannedUserIds.filter(id => id !== userIdToUnban);
+    
+    await this.meetingModel.findByIdAndUpdate(meetingId, {
+      bannedUserIds: updatedBannedUserIds,
+    });
+
+    return { 
+      success: true, 
+      message: 'Participant unbanned and can now rejoin' 
+    };
   }
 
   async getParticipantById(participantId: string, userId: string) {
@@ -360,6 +399,11 @@ export class ParticipantService {
     // Check if room is locked
     if (meeting.isLocked) {
       throw new ForbiddenException('This room is currently locked');
+    }
+
+    // Check if user is banned from this meeting
+    if (userId && meeting.bannedUserIds && meeting.bannedUserIds.includes(userId)) {
+      throw new ForbiddenException('You have been removed from this meeting and cannot rejoin');
     }
 
     // Determine if participant should go to waiting room

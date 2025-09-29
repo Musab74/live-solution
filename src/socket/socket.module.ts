@@ -1,13 +1,19 @@
-// // src/socket/socket.module.ts
-// import { Module } from '@nestjs/common';
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { ChatSocketGateway } from './chat-socket.gateway';
+import { MemberModule } from '../components/members/member.module';
+import { ChatModule } from '../components/chat/chat.module';
 
-// // If your gateway uses AuthService (token verify), import your AuthModule:
-// import { AuthModule } from '../components/auth/auth.module'; // <-- adjust path to your project
-// import { SocketGateway } from './socket.getaway';
-
-// @Module({
-//   imports: [AuthModule],        // remove if you don't need AuthService inside gateway
-//   providers: [SocketGateway],
-//   exports: [SocketGateway],
-// })
-// export class SocketModule {}
+@Module({
+  imports: [
+    JwtModule.register({
+      secret: `${process.env.JWT_SECRET}`,
+      signOptions: { expiresIn: '3h' },
+    }),
+    MemberModule,
+    ChatModule,
+  ],
+  providers: [ChatSocketGateway],
+  exports: [ChatSocketGateway],
+})
+export class SocketModule {}
