@@ -23,7 +23,7 @@ import { Logger } from '@nestjs/common';
 import { LivekitService } from '../signaling/livekit.service';
 
 @Injectable()
-export class MeetingService {
+export class MeetingService { 
   private readonly logger = new Logger(MeetingService.name);
 
   constructor(

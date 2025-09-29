@@ -112,6 +112,11 @@ export class Meeting {
   @Prop({ default: 0 })
   participantCount!: number;
 
+  // Ban list for kicked participants
+  @Field(() => [String], { nullable: true })
+  @Prop({ type: [String], default: [] })
+  bannedUserIds?: string[]; // Array of user IDs who were kicked from this meeting
+
   @Field()
   createdAt!: Date;
 
