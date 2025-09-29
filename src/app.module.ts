@@ -6,7 +6,6 @@ import { MemberModule } from './components/members/member.module';
 import { ParticipantModule } from './components/participants/participant.module';
 import { MeetingModule } from './components/meetings/meeting.module';
 import { VodModule } from './components/vod/vod.module';
-import { ChatModule } from './components/chat/chat.module';
 import { SignalingModule } from './components/signaling/signaling.module';
 import { HealthModule } from './components/health/health.module';
 import { RecordingModule } from './components/recording/recording.module';
@@ -39,7 +38,6 @@ import { Vod, VodSchema } from './schemas/Vod.model';
     ParticipantModule,
     MeetingModule,
     VodModule,
-    ChatModule,
     SignalingModule,
     HealthModule,
     RecordingModule,

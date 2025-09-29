@@ -12,7 +12,7 @@ import { UseGuards } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { MemberService } from '../members/member.service';
 import { ParticipantService } from '../participants/participant.service';
-import { ChatService } from '../chat/chat.service';
+import { ChatService } from '../../services/chat.service';
 import { SystemRole } from '../../libs/enums/enums';
 
 interface AuthenticatedSocket extends Socket {
@@ -49,34 +49,77 @@ export class SignalingGateway
   ) {}
 
   async handleConnection(client: AuthenticatedSocket) {
+    console.log('🔌 WebSocket connection attempt from client:', client.id);
+    console.log('🔌 Handshake auth:', client.handshake.auth);
+    console.log('🔌 Handshake headers:', client.handshake.headers);
+    
     try {
+      
       // Extract token from handshake
       const token =
         client.handshake.auth?.token ||
         client.handshake.headers?.authorization?.replace('Bearer ', '');
 
+      console.log('🔌 Extracted token:', token ? 'Present' : 'Missing');
+      console.log('🔌 Token preview:', token ? token.substring(0, 20) + '...' : 'None');
+
       if (!token) {
+        console.log('❌ No token provided, disconnecting client');
+        client.emit('ERROR', { message: 'No authentication token provided' });
         client.disconnect();
         return;
       }
 
       // Verify JWT token
-      const payload = this.jwtService.verify(token);
+      console.log('🔌 Verifying JWT token...');
+      let payload;
+      try {
+        payload = this.jwtService.verify(token);
+        console.log('🔌 JWT payload:', payload);
+      } catch (jwtError) {
+        console.error('❌ JWT verification failed:', jwtError.message);
+        client.emit('ERROR', { message: 'Invalid authentication token' });
+        client.disconnect();
+        return;
+      }
+      
+      console.log('🔌 Getting user profile for ID:', payload.sub);
       const user = await this.memberService.getProfile(payload.sub);
 
       if (!user) {
+        console.log('❌ User not found, disconnecting client');
+        client.emit('ERROR', { message: 'User not found' });
         client.disconnect();
         return;
       }
 
+      console.log('✅ User found:', user.displayName, user.email);
       client.user = user;
       this.connectedUsers.set(client.id, client);
 
       console.log(
-        `User ${user.displayName} connected with socket ${client.id}`,
+        `✅ User ${user.displayName} connected with socket ${client.id}`,
       );
+      
+      // Send success message to client
+      client.emit('CONNECTION_SUCCESS', { 
+        message: 'Successfully connected to chat server',
+        user: {
+          _id: user._id,
+          displayName: user.displayName,
+          email: user.email,
+          systemRole: user.systemRole
+        }
+      });
+      
     } catch (error) {
-      console.error('Connection error:', error);
+      console.error('❌ Connection error:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      client.emit('ERROR', { message: 'Connection failed: ' + error.message });
       client.disconnect();
     }
   }
@@ -195,28 +238,206 @@ export class SignalingGateway
     const { roomName, message, replyToMessageId } = data;
 
     try {
+      // Check if user has access to this meeting
+      const hasAccess = await this.chatService.checkMeetingAccess(
+        roomName,
+        client.user._id,
+        client.user.systemRole
+      );
+
+      if (!hasAccess) {
+        client.emit('ERROR', { message: 'You do not have access to this meeting chat' });
+        return;
+      }
+
       // Save message to database
-      const chatMessage = {
-        meetingId: roomName, // Assuming roomName is meetingId
+      const savedMessage = await this.chatService.createMessage({
+        meetingId: roomName,
         text: message,
         displayName: client.user.displayName,
         userId: client.user._id,
         replyToMessageId,
+      });
+
+      // Format message for broadcast
+      const messageData = {
+        _id: savedMessage._id.toString(),
+        meetingId: savedMessage.meetingId.toString(),
+        text: savedMessage.text,
+        displayName: savedMessage.displayName,
+        userId: savedMessage.userId.toString(),
+        replyToMessageId: savedMessage.replyToMessageId?.toString(),
+        createdAt: savedMessage.createdAt.toISOString(),
       };
 
       // Broadcast to room
-      client.to(roomName).emit('CHAT_MESSAGE', {
-        ...chatMessage,
-        _id: Date.now().toString(), // Temporary ID
-        createdAt: new Date(),
+      this.server.to(roomName).emit('CHAT_MESSAGE', messageData);
+
+      console.log(
+        `Chat message from ${client.user.displayName} in room ${roomName} saved with ID: ${savedMessage._id}`,
+      );
+    } catch (error) {
+      console.error('Error sending chat message:', error);
+      client.emit('ERROR', { message: 'Failed to send chat message' });
+    }
+  }
+
+  @SubscribeMessage('JOIN_CHAT_ROOM')
+  async handleJoinChatRoom(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    console.log('📤 JOIN_CHAT_ROOM received:', data);
+    console.log('📤 Client user:', client.user ? 'Present' : 'Missing');
+    
+    if (!client.user) {
+      console.log('❌ No client user, returning');
+      return;
+    }
+
+    const { meetingId } = data;
+    console.log('📤 Processing meeting ID:', meetingId);
+
+    try {
+      // Check if user has access to this meeting
+      const hasAccess = await this.chatService.checkMeetingAccess(
+        meetingId,
+        client.user._id,
+        client.user.systemRole
+      );
+
+      if (!hasAccess) {
+        client.emit('ERROR', { message: 'You do not have access to this meeting chat' });
+        return;
+      }
+
+      // Join socket room
+      await client.join(meetingId);
+
+      // Track user in room
+      if (!this.roomUsers.has(meetingId)) {
+        this.roomUsers.set(meetingId, new Set());
+      }
+      this.roomUsers.get(meetingId)!.add(client.id);
+
+      // Load existing messages from database
+      console.log(`Loading existing messages for meeting ${meetingId}`);
+      const existingMessages = await this.chatService.getMessagesByMeeting(meetingId);
+      console.log(`Found ${existingMessages.length} existing messages`);
+
+      // Send existing messages to the joining user
+      client.emit('CHAT_MESSAGES_LOADED', { messages: existingMessages });
+      console.log(
+        `Sent ${existingMessages.length} existing messages to ${client.user.displayName}`
+      );
+
+      // Get current participants in room
+      const roomParticipants = Array.from(this.roomUsers.get(meetingId) || [])
+        .map((socketId) => {
+          const user = this.connectedUsers.get(socketId);
+          return user
+            ? {
+              userId: user.user!._id,
+              displayName: user.user!.displayName,
+              socketId,
+            }
+            : null;
+        })
+        .filter(Boolean);
+
+      // Notify user of current participants
+      client.emit('CHAT_PEER_LIST', { participants: roomParticipants });
+
+      // Notify others that user joined chat
+      client.to(meetingId).emit('USER_JOINED_CHAT', {
+        userId: client.user._id,
+        displayName: client.user.displayName,
+        socketId: client.id,
+      });
+
+      console.log(`User ${client.user.displayName} joined chat room ${meetingId}`);
+    } catch (error) {
+      console.error('Error joining chat room:', error);
+      client.emit('ERROR', { message: 'Failed to join chat room' });
+    }
+  }
+
+  @SubscribeMessage('LEAVE_CHAT_ROOM')
+  async handleLeaveChatRoom(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    // Leave socket room
+    await client.leave(meetingId);
+
+    // Remove from room tracking
+    const roomUsers = this.roomUsers.get(meetingId);
+    if (roomUsers) {
+      roomUsers.delete(client.id);
+    }
+
+    // Notify others that user left chat
+    client.to(meetingId).emit('USER_LEFT_CHAT', {
+      userId: client.user._id,
+      displayName: client.user.displayName,
+      socketId: client.id,
+    });
+
+    console.log(`User ${client.user.displayName} left chat room ${meetingId}`);
+  }
+
+  @SubscribeMessage('DELETE_CHAT_MESSAGE')
+  async handleDeleteChatMessage(
+    @MessageBody()
+    data: { meetingId: string; messageId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId, messageId } = data;
+
+    try {
+      // Check if user has permission to delete (host or message owner)
+      const message = await this.chatService.getMessageByIdSimple(messageId);
+      if (!message) {
+        client.emit('ERROR', { message: 'Message not found' });
+        return;
+      }
+
+      // Check permissions
+      const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+      const isOwner = message.userId === client.user._id;
+
+      if (!isHost && !isOwner) {
+        client.emit('ERROR', { message: 'Insufficient permissions to delete message' });
+        return;
+      }
+
+      // Delete message from database
+      await this.chatService.deleteMessageById(messageId);
+
+      // Broadcast deletion to room
+      this.server.to(meetingId).emit('CHAT_MESSAGE_DELETED', {
+        messageId,
+        deletedBy: client.user._id,
       });
 
       console.log(
-        `Chat message from ${client.user.displayName} in room ${roomName}`,
+        `Chat message ${messageId} deleted by ${client.user.displayName}`,
       );
     } catch (error) {
-      client.emit('ERROR', { message: 'Failed to send chat message' });
+      console.error('Error deleting chat message:', error);
+      client.emit('ERROR', { message: 'Failed to delete chat message' });
     }
+  }
+
+  @SubscribeMessage('PING')
+  handlePing(@ConnectedSocket() client: AuthenticatedSocket) {
+    client.emit('PONG', { timestamp: Date.now() });
   }
 
   @SubscribeMessage('FORCE_MUTE')
@@ -312,11 +533,6 @@ export class SignalingGateway
         reason,
       });
     }
-  }
-
-  @SubscribeMessage('PING')
-  handlePing(@ConnectedSocket() client: AuthenticatedSocket) {
-    client.emit('PONG', { timestamp: Date.now() });
   }
 
   // Helper method to get room participants
