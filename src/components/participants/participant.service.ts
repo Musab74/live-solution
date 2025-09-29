@@ -1386,9 +1386,37 @@ export class ParticipantService {
     }
 
     // Verify the user owns this participant record
-    if (participant.userId && participant.userId.toString() !== userId) {
+    console.log('🔍 Backend validation - Participant ownership check:', {
+      participantId,
+      participantUserId: participant.userId,
+      participantUserIdString: participant.userId?.toString(),
+      participantUserIdType: typeof participant.userId,
+      requestedUserId: userId,
+      requestedUserIdType: typeof userId,
+      areEqual: participant.userId?.toString() === userId,
+      areEqualStrict: participant.userId?.toString() === userId?.toString()
+    });
+    
+    // Fix: Proper ObjectId comparison
+    const participantUserIdStr = participant.userId?.toString();
+    const requestedUserIdStr = userId?.toString();
+    
+    if (participant.userId && participantUserIdStr !== requestedUserIdStr) {
+      console.error('❌ Backend validation failed - User ID mismatch:', {
+        participantUserId: participantUserIdStr,
+        requestedUserId: requestedUserIdStr,
+        participantId,
+        participantDisplayName: participant.displayName,
+        comparison: `${participantUserIdStr} !== ${requestedUserIdStr}`
+      });
       throw new ForbiddenException('You can only raise your own hand');
     }
+    
+    console.log('✅ Backend validation passed - User owns participant:', {
+      participantId,
+      participantUserId: participantUserIdStr,
+      requestedUserId: requestedUserIdStr
+    });
 
     // Check if hand is already raised
     if (participant.hasHandRaised) {
