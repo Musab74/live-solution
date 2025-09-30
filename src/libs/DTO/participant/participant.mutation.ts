@@ -202,6 +202,18 @@ export class ParticipantResponse {
 }
 
 @ObjectType()
+export class RemovedParticipantInfo {
+  @Field(() => ID, { nullable: true })
+  userId?: string;
+
+  @Field(() => ID)
+  meetingId: string;
+
+  @Field()
+  displayName: string;
+}
+
+@ObjectType()
 export class ParticipantMessageResponse {
   @Field()
   success: boolean;
@@ -215,5 +227,8 @@ export class ParticipantMessageResponse {
 
   @Field(() => ID, { nullable: true })
   newHostParticipantId?: string;
+
+  @Field(() => RemovedParticipantInfo, { nullable: true })
+  removedParticipant?: RemovedParticipantInfo;
 }
 

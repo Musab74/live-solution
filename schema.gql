@@ -192,11 +192,18 @@ type ParticipantResponse {
   updatedAt: DateTime!
 }
 
+type RemovedParticipantInfo {
+  userId: ID
+  meetingId: ID!
+  displayName: String!
+}
+
 type ParticipantMessageResponse {
   success: Boolean!
   message: String!
   newHostId: ID
   newHostParticipantId: ID
+  removedParticipant: RemovedParticipantInfo
 }
 
 type ScreenShareInfo {

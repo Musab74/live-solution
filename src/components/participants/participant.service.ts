@@ -5,6 +5,8 @@ import {
   BadRequestException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { HostValidationUtil } from '../../utils/host-validation.util';
 import { MeetingUtils } from '../../utils/meeting-utils';
@@ -74,7 +76,7 @@ export class ParticipantService {
     private participantModel: Model<ParticipantDocument>,
     @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
-    private readonly livekitService: LivekitService, // Add this
+    private readonly livekitService: LivekitService,
   ) {}
 
   async getParticipantsByMeeting(meetingId: string, userId: string): Promise<Participant[]> {
@@ -291,9 +293,9 @@ export class ParticipantService {
       throw new NotFoundException('Participant not found');
     }
 
-    // Verify the user is the host of the meeting
+    // Verify the user is the host of the meeting (either original or current host)
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    if (!meeting || !MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
+    if (!meeting || !MeetingUtils.isCurrentMeetingHost(meeting, hostId)) {
       throw new ForbiddenException(
         'Only the meeting host can remove participants',
       );
@@ -320,16 +322,22 @@ export class ParticipantService {
       $inc: { participantCount: -1 },
     });
 
+
     return { 
       success: true, 
-      message: 'Participant removed and banned from rejoining' 
+      message: 'Participant removed and banned from rejoining',
+      removedParticipant: {
+        userId: participant.userId?.toString(),
+        meetingId: participant.meetingId,
+        displayName: participant.displayName
+      }
     };
   }
 
   async unbanParticipant(meetingId: string, userIdToUnban: string, hostId: string) {
-    // Verify the user is the host of the meeting
+    // Verify the user is the host of the meeting (either original or current host)
     const meeting = await this.meetingModel.findById(meetingId);
-    if (!meeting || !MeetingUtils.isMeetingHost(meeting.hostId, hostId)) {
+    if (!meeting || !MeetingUtils.isCurrentMeetingHost(meeting, hostId)) {
       throw new ForbiddenException(
         'Only the meeting host can unban participants',
       );
@@ -362,7 +370,7 @@ export class ParticipantService {
 
     // Verify the user is the host or the participant themselves
     const meeting = await this.meetingModel.findById(participant.meetingId);
-    const isHost = meeting && MeetingUtils.isMeetingHost(meeting.hostId, userId);
+    const isHost = meeting && MeetingUtils.isCurrentMeetingHost(meeting, userId);
     const isOwner =
       participant.userId && participant.userId.toString() === userId;
 
