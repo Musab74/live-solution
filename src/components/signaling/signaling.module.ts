@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { LivekitService } from './livekit.service';
@@ -33,7 +33,7 @@ import { Participant, ParticipantSchema } from '../../schemas/Participant.model'
     ]),
     AuthModule,
     MemberModule,
-    ParticipantModule,
+    forwardRef(() => ParticipantModule),
   ],
   providers: [LivekitService, LivekitResolver, SignalingGateway, ChatService],
   exports: [LivekitService, SignalingGateway, ChatService],

@@ -956,12 +956,47 @@ export class MeetingService {
       // 4) (Optional) publish subscriptions so UIs react immediately
       // await this.pubSub.publish('meetingUpdated', { meetingUpdated: { _id: meeting._id, status: meeting.status, endedAt: meeting.endedAt, durationMin: meeting.durationMin, participantCount: meeting.participantCount } });
 
+      // Return the full meeting object as expected by the frontend
+      const populatedMeeting = await this.meetingModel.findById(meetingId).populate('hostId');
+      
+      // Get host information safely
+      const hostInfo = populatedMeeting.hostId && typeof populatedMeeting.hostId === 'object' && '_id' in populatedMeeting.hostId 
+        ? populatedMeeting.hostId as any
+        : null;
+      
       return {
-        _id: meeting._id,
-        status: meeting.status,
-        endedAt: meeting.endedAt,
-        durationMin: meeting.durationMin,
-        message: 'Meeting ended successfully',
+        _id: populatedMeeting._id,
+        title: populatedMeeting.title,
+        status: populatedMeeting.status,
+        inviteCode: populatedMeeting.inviteCode,
+        isPrivate: populatedMeeting.isPrivate,
+        scheduledFor: populatedMeeting.scheduledFor,
+        actualStartAt: populatedMeeting.actualStartAt,
+        endedAt: populatedMeeting.endedAt,
+        durationMin: populatedMeeting.durationMin,
+        notes: populatedMeeting.notes,
+        participantCount: populatedMeeting.participantCount,
+        hostId: hostInfo?._id || populatedMeeting.hostId,
+        currentHostId: populatedMeeting.currentHostId,
+        createdAt: populatedMeeting.createdAt,
+        updatedAt: populatedMeeting.updatedAt,
+        host: hostInfo ? {
+          _id: hostInfo._id,
+          email: hostInfo.email || '',
+          displayName: hostInfo.displayName || '',
+          systemRole: hostInfo.systemRole || '',
+          avatarUrl: hostInfo.avatarUrl || '',
+          organization: hostInfo.organization || '',
+          department: hostInfo.department || ''
+        } : {
+          _id: populatedMeeting.hostId.toString(),
+          email: '',
+          displayName: '',
+          systemRole: '',
+          avatarUrl: '',
+          organization: '',
+          department: ''
+        }
       };
     } catch (error) {
       this.logger.error(
