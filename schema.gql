@@ -89,6 +89,9 @@ type ParticipantWithLoginInfo {
   micState: String!
   cameraState: String!
   socketId: String
+  hasHandRaised: Boolean
+  handRaisedAt: DateTime
+  handLoweredAt: DateTime
   loginInfo: LoginInfo!
   createdAt: DateTime!
   updatedAt: DateTime!

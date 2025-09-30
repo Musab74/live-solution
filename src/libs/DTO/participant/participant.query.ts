@@ -83,6 +83,15 @@ export class ParticipantWithLoginInfo {
   @Field({ nullable: true })
   socketId?: string;
 
+  @Field({ nullable: true })
+  hasHandRaised?: boolean;
+
+  @Field({ nullable: true })
+  handRaisedAt?: Date;
+
+  @Field({ nullable: true })
+  handLoweredAt?: Date;
+
   @Field(() => LoginInfo)
   loginInfo: LoginInfo;
 
