@@ -40,6 +40,7 @@ export class SignalingGateway
 
   private connectedUsers = new Map<string, AuthenticatedSocket>();
   private roomUsers = new Map<string, Set<string>>();
+  private raisedHands = new Map<string, { userId: string; displayName: string; raisedAt: Date; timeoutId: NodeJS.Timeout }>();
 
   constructor(
     private jwtService: JwtService,
@@ -127,6 +128,9 @@ export class SignalingGateway
   handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
       console.log(`User ${client.user.displayName} disconnected`);
+
+      // Clean up raised hands for this user
+      this.cleanupUserHands(client.user._id);
 
       // Remove from all rooms
       for (const [roomName, users] of this.roomUsers.entries()) {
@@ -440,91 +444,7 @@ export class SignalingGateway
     client.emit('PONG', { timestamp: Date.now() });
   }
 
-  // ==================== HAND RAISE WEBSOCKET HANDLERS ====================
-
-  @SubscribeMessage('RAISE_HAND')
-  async handleRaiseHand(
-    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) return;
-
-    const { meetingId, participantId, reason } = data;
-    console.log('✋ RAISE_HAND received:', { meetingId, participantId, reason, userId: client.user._id });
-
-    try {
-      // Use the existing service method
-      const result = await this.participantService.raiseHand(
-        { participantId, reason },
-        client.user._id
-      );
-
-      if (result.success) {
-        // Broadcast to all participants in the meeting
-        this.server.to(meetingId).emit('HAND_RAISED', {
-          participantId,
-          displayName: client.user.displayName,
-          userId: client.user._id,
-          reason,
-          raisedAt: result.handRaisedAt,
-          meetingId,
-        });
-
-        console.log(`✋ Hand raised by ${client.user.displayName} in meeting ${meetingId}`);
-      }
-
-      // Send confirmation to the user who raised their hand
-      client.emit('HAND_RAISE_SUCCESS', result);
-    } catch (error) {
-      console.error('❌ Error raising hand:', error);
-      client.emit('HAND_RAISE_ERROR', { 
-        message: error.message || 'Failed to raise hand',
-        participantId 
-      });
-    }
-  }
-
-  @SubscribeMessage('LOWER_HAND')
-  async handleLowerHand(
-    @MessageBody() data: { meetingId: string; participantId: string; reason?: string },
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    if (!client.user) return;
-
-    const { meetingId, participantId, reason } = data;
-    console.log('✋ LOWER_HAND received:', { meetingId, participantId, reason, userId: client.user._id });
-
-    try {
-      // Use the existing service method
-      const result = await this.participantService.lowerHand(
-        { participantId, reason },
-        client.user._id
-      );
-
-      if (result.success) {
-        // Broadcast to all participants in the meeting
-        this.server.to(meetingId).emit('HAND_LOWERED', {
-          participantId,
-          displayName: client.user.displayName,
-          userId: client.user._id,
-          reason,
-          loweredAt: result.handLoweredAt,
-          meetingId,
-        });
-
-        console.log(`✋ Hand lowered by ${client.user.displayName} in meeting ${meetingId}`);
-      }
-
-      // Send confirmation to the user who lowered their hand
-      client.emit('HAND_LOWER_SUCCESS', result);
-    } catch (error) {
-      console.error('❌ Error lowering hand:', error);
-      client.emit('HAND_LOWER_ERROR', { 
-        message: error.message || 'Failed to lower hand',
-        participantId 
-      });
-    }
-  }
+  // ==================== HAND RAISE WEBSOCKET HANDLERS (REMOVED - USING NEW SYSTEM BELOW) ====================
 
   @SubscribeMessage('HOST_LOWER_HAND')
   async handleHostLowerHand(
@@ -800,9 +720,13 @@ export class SignalingGateway
       }
 
       const { meetingId } = data;
+      console.log(`✋ Host ${client.user.displayName} joining meeting room ${meetingId}`);
 
       // Join host room
       await client.join(`host_${meetingId}`);
+      
+      // Also join the main meeting room for hand raise events
+      await client.join(meetingId);
 
       // Notify all waiting participants that host has joined
       client.to(`waiting_${meetingId}`).emit('HOST_JOINED', {
@@ -814,6 +738,8 @@ export class SignalingGateway
         message: 'Successfully joined as host',
         meetingId,
       });
+      
+      console.log(`✋ Host ${client.user.displayName} joined meeting room ${meetingId}`);
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to join as host' });
     }
@@ -843,6 +769,41 @@ export class SignalingGateway
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to approve participant' });
+    }
+  }
+
+  @SubscribeMessage('PARTICIPANT_JOIN_MEETING')
+  async handleParticipantJoinMeeting(
+    @MessageBody() data: { meetingId: string; participantId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      if (!client.user) {
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId, participantId } = data;
+      console.log(`✋ Participant ${client.user.displayName} joining meeting room ${meetingId}`);
+
+      // Join the main meeting room for hand raise events
+      await client.join(meetingId);
+
+      // Store participant info
+      client.data = { ...client.data, meetingId, participantId };
+
+      // Notify all participants in the meeting
+      client.to(meetingId).emit('PARTICIPANT_JOINED_MEETING', {
+        participantId,
+        displayName: client.user.displayName,
+        userId: client.user._id,
+        meetingId,
+      });
+
+      console.log(`✋ Participant ${client.user.displayName} joined meeting room ${meetingId}`);
+    } catch (error) {
+      console.error('Error joining meeting room:', error);
+      client.emit('ERROR', { message: 'Failed to join meeting room' });
     }
   }
 
@@ -897,6 +858,189 @@ export class SignalingGateway
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to admit participant' });
+    }
+  }
+
+  // ===== REAL-TIME HAND RAISE SYSTEM (WebSocket-based, no DB) =====
+
+  @SubscribeMessage('RAISE_HAND')
+  async handleRaiseHand(
+    @MessageBody() data: { meetingId: string; userId: string; displayName: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      console.log('✋ RAISE_HAND event received:', data);
+      
+      if (!client.user) {
+        console.log('✋ No user found in client');
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId, userId, displayName } = data;
+      const handKey = `${meetingId}:${userId}`;
+
+      console.log(`✋ Hand raised: ${displayName} in meeting ${meetingId}`);
+
+      // Check if hand is already raised
+      if (this.raisedHands.has(handKey)) {
+        console.log(`✋ Hand already raised for ${displayName}, ignoring`);
+        return;
+      }
+
+      // Set 2-minute timeout for auto-lower
+      const timeoutId = setTimeout(() => {
+        this.autoLowerHand(meetingId, userId, displayName);
+      }, 120000); // 2 minutes = 120000ms
+
+      // Store raised hand info
+      this.raisedHands.set(handKey, {
+        userId,
+        displayName,
+        raisedAt: new Date(),
+        timeoutId
+      });
+
+      // Broadcast to all participants in the meeting room
+      const broadcastData = {
+        userId,
+        displayName,
+        raisedAt: new Date(),
+        meetingId
+      };
+      
+      console.log('✋ Broadcasting HAND_RAISED to meeting room:', meetingId, broadcastData);
+      client.to(meetingId).emit('HAND_RAISED', broadcastData);
+
+      // Also send to the person who raised their hand
+      console.log('✋ Sending HAND_RAISED to sender:', broadcastData);
+      client.emit('HAND_RAISED', broadcastData);
+
+      console.log(`✋ Hand raise broadcasted for ${displayName}`);
+    } catch (error) {
+      console.error('Error handling hand raise:', error);
+      client.emit('ERROR', { message: 'Failed to raise hand' });
+    }
+  }
+
+  @SubscribeMessage('LOWER_HAND')
+  async handleLowerHand(
+    @MessageBody() data: { meetingId: string; userId: string; displayName: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      if (!client.user) {
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId, userId, displayName } = data;
+      const handKey = `${meetingId}:${userId}`;
+
+      console.log(`✋ Hand lowered: ${displayName} in meeting ${meetingId}`);
+
+      // Remove from raised hands and clear timeout
+      const handInfo = this.raisedHands.get(handKey);
+      if (handInfo) {
+        clearTimeout(handInfo.timeoutId);
+        this.raisedHands.delete(handKey);
+      }
+
+      // Broadcast to all participants in the meeting room
+      client.to(meetingId).emit('HAND_LOWERED', {
+        userId,
+        displayName,
+        loweredAt: new Date(),
+        meetingId
+      });
+
+      // Also send to the person who lowered their hand
+      client.emit('HAND_LOWERED', {
+        userId,
+        displayName,
+        loweredAt: new Date(),
+        meetingId
+      });
+
+      console.log(`✋ Hand lower broadcasted for ${displayName}`);
+    } catch (error) {
+      console.error('Error handling hand lower:', error);
+      client.emit('ERROR', { message: 'Failed to lower hand' });
+    }
+  }
+
+  @SubscribeMessage('GET_RAISED_HANDS')
+  async handleGetRaisedHands(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    try {
+      if (!client.user) {
+        client.emit('ERROR', { message: 'Authentication required' });
+        return;
+      }
+
+      const { meetingId } = data;
+      const raisedHands = Array.from(this.raisedHands.entries())
+        .filter(([key]) => key.startsWith(`${meetingId}:`))
+        .map(([key, handInfo]) => ({
+          userId: handInfo.userId,
+          displayName: handInfo.displayName,
+          raisedAt: handInfo.raisedAt,
+          timeRemaining: Math.max(0, 60000 - (Date.now() - handInfo.raisedAt.getTime()))
+        }));
+
+      client.emit('RAISED_HANDS_LIST', {
+        meetingId,
+        raisedHands,
+        timestamp: new Date()
+      });
+
+      console.log(`✋ Sent raised hands list for meeting ${meetingId}:`, raisedHands.length);
+    } catch (error) {
+      console.error('Error getting raised hands:', error);
+      client.emit('ERROR', { message: 'Failed to get raised hands' });
+    }
+  }
+
+  // Auto-lower hand after 1 minute
+  private autoLowerHand(meetingId: string, userId: string, displayName: string) {
+    const handKey = `${meetingId}:${userId}`;
+    const handInfo = this.raisedHands.get(handKey);
+    
+    if (handInfo) {
+      console.log(`✋ Auto-lowering hand for ${displayName} after 1 minute`);
+      
+      // Remove from raised hands
+      this.raisedHands.delete(handKey);
+      
+      // Broadcast auto-lower to all participants
+      this.server.to(meetingId).emit('HAND_AUTO_LOWERED', {
+        userId,
+        displayName,
+        loweredAt: new Date(),
+        meetingId,
+        reason: 'Auto-lowered after 1 minute'
+      });
+    }
+  }
+
+  // Clean up raised hands when user disconnects
+  private cleanupUserHands(userId: string) {
+    for (const [key, handInfo] of this.raisedHands.entries()) {
+      if (handInfo.userId === userId) {
+        clearTimeout(handInfo.timeoutId);
+        this.raisedHands.delete(key);
+        
+        const [meetingId] = key.split(':');
+        this.server.to(meetingId).emit('HAND_AUTO_LOWERED', {
+          userId,
+          displayName: handInfo.displayName,
+          loweredAt: new Date(),
+          meetingId,
+          reason: 'User disconnected'
+        });
+      }
     }
   }
 }
