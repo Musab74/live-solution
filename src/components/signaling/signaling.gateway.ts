@@ -457,28 +457,49 @@ export class SignalingGateway
     console.log('✋ HOST_LOWER_HAND received:', { meetingId, participantId, reason, hostId: client.user._id });
 
     try {
-      // Use the existing service method
-      const result = await this.participantService.hostLowerHand(
-        { meetingId, participantId, reason },
-        client.user._id
-      );
-
-      if (result.success) {
-        // Broadcast to all participants in the meeting
-        this.server.to(meetingId).emit('HAND_LOWERED_BY_HOST', {
-          participantId,
-          displayName: client.user.displayName,
-          hostId: client.user._id,
-          reason,
-          loweredAt: result.handLoweredAt,
-          meetingId,
+      // Use the new WebSocket-only system
+      const handKey = `${meetingId}:${participantId}`;
+      
+      // Check if hand is raised in our in-memory system
+      if (!this.raisedHands.has(handKey)) {
+        console.log(`✋ Hand not found in raised hands: ${handKey}`);
+        client.emit('HOST_LOWER_HAND_ERROR', { 
+          message: 'Participant\'s hand is not currently raised',
+          participantId 
         });
-
-        console.log(`✋ Hand lowered by host ${client.user.displayName} for participant ${participantId} in meeting ${meetingId}`);
+        return;
       }
 
+      // Get participant info
+      const handInfo = this.raisedHands.get(handKey);
+      const { displayName } = handInfo;
+
+      // Remove from raised hands and clear timeout
+      clearTimeout(handInfo.timeoutId);
+      this.raisedHands.delete(handKey);
+
+      // Broadcast to all participants in the meeting
+      this.server.to(meetingId).emit('HAND_LOWERED_BY_HOST', {
+        userId: participantId,
+        displayName,
+        hostId: client.user._id,
+        hostDisplayName: client.user.displayName,
+        reason,
+        loweredAt: new Date(),
+        meetingId,
+      });
+
       // Send confirmation to the host
-      client.emit('HOST_LOWER_HAND_SUCCESS', result);
+      client.emit('HOST_LOWER_HAND_SUCCESS', {
+        success: true,
+        message: 'Participant\'s hand lowered successfully',
+        participantId,
+        hasHandRaised: false,
+        handLoweredAt: new Date(),
+        reason,
+      });
+
+      console.log(`✋ Hand lowered by host ${client.user.displayName} for participant ${participantId} (${displayName}) in meeting ${meetingId}`);
     } catch (error) {
       console.error('❌ Error lowering hand as host:', error);
       client.emit('HOST_LOWER_HAND_ERROR', { 
@@ -499,8 +520,30 @@ export class SignalingGateway
     console.log('✋ LOWER_ALL_HANDS received:', { meetingId, reason, hostId: client.user._id });
 
     try {
-      // Use the existing service method
-      const results = await this.participantService.lowerAllHands(meetingId, client.user._id);
+      // Use the new WebSocket-only system
+      const loweredHands = [];
+      const handsToRemove = [];
+
+      // Find all raised hands for this meeting
+      for (const [handKey, handInfo] of this.raisedHands.entries()) {
+        if (handKey.startsWith(`${meetingId}:`)) {
+          loweredHands.push({
+            userId: handInfo.userId,
+            displayName: handInfo.displayName,
+            loweredAt: new Date()
+          });
+          handsToRemove.push(handKey);
+        }
+      }
+
+      // Remove all hands and clear timeouts
+      for (const handKey of handsToRemove) {
+        const handInfo = this.raisedHands.get(handKey);
+        if (handInfo) {
+          clearTimeout(handInfo.timeoutId);
+          this.raisedHands.delete(handKey);
+        }
+      }
 
       // Broadcast to all participants in the meeting
       this.server.to(meetingId).emit('ALL_HANDS_LOWERED', {
@@ -509,16 +552,17 @@ export class SignalingGateway
         reason,
         loweredAt: new Date(),
         meetingId,
-        loweredCount: results.length,
+        loweredCount: loweredHands.length,
+        loweredHands
       });
 
-      console.log(`✋ All hands lowered by host ${client.user.displayName} in meeting ${meetingId} (${results.length} hands lowered)`);
+      console.log(`✋ All hands lowered by host ${client.user.displayName} in meeting ${meetingId} (${loweredHands.length} hands lowered)`);
 
       // Send confirmation to the host
       client.emit('LOWER_ALL_HANDS_SUCCESS', { 
         success: true,
-        message: `Successfully lowered ${results.length} hands`,
-        loweredCount: results.length 
+        message: `Successfully lowered ${loweredHands.length} hands`,
+        loweredCount: loweredHands.length 
       });
     } catch (error) {
       console.error('❌ Error lowering all hands:', error);
