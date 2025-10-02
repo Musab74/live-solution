@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { Session } from '../../schemas/Participant.model';
 import { MeetingStatus } from '../../enums/enums';
 
 @ObjectType()
@@ -162,6 +163,30 @@ export class ParticipantAttendance {
   @Field()
   displayName: string;
 
+  @Field({ nullable: true })
+  email?: string;
+
+  @Field({ nullable: true })
+  firstName?: string;
+
+  @Field({ nullable: true })
+  lastName?: string;
+
+  @Field({ nullable: true })
+  systemRole?: string;
+
+  @Field({ nullable: true })
+  avatarUrl?: string;
+
+  @Field({ nullable: true })
+  organization?: string;
+
+  @Field({ nullable: true })
+  department?: string;
+
+  @Field()
+  role: string;
+
   @Field()
   joinedAt: string;
 
@@ -172,7 +197,31 @@ export class ParticipantAttendance {
   totalTime: number;
 
   @Field()
+  sessionCount: number;
+
+  @Field()
+  isCurrentlyOnline: boolean;
+
+  @Field()
   status: string;
+
+  @Field()
+  micState: string;
+
+  @Field()
+  cameraState: string;
+
+  @Field()
+  hasHandRaised: boolean;
+
+  @Field({ nullable: true })
+  handRaisedAt?: string;
+
+  @Field({ nullable: true })
+  handLoweredAt?: string;
+
+  @Field(() => [Session])
+  sessions: Session[];
 }
 
 @ObjectType()
