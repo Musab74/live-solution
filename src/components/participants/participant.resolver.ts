@@ -715,7 +715,15 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    return this.participantService.getMeetingAttendance(meetingId, user._id);
+    this.logger.log(`[GET_MEETING_ATTENDANCE_RESOLVER] Called - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`);
+    try {
+      const result = await this.participantService.getMeetingAttendance(meetingId, user._id);
+      this.logger.log(`[GET_MEETING_ATTENDANCE_RESOLVER] Success - Meeting ID: ${meetingId}, Participants: ${result.totalParticipants}`);
+      return result;
+    } catch (error) {
+      this.logger.error(`[GET_MEETING_ATTENDANCE_RESOLVER] Error - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
   }
 
   // ==================== SCREEN SHARING RESOLVERS ====================

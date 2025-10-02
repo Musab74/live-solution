@@ -1094,17 +1094,25 @@ export class ParticipantService {
     meetingId: string,
     requesterId: string,
   ): Promise<any> {
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Starting - Meeting ID: ${meetingId}, Requester ID: ${requesterId}`);
+    
     // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
+      this.logger.error(`[GET_MEETING_ATTENDANCE] Meeting not found - Meeting ID: ${meetingId}`);
       throw new NotFoundException('Meeting not found');
     }
+
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Meeting found - Title: ${meeting.title}, Host ID: ${meeting.hostId}, Status: ${meeting.status}`);
 
     // Verify requester has permission
     const requester = await this.memberModel.findById(requesterId);
     if (!requester) {
+      this.logger.error(`[GET_MEETING_ATTENDANCE] User not found - Requester ID: ${requesterId}`);
       throw new NotFoundException('User not found');
     }
+
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Requester found - Email: ${requester.email}, Role: ${requester.systemRole}`);
 
     // Check permissions:
     // 1. If requester is the host of the meeting
@@ -1112,18 +1120,30 @@ export class ParticipantService {
     const isHost = meeting.hostId.toString() === requesterId;
     const isTutor = requester.systemRole === SystemRole.TUTOR && isHost;
 
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Permission check - isHost: ${isHost}, isTutor: ${isTutor}, meetingHostId: ${meeting.hostId}, requesterId: ${requesterId}`);
+
     if (!isHost && !isTutor) {
+      this.logger.error(`[GET_MEETING_ATTENDANCE] Permission denied - Requester ID: ${requesterId}, Meeting Host ID: ${meeting.hostId}`);
       throw new ForbiddenException(
         'Only meeting hosts and tutors can view attendance for their own courses',
       );
     }
 
-    // Get all participants with their session data
+    // Get all participants with their session data and full user information
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Fetching participants for meeting: ${meetingId}`);
     const participants = await this.participantModel
       .find({ meetingId })
-      .populate('userId', 'email displayName firstName lastName')
+      .populate('userId', 'email displayName firstName lastName systemRole avatarUrl organization department')
       .sort({ createdAt: 1 })
       .lean();
+
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Found ${participants.length} participants:`, participants.map(p => ({
+      _id: p._id,
+      displayName: p.displayName,
+      status: p.status,
+      sessions: p.sessions?.length || 0,
+      userId: p.userId
+    })));
 
     // Calculate attendance data
     const attendanceData = participants.map((participant) => {
@@ -1144,6 +1164,10 @@ export class ParticipantService {
             displayName: (participant.userId as any).displayName,
             firstName: (participant.userId as any).firstName,
             lastName: (participant.userId as any).lastName,
+            systemRole: (participant.userId as any).systemRole,
+            avatarUrl: (participant.userId as any).avatarUrl,
+            organization: (participant.userId as any).organization,
+            department: (participant.userId as any).department,
           }
           : null;
 
@@ -1163,14 +1187,13 @@ export class ParticipantService {
         isCurrentlyOnline:
           sessions.length > 0 && !sessions[sessions.length - 1].leftAt,
         sessions: sessions.map((session, index) => ({
-          sessionId: session.joinedAt.getTime().toString() + '_' + index,
           joinedAt: session.joinedAt,
           leftAt: session.leftAt,
-          duration: session.leftAt
+          durationSec: session.leftAt
             ? Math.floor(
               (new Date(session.leftAt).getTime() -
                 new Date(session.joinedAt).getTime()) /
-              1000,
+                1000,
             )
             : Math.floor(
               (Date.now() - new Date(session.joinedAt).getTime()) / 1000,
@@ -1179,15 +1202,66 @@ export class ParticipantService {
       };
     });
 
-    return {
+    // Calculate meeting duration
+    const meetingDuration = meeting.actualStartAt && meeting.endedAt 
+      ? Math.floor((new Date(meeting.endedAt).getTime() - new Date(meeting.actualStartAt).getTime()) / 1000)
+      : meeting.actualStartAt 
+        ? Math.floor((Date.now() - new Date(meeting.actualStartAt).getTime()) / 1000)
+        : 0;
+
+    // Calculate attendance statistics
+    const presentParticipants = attendanceData.filter(p => p.totalDuration > 0).length;
+    const absentParticipants = attendanceData.length - presentParticipants;
+    const totalAttendanceTime = attendanceData.reduce((sum, p) => sum + p.totalDuration, 0);
+    const averageAttendanceTime = attendanceData.length > 0 ? totalAttendanceTime / attendanceData.length : 0;
+    const attendanceRate = meetingDuration > 0 ? Math.round((totalAttendanceTime / (attendanceData.length * meetingDuration)) * 100) : 0;
+
+    const result = {
       meetingId,
       totalParticipants: participants.length,
-      currentlyOnline: participants.filter((p) => {
-        const sessions = p.sessions || [];
-        return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
-      }).length,
-      attendance: attendanceData,
+      presentParticipants,
+      absentParticipants,
+      averageAttendanceTime: Math.round(averageAttendanceTime),
+      attendanceRate: Math.min(attendanceRate, 100),
+      participants: attendanceData.map((p, index) => {
+        const originalParticipant = participants[index];
+        return {
+          _id: p._id,
+          displayName: p.user?.displayName || (p.user?.firstName && p.user?.lastName ? `${p.user.firstName} ${p.user.lastName}` : 'Unknown User'),
+          email: p.user?.email || null,
+          firstName: p.user?.firstName || null,
+          lastName: p.user?.lastName || null,
+          systemRole: p.user?.systemRole || null,
+          avatarUrl: p.user?.avatarUrl || null,
+          organization: p.user?.organization || null,
+          department: p.user?.department || null,
+          role: p.role,
+          joinedAt: p.joinedAt?.toISOString() || p.createdAt?.toISOString() || new Date().toISOString(),
+          leftAt: p.leftAt?.toISOString() || null,
+          totalTime: p.totalDuration,
+          sessionCount: p.sessionCount,
+          isCurrentlyOnline: p.isCurrentlyOnline,
+          status: p.status === 'LEFT' ? 'LEFT' : p.isCurrentlyOnline ? 'ONLINE' : 'PRESENT',
+          micState: originalParticipant?.micState || 'OFF',
+          cameraState: originalParticipant?.cameraState || 'OFF',
+          hasHandRaised: originalParticipant?.hasHandRaised || false,
+          handRaisedAt: originalParticipant?.handRaisedAt?.toISOString() || null,
+          handLoweredAt: originalParticipant?.handLoweredAt?.toISOString() || null,
+          sessions: p.sessions || []
+        };
+      })
     };
+
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Returning result - Total participants: ${result.totalParticipants}, Present: ${result.presentParticipants}, Absent: ${result.absentParticipants}`);
+    this.logger.log(`[GET_MEETING_ATTENDANCE] Participants data:`, result.participants.map(p => ({
+      _id: p._id,
+      displayName: p.displayName,
+      status: p.status,
+      totalTime: p.totalTime,
+      sessionCount: p.sessionCount
+    })));
+
+    return result;
   }
 
   // ==================== SCREEN SHARING METHODS ====================
