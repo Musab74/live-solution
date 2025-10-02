@@ -41,6 +41,7 @@ export class SignalingGateway
   private connectedUsers = new Map<string, AuthenticatedSocket>();
   private roomUsers = new Map<string, Set<string>>();
   private raisedHands = new Map<string, { userId: string; displayName: string; raisedAt: Date; timeoutId: NodeJS.Timeout }>();
+  private participantHeartbeats = new Map<string, NodeJS.Timeout>(); // Track heartbeat timeouts per participant
 
   constructor(
     private jwtService: JwtService,
@@ -125,12 +126,23 @@ export class SignalingGateway
     }
   }
 
-  handleDisconnect(client: AuthenticatedSocket) {
+  async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
       console.log(`User ${client.user.displayName} disconnected`);
 
       // Clean up raised hands for this user
       this.cleanupUserHands(client.user._id);
+
+      // Clean up heartbeat timeout for this user
+      const heartbeatTimeout = this.participantHeartbeats.get(client.user._id);
+      if (heartbeatTimeout) {
+        clearTimeout(heartbeatTimeout);
+        this.participantHeartbeats.delete(client.user._id);
+      }
+
+      // FIXED: Don't immediately mark as LEFT - let the background cleanup handle it
+      // This prevents users from being marked as LEFT when they just refresh the page
+      console.log(`[PRESENCE] User ${client.user._id} disconnected - will be cleaned up by background job if stale`);
 
       // Remove from all rooms
       for (const [roomName, users] of this.roomUsers.entries()) {
@@ -1086,5 +1098,133 @@ export class SignalingGateway
         });
       }
     }
+  }
+
+  // ==================== PRESENCE SYSTEM ====================
+
+  @SubscribeMessage('JOIN_MEETING')
+  async handleJoinMeeting(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    try {
+      console.log(`[PRESENCE] User ${client.user.displayName} joining meeting ${meetingId}`);
+
+      // Update participant's lastSeenAt and socketId
+      await this.participantService.updateParticipantPresence(
+        client.user._id,
+        meetingId,
+        client.id
+      );
+
+      // Start heartbeat timeout for this participant
+      this.startHeartbeatTimeout(client.user._id);
+
+      // Notify client of successful join
+      client.emit('MEETING_JOIN_SUCCESS', {
+        meetingId,
+        userId: client.user._id,
+        message: 'Successfully joined meeting'
+      });
+
+      console.log(`✅ [PRESENCE] User ${client.user.displayName} presence updated for meeting ${meetingId}`);
+    } catch (error) {
+      console.error('❌ [PRESENCE] Error joining meeting:', error);
+      client.emit('ERROR', { message: 'Failed to join meeting' });
+    }
+  }
+
+  @SubscribeMessage('HEARTBEAT')
+  async handleHeartbeat(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    try {
+      // Update participant's lastSeenAt timestamp
+      await this.participantService.updateParticipantHeartbeat(
+        client.user._id,
+        meetingId
+      );
+
+      // Restart heartbeat timeout
+      this.startHeartbeatTimeout(client.user._id);
+
+      // Send heartbeat acknowledgment
+      client.emit('HEARTBEAT_ACK', {
+        timestamp: new Date().toISOString(),
+        meetingId
+      });
+    } catch (error) {
+      console.error('❌ [PRESENCE] Error updating heartbeat:', error);
+    }
+  }
+
+  @SubscribeMessage('LEAVE_MEETING')
+  async handleLeaveMeeting(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    try {
+      console.log(`[PRESENCE] User ${client.user.displayName} leaving meeting ${meetingId}`);
+
+      // Mark participant as LEFT
+      await this.participantService.markParticipantAsLeftInMeeting(
+        client.user._id,
+        meetingId
+      );
+
+      // Clean up heartbeat timeout
+      const heartbeatTimeout = this.participantHeartbeats.get(client.user._id);
+      if (heartbeatTimeout) {
+        clearTimeout(heartbeatTimeout);
+        this.participantHeartbeats.delete(client.user._id);
+      }
+
+      // Notify client of successful leave
+      client.emit('MEETING_LEAVE_SUCCESS', {
+        meetingId,
+        userId: client.user._id,
+        message: 'Successfully left meeting'
+      });
+
+      console.log(`✅ [PRESENCE] User ${client.user.displayName} marked as LEFT for meeting ${meetingId}`);
+    } catch (error) {
+      console.error('❌ [PRESENCE] Error leaving meeting:', error);
+      client.emit('ERROR', { message: 'Failed to leave meeting' });
+    }
+  }
+
+  // Start heartbeat timeout - if no heartbeat received within 60 seconds, mark as LEFT
+  private startHeartbeatTimeout(userId: string) {
+    // Clear existing timeout if any
+    const existingTimeout = this.participantHeartbeats.get(userId);
+    if (existingTimeout) {
+      clearTimeout(existingTimeout);
+    }
+
+    // Set new timeout
+    const timeout = setTimeout(async () => {
+      console.log(`[PRESENCE] Heartbeat timeout for user ${userId}, marking as LEFT`);
+      try {
+        await this.participantService.markParticipantAsLeft(userId);
+        this.participantHeartbeats.delete(userId);
+      } catch (error) {
+        console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
+      }
+    }, 60000); // 60 seconds
+
+    this.participantHeartbeats.set(userId, timeout);
   }
 }

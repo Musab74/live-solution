@@ -1,0 +1,23 @@
+# Database Configuration
+MONGODB=mongodb://localhost:27017/live-solution
+MONGODB_PROD=mongodb://localhost:27017/live-solution-prod
+
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+
+# Server Configuration
+PORT=3007
+NODE_ENV=development
+
+# LiveKit Configuration
+LIVEKIT_URL=https://your-livekit-server.com
+LIVEKIT_API_KEY=your-livekit-api-key
+LIVEKIT_API_SECRET=your-livekit-api-secret
+
+# CORS Configuration
+CORS_ORIGIN=http://localhost:3000,http://localhost:3001
+
+# File Upload Configuration
+MAX_FILE_SIZE=50000000
+UPLOAD_PATH=./uploads
+

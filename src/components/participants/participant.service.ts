@@ -104,9 +104,13 @@ export class ParticipantService {
 
     console.log(`[DEBUG] getParticipantsByMeeting - Host detection: meeting.hostId:`, meeting.hostId, 'userId:', userId, 'isHost:', isHost);
 
+    // Filter by fresh participants (seen within last 60 seconds)
+    const threshold = new Date(Date.now() - (60 * 1000));
+    
     const participants = await this.participantModel.find({
       meetingId: new Types.ObjectId(meetingId),
-      status: statusFilter
+      status: statusFilter,
+      lastSeenAt: { $gte: threshold } // Only show participants seen within last 30 seconds
     }).populate('userId', 'email displayName systemRole avatarUrl');
 
     console.log(`[DEBUG] getParticipantsByMeeting - Found ${participants.length} active participants (excluding LEFT)`);
@@ -450,10 +454,18 @@ export class ParticipantService {
       if (existingParticipant) {
         console.log(`[JOIN_MEETING] User already a participant, updating status and displayName`);
 
-        // Always refresh display name
+        // Always refresh display name and update lastSeenAt
         existingParticipant.displayName = realDisplayName;
+        existingParticipant.lastSeenAt = new Date();
 
         const prevStatus = existingParticipant.status;
+
+        // FIXED: If participant was previously LEFT, reset their status properly
+        if (prevStatus === ParticipantStatus.LEFT) {
+          console.log(`[JOIN_MEETING] Participant ${existingParticipant._id} was LEFT, resetting status`);
+          // Clear any existing sessions since they left
+          existingParticipant.sessions = [];
+        }
 
         if (isHost) {
           // Host joins immediately
@@ -514,6 +526,7 @@ export class ParticipantService {
       displayName: realDisplayName,
       role: participantRole,
       status: initialStatus,
+      lastSeenAt: new Date(), // Initialize lastSeenAt for presence tracking
       sessions: initialStatus === ParticipantStatus.ADMITTED ? [{
         joinedAt: new Date(),
         leftAt: undefined,
@@ -727,8 +740,16 @@ export class ParticipantService {
       );
     }
 
+    // Filter by fresh participants (seen within last 60 seconds)
+    const threshold = new Date(Date.now() - (60 * 1000));
+    
     const stats = await this.participantModel.aggregate([
-      { $match: { meetingId: new Types.ObjectId(meetingId) } },
+      { 
+        $match: { 
+          meetingId: new Types.ObjectId(meetingId),
+          lastSeenAt: { $gte: threshold } // Only count participants seen within last 30 seconds
+        } 
+      },
       {
         $group: {
           _id: '$status',
@@ -1722,15 +1743,19 @@ export class ParticipantService {
       throw new ForbiddenException('Only the meeting host can view waiting participants');
     }
 
+    // Filter by fresh participants (seen within last 60 seconds)
+    const threshold = new Date(Date.now() - (60 * 1000));
+    
     const waitingParticipants = await this.participantModel
       .find({
         meetingId: new Types.ObjectId(meetingId),
-        status: ParticipantStatus.WAITING
+        status: ParticipantStatus.WAITING,
+        lastSeenAt: { $gte: threshold } // Only show participants seen within last 30 seconds
       })
       .populate('userId', 'email displayName systemRole avatarUrl')
       .sort({ createdAt: 1 });
 
-    console.log(`[GET_WAITING_PARTICIPANTS] Found ${waitingParticipants.length} waiting participants`);
+    console.log(`[GET_WAITING_PARTICIPANTS] Found ${waitingParticipants.length} fresh waiting participants (filtered by lastSeenAt)`);
 
     return waitingParticipants;
   }
@@ -1929,6 +1954,208 @@ export class ParticipantService {
     } catch (error) {
       this.logger.error(`[CLEANUP_DUPLICATE_PARTICIPANTS] Error: ${error.message}`);
       return 0;
+    }
+  }
+
+  // ==================== PRESENCE SYSTEM METHODS ====================
+
+  /**
+   * Update participant presence when they join a meeting
+   */
+  async updateParticipantPresence(userId: string, meetingId: string, socketId: string) {
+    try {
+      const now = new Date();
+      
+      // Find and update the participant
+      const participant = await this.participantModel.findOneAndUpdate(
+        {
+          userId: new Types.ObjectId(userId),
+          meetingId: new Types.ObjectId(meetingId)
+        },
+        {
+          $set: {
+            lastSeenAt: now,
+            socketId: socketId
+          }
+        },
+        { new: true }
+      );
+
+      if (!participant) {
+        this.logger.warn(`[PRESENCE] Participant not found for user ${userId} in meeting ${meetingId}`);
+        return null;
+      }
+
+      this.logger.log(`[PRESENCE] Updated presence for participant ${participant._id} in meeting ${meetingId}`);
+      return participant;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error updating participant presence: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Update participant heartbeat timestamp
+   */
+  async updateParticipantHeartbeat(userId: string, meetingId: string) {
+    try {
+      const now = new Date();
+      
+      const participant = await this.participantModel.findOneAndUpdate(
+        {
+          userId: new Types.ObjectId(userId),
+          meetingId: new Types.ObjectId(meetingId),
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] }
+        },
+        {
+          $set: {
+            lastSeenAt: now
+          }
+        },
+        { new: true }
+      );
+
+      if (!participant) {
+        this.logger.warn(`[PRESENCE] Participant not found for heartbeat update: user ${userId} in meeting ${meetingId}`);
+        return null;
+      }
+
+      return participant;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error updating participant heartbeat: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark participant as LEFT in all meetings (for disconnect detection)
+   */
+  async markParticipantAsLeft(userId: string) {
+    try {
+      const now = new Date();
+      
+      const result = await this.participantModel.updateMany(
+        {
+          userId: new Types.ObjectId(userId),
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] }
+        },
+        {
+          $set: {
+            status: ParticipantStatus.LEFT,
+            lastSeenAt: now,
+            socketId: null
+          }
+        }
+      );
+
+      this.logger.log(`[PRESENCE] Marked ${result.modifiedCount} participants as LEFT for user ${userId}`);
+      return result.modifiedCount;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error marking participant as LEFT: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Mark participant as LEFT in a specific meeting (for explicit leave)
+   */
+  async markParticipantAsLeftInMeeting(userId: string, meetingId: string) {
+    try {
+      const now = new Date();
+      
+      const participant = await this.participantModel.findOneAndUpdate(
+        {
+          userId: new Types.ObjectId(userId),
+          meetingId: new Types.ObjectId(meetingId),
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] }
+        },
+        {
+          $set: {
+            status: ParticipantStatus.LEFT,
+            lastSeenAt: now,
+            socketId: null
+          }
+        },
+        { new: true }
+      );
+
+      if (!participant) {
+        this.logger.warn(`[PRESENCE] Participant not found for leave: user ${userId} in meeting ${meetingId}`);
+        return null;
+      }
+
+      this.logger.log(`[PRESENCE] Marked participant as LEFT in meeting ${meetingId}`);
+      return participant;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error marking participant as LEFT in meeting: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Clean up stale participants (those with lastSeenAt older than threshold)
+   */
+  async cleanupStaleParticipants(thresholdSeconds: number = 30) {
+    try {
+      const threshold = new Date(Date.now() - (thresholdSeconds * 1000));
+      
+      const result = await this.participantModel.updateMany(
+        {
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] },
+          lastSeenAt: { $lt: threshold }
+        },
+        {
+          $set: {
+            status: ParticipantStatus.LEFT,
+            socketId: null
+          }
+        }
+      );
+
+      this.logger.log(`[PRESENCE] Cleaned up ${result.modifiedCount} stale participants (older than ${thresholdSeconds}s)`);
+      return result.modifiedCount;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error cleaning up stale participants: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get fresh participants only (those seen within threshold)
+   */
+  async getFreshParticipants(meetingId: string, thresholdSeconds: number = 30) {
+    try {
+      const threshold = new Date(Date.now() - (thresholdSeconds * 1000));
+      
+      const participants = await this.participantModel.find({
+        meetingId: new Types.ObjectId(meetingId),
+        status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] },
+        lastSeenAt: { $gte: threshold }
+      }).lean();
+
+      return participants;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error getting fresh participants: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get count of stale participants (for monitoring)
+   */
+  async getStaleParticipantsCount(thresholdSeconds: number = 30): Promise<number> {
+    try {
+      const threshold = new Date(Date.now() - (thresholdSeconds * 1000));
+      
+      const count = await this.participantModel.countDocuments({
+        status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED] },
+        lastSeenAt: { $lt: threshold }
+      });
+
+      return count;
+    } catch (error) {
+      this.logger.error(`[PRESENCE] Error getting stale participants count: ${error.message}`);
+      throw error;
     }
   }
 }

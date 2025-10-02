@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/members/member.module';
@@ -19,6 +20,7 @@ import { Participant, ParticipantSchema } from './schemas/Participant.model';
 import { ChatMessage, ChatMessageSchema } from './schemas/Chat.message.model';
 import { Invite, InviteSchema } from './schemas/Invite.model';
 import { Vod, VodSchema } from './schemas/Vod.model';
+import { PresenceCleanupService } from './services/presence-cleanup.service';
 
 @Module({
   imports: [
@@ -26,6 +28,7 @@ import { Vod, VodSchema } from './schemas/Vod.model';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    ScheduleModule.forRoot(),
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
       autoSchemaFile: 'schema.gql',
@@ -51,5 +54,6 @@ import { Vod, VodSchema } from './schemas/Vod.model';
       { name: Vod.name, schema: VodSchema },
     ]),
   ],
+  providers: [PresenceCleanupService],
 })
 export class AppModule {}
