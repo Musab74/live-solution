@@ -546,6 +546,7 @@ type Mutation {
   clearFakeParticipants(meetingId: ID!): String!
   updateParticipantMediaState(participantId: ID!, micState: String, cameraState: String): ParticipantResponse!
   cleanupDuplicateParticipants(meetingId: ID!): String!
+  cleanupStaleParticipants(meetingId: ID!): String!
   forceLeaveMeeting(meetingId: ID!): String!
   updateSession(input: UpdateSessionInput!): ParticipantMessageResponse!
   preMeetingSetup(input: PreMeetingSetupInput!): WaitingRoomResponse!

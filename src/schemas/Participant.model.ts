@@ -101,6 +101,11 @@ export class Participant {
   @Prop()
   socketId?: string;
 
+  // presence tracking for heartbeat system
+  @Field({ nullable: true })
+  @Prop({ default: Date.now })
+  lastSeenAt?: Date;
+
   // attendance: multiple sessions if reconnects
   @Field(() => [Session])
   @Prop({ type: [SessionSchema], default: [] })

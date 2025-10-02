@@ -285,6 +285,24 @@ export class ParticipantResolver {
     }
   }
 
+  @Mutation(() => String, { name: 'cleanupStaleParticipants' })
+  @UseGuards(AuthGuard)
+  async cleanupStaleParticipants(
+    @Args('meetingId', { type: () => ID }) meetingId: string,
+    @AuthMember() user: Member,
+  ) {
+    console.log(`[CLEANUP_STALE] Manual cleanup called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
+    
+    try {
+      const cleanedCount = await this.participantService.cleanupStaleParticipants(60); // 60 seconds threshold
+      console.log(`[CLEANUP_STALE] Success - Cleaned up ${cleanedCount} stale participants`);
+      return `Successfully cleaned up ${cleanedCount} stale participants from meeting ${meetingId}`;
+    } catch (error) {
+      console.error(`[CLEANUP_STALE] Error:`, error);
+      throw error;
+    }
+  }
+
   @Query(() => ParticipantWithLoginInfo, { name: 'getParticipantByUserAndMeeting' })
   @UseGuards(AuthGuard)
   async getParticipantByUserAndMeeting(
