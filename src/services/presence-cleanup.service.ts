@@ -20,7 +20,7 @@ export class PresenceCleanupService {
   // @Cron(CronExpression.EVERY_MINUTE)
   async cleanupStaleParticipants() {
     try {
-      const cleanedCount = await this.participantService.cleanupStaleParticipants(60); // 60 seconds threshold
+      const cleanedCount = await this.participantService.cleanupStaleParticipants(10); // 10 seconds threshold - AGGRESSIVE cleanup
       
       if (cleanedCount > 0) {
         this.logger.log(`[CLEANUP] Cleaned up ${cleanedCount} stale participants`);
@@ -33,7 +33,7 @@ export class PresenceCleanupService {
   /**
    * Manual cleanup method for testing or emergency cleanup
    */
-  async manualCleanup(thresholdSeconds: number = 30): Promise<number> {
+  async manualCleanup(thresholdSeconds: number = 10): Promise<number> {
     try {
       this.logger.log(`[MANUAL_CLEANUP] Starting manual cleanup with ${thresholdSeconds}s threshold`);
       const cleanedCount = await this.participantService.cleanupStaleParticipants(thresholdSeconds);
@@ -48,7 +48,7 @@ export class PresenceCleanupService {
   /**
    * Get statistics about stale participants (for monitoring)
    */
-  async getStaleParticipantsStats(thresholdSeconds: number = 30): Promise<{
+  async getStaleParticipantsStats(thresholdSeconds: number = 10): Promise<{
     totalStale: number;
     staleInWaiting: number;
     staleAdmitted: number;

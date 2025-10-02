@@ -4,6 +4,8 @@ import {
   ForbiddenException,
   ConflictException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { HostValidationUtil } from '../../utils/host-validation.util';
 import { MeetingUtils } from '../../utils/meeting-utils';
@@ -21,6 +23,7 @@ import {
 import { SystemRole, MeetingStatus, ParticipantStatus } from '../../libs/enums/enums';
 import { Logger } from '@nestjs/common';
 import { LivekitService } from '../signaling/livekit.service';
+import { ParticipantService } from '../participants/participant.service';
 
 @Injectable()
 export class MeetingService { 
@@ -31,6 +34,8 @@ export class MeetingService {
     @InjectModel(Member.name) private memberModel: Model<MemberDocument>,
     @InjectModel(Participant.name) private participantModel: Model<ParticipantDocument>,
     private readonly livekitService: LivekitService,
+    @Inject(forwardRef(() => ParticipantService))
+    private readonly participantService: ParticipantService,
   ) {}
 
   // CREATE MEETING
@@ -784,6 +789,10 @@ export class MeetingService {
       // 🔧 FIX: Don't delete participants when meeting starts!
       // This was causing participants to disappear from the list
       this.logger.log(`[START_MEETING] Meeting ${meetingId} started successfully without clearing participants`);
+
+      // FIXED: Send WebSocket notification to all waiting participants
+      // Notify the participant service to trigger WebSocket notifications
+      await this.participantService.notifyMeetingStarted(meetingId);
 
       // 🔧 FIX: Removed duplicate cleanup to prevent participant deletion issues
 

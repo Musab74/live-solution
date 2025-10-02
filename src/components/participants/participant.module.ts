@@ -20,7 +20,7 @@ import { LivekitService } from '../signaling/livekit.service';
       { name: Member.name, schema: MemberSchema },
     ]),
     AuthModule,
-    MeetingModule,
+    forwardRef(() => MeetingModule),
   ],
   providers: [ParticipantService, ParticipantResolver, LivekitService],
   exports: [ParticipantService],

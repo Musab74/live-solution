@@ -42,13 +42,25 @@ export class SignalingGateway
   private roomUsers = new Map<string, Set<string>>();
   private raisedHands = new Map<string, { userId: string; displayName: string; raisedAt: Date; timeoutId: NodeJS.Timeout }>();
   private participantHeartbeats = new Map<string, NodeJS.Timeout>(); // Track heartbeat timeouts per participant
+  
+  // OPTIMIZED: Track last DB update time to reduce database load
+  private lastHeartbeatUpdate = new Map<string, number>();
 
   constructor(
     private jwtService: JwtService,
     private memberService: MemberService,
     private participantService: ParticipantService,
     private chatService: ChatService,
-  ) {}
+  ) {
+    // Listen for global meeting start events
+    if ((global as any).meetingStartEmitter) {
+      (global as any).meetingStartEmitter.on('meetingStarted', (meetingId: string) => {
+        console.log(`[SIGNALING_GATEWAY] Received meeting started event for meeting ${meetingId}`);
+        this.notifyMeetingStarted(meetingId);
+      });
+      console.log('[SIGNALING_GATEWAY] Registered global meeting start event listener');
+    }
+  }
 
   async handleConnection(client: AuthenticatedSocket) {
     console.log('🔌 WebSocket connection attempt from client:', client.id);
@@ -139,6 +151,9 @@ export class SignalingGateway
         clearTimeout(heartbeatTimeout);
         this.participantHeartbeats.delete(client.user._id);
       }
+      
+      // Clean up heartbeat tracking
+      this.lastHeartbeatUpdate.delete(client.user._id);
 
       // FIXED: Don't immediately mark as LEFT - let the background cleanup handle it
       // This prevents users from being marked as LEFT when they just refresh the page
@@ -745,6 +760,12 @@ export class SignalingGateway
     try {
       const { meetingId, participantId } = data;
 
+      // FIXED: Update participant status to LEFT in database
+      if (client.user?._id) {
+        console.log(`[LEAVE_WAITING_ROOM] Marking participant ${client.user._id} as LEFT in meeting ${meetingId}`);
+        await this.participantService.markParticipantAsLeftInMeeting(client.user._id, meetingId);
+      }
+
       // Leave the waiting room
       await client.leave(`waiting_${meetingId}`);
 
@@ -760,6 +781,7 @@ export class SignalingGateway
         participantId,
       });
     } catch (error) {
+      console.error('❌ [LEAVE_WAITING_ROOM] Error:', error);
       client.emit('ERROR', { message: 'Failed to leave waiting room' });
     }
   }
@@ -822,6 +844,20 @@ export class SignalingGateway
         type: 'PARTICIPANT_APPROVED',
         participantId,
         message: 'A participant has been approved',
+      });
+
+      // FIXED: Also emit meeting status change to waiting room
+      client.to(`waiting_${meetingId}`).emit('MEETING_STATUS_CHANGED', {
+        status: 'LIVE',
+        meetingId,
+        message: 'Meeting has started',
+      });
+
+      // FIXED: Notify the specific participant that they've been admitted
+      client.to(`waiting_${meetingId}`).emit('PARTICIPANT_ADMITTED_TO_MEETING', {
+        participantId,
+        meetingId,
+        message: 'You have been admitted to the meeting - redirecting to live room',
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to approve participant' });
@@ -914,6 +950,32 @@ export class SignalingGateway
       });
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to admit participant' });
+    }
+  }
+
+  // ===== MEETING START NOTIFICATION =====
+  
+  // Public method to notify all waiting participants when meeting starts
+  async notifyMeetingStarted(meetingId: string) {
+    try {
+      console.log(`[MEETING_STARTED] Notifying all waiting participants for meeting ${meetingId}`);
+      
+      // Emit to all waiting participants
+      this.server.to(`waiting_${meetingId}`).emit('MEETING_STATUS_CHANGED', {
+        status: 'LIVE',
+        meetingId,
+        message: 'Meeting has started - you will be redirected to the live room',
+      });
+
+      // Also emit individual admission events for each waiting participant
+      this.server.to(`waiting_${meetingId}`).emit('ALL_PARTICIPANTS_ADMITTED', {
+        meetingId,
+        message: 'All participants have been admitted - redirecting to live room',
+      });
+
+      console.log(`[MEETING_STARTED] Successfully notified waiting participants for meeting ${meetingId}`);
+    } catch (error) {
+      console.error(`[MEETING_STARTED] Error notifying waiting participants:`, error);
     }
   }
 
@@ -1148,20 +1210,38 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
-      // Update participant's lastSeenAt timestamp
-      await this.participantService.updateParticipantHeartbeat(
-        client.user._id,
-        meetingId
-      );
+      // AGGRESSIVE APPROACH: Update database every 2nd heartbeat (10 seconds) for fast cleanup
+      const now = Date.now();
+      const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
+      const shouldUpdateDB = (now - lastUpdate) > 10000; // Update DB every 10 seconds (2 heartbeats)
 
-      // Restart heartbeat timeout
+      if (shouldUpdateDB) {
+        // Update participant's lastSeenAt timestamp in database
+        await this.participantService.updateParticipantHeartbeat(
+          client.user._id,
+          meetingId
+        );
+        this.lastHeartbeatUpdate.set(client.user._id, now);
+      }
+
+      // Always restart heartbeat timeout (lightweight operation)
       this.startHeartbeatTimeout(client.user._id);
 
-      // Send heartbeat acknowledgment
-      client.emit('HEARTBEAT_ACK', {
-        timestamp: new Date().toISOString(),
-        meetingId
-      });
+      // Send heartbeat acknowledgment (only if DB was updated)
+      if (shouldUpdateDB) {
+        client.emit('HEARTBEAT_ACK', {
+          timestamp: new Date().toISOString(),
+          meetingId,
+          dbUpdated: true
+        });
+      } else {
+        // Lightweight ack without DB update
+        client.emit('HEARTBEAT_ACK_LIGHT', {
+          timestamp: new Date().toISOString(),
+          meetingId,
+          dbUpdated: false
+        });
+      }
     } catch (error) {
       console.error('❌ [PRESENCE] Error updating heartbeat:', error);
     }
@@ -1220,10 +1300,11 @@ export class SignalingGateway
       try {
         await this.participantService.markParticipantAsLeft(userId);
         this.participantHeartbeats.delete(userId);
+        this.lastHeartbeatUpdate.delete(userId);
       } catch (error) {
         console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
       }
-    }, 60000); // 60 seconds
+    }, 10000); // 10 seconds - AGGRESSIVE: 5s heartbeat + 5s grace period for fast ghost cleanup
 
     this.participantHeartbeats.set(userId, timeout);
   }
