@@ -294,7 +294,7 @@ export class ParticipantResolver {
     console.log(`[CLEANUP_STALE] Manual cleanup called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
     
     try {
-      const cleanedCount = await this.participantService.cleanupStaleParticipants(60); // 60 seconds threshold
+        const cleanedCount = await this.participantService.cleanupStaleParticipants(10); // 10 seconds threshold - AGGRESSIVE cleanup
       console.log(`[CLEANUP_STALE] Success - Cleaned up ${cleanedCount} stale participants`);
       return `Successfully cleaned up ${cleanedCount} stale participants from meeting ${meetingId}`;
     } catch (error) {

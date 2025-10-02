@@ -104,8 +104,8 @@ export class ParticipantService {
 
     console.log(`[DEBUG] getParticipantsByMeeting - Host detection: meeting.hostId:`, meeting.hostId, 'userId:', userId, 'isHost:', isHost);
 
-    // Filter by fresh participants (seen within last 60 seconds)
-    const threshold = new Date(Date.now() - (60 * 1000));
+    // Filter by fresh participants (seen within last 10 seconds) - AGGRESSIVE cleanup
+    const threshold = new Date(Date.now() - (10 * 1000));
     
     const participants = await this.participantModel.find({
       meetingId: new Types.ObjectId(meetingId),
@@ -740,8 +740,8 @@ export class ParticipantService {
       );
     }
 
-    // Filter by fresh participants (seen within last 60 seconds)
-    const threshold = new Date(Date.now() - (60 * 1000));
+    // Filter by fresh participants (seen within last 10 seconds) - AGGRESSIVE cleanup
+    const threshold = new Date(Date.now() - (10 * 1000));
     
     const stats = await this.participantModel.aggregate([
       { 
@@ -1743,8 +1743,8 @@ export class ParticipantService {
       throw new ForbiddenException('Only the meeting host can view waiting participants');
     }
 
-    // Filter by fresh participants (seen within last 60 seconds)
-    const threshold = new Date(Date.now() - (60 * 1000));
+    // Filter by fresh participants (seen within last 10 seconds) - AGGRESSIVE cleanup
+    const threshold = new Date(Date.now() - (10 * 1000));
     
     const waitingParticipants = await this.participantModel
       .find({
@@ -2156,6 +2156,25 @@ export class ParticipantService {
     } catch (error) {
       this.logger.error(`[PRESENCE] Error getting stale participants count: ${error.message}`);
       throw error;
+    }
+  }
+
+  // Notify SignalingGateway that meeting has started (for WebSocket notifications)
+  async notifyMeetingStarted(meetingId: string) {
+    try {
+      this.logger.log(`[NOTIFY_MEETING_STARTED] Meeting ${meetingId} started - triggering WebSocket notifications`);
+      
+      // Emit a global event that the SignalingGateway can listen to
+      // We'll use Node.js EventEmitter for this
+      if ((global as any).meetingStartEmitter) {
+        (global as any).meetingStartEmitter.emit('meetingStarted', meetingId);
+        this.logger.log(`[NOTIFY_MEETING_STARTED] Emitted meetingStarted event for meeting ${meetingId}`);
+      } else {
+        this.logger.warn(`[NOTIFY_MEETING_STARTED] Global meetingStartEmitter not available`);
+      }
+      
+    } catch (error) {
+      this.logger.error(`[NOTIFY_MEETING_STARTED] Error:`, error);
     }
   }
 }

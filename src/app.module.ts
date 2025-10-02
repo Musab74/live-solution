@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitter } from 'events';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/members/member.module';
@@ -21,6 +22,10 @@ import { ChatMessage, ChatMessageSchema } from './schemas/Chat.message.model';
 import { Invite, InviteSchema } from './schemas/Invite.model';
 import { Vod, VodSchema } from './schemas/Vod.model';
 import { PresenceCleanupService } from './services/presence-cleanup.service';
+
+// Initialize global event emitter for meeting start notifications
+const meetingStartEmitter = new EventEmitter();
+(global as any).meetingStartEmitter = meetingStartEmitter;
 
 @Module({
   imports: [
