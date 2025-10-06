@@ -140,7 +140,7 @@ export class SignalingGateway
 
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
-      console.log(`User ${client.user.displayName} disconnected`);
+      console.log(`[DISCONNECT] User ${client.user.displayName} disconnected`);
 
       // Clean up raised hands for this user
       this.cleanupUserHands(client.user._id);
@@ -155,11 +155,11 @@ export class SignalingGateway
       // Clean up heartbeat tracking
       this.lastHeartbeatUpdate.delete(client.user._id);
 
-      // FIXED: Don't immediately mark as LEFT - let the background cleanup handle it
-      // This prevents users from being marked as LEFT when they just refresh the page
-      console.log(`[PRESENCE] User ${client.user._id} disconnected - will be cleaned up by background job if stale`);
+      // FIXED: Don't immediately mark as LEFT on disconnect
+      // Let the heartbeat timeout system handle it (60 seconds grace period)
+      console.log(`[DISCONNECT] User ${client.user._id} disconnected - will be marked as LEFT after 60s if no reconnection`);
 
-      // Remove from all rooms
+      // Remove from all rooms and notify others
       for (const [roomName, users] of this.roomUsers.entries()) {
         if (users.has(client.id)) {
           users.delete(client.id);
@@ -167,10 +167,12 @@ export class SignalingGateway
             userId: client.user._id,
             displayName: client.user.displayName,
             socketId: client.id,
+            timestamp: new Date().toISOString()
           });
         }
       }
 
+      // Remove from connected users
       this.connectedUsers.delete(client.id);
     }
   }
@@ -1184,7 +1186,7 @@ export class SignalingGateway
       );
 
       // Start heartbeat timeout for this participant
-      this.startHeartbeatTimeout(client.user._id);
+      this.startHeartbeatTimeout(client.user._id, meetingId);
 
       // Notify client of successful join
       client.emit('MEETING_JOIN_SUCCESS', {
@@ -1210,10 +1212,12 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
-      // AGGRESSIVE APPROACH: Update database every 2nd heartbeat (10 seconds) for fast cleanup
+      console.log(`[HEARTBEAT] Received heartbeat for ${client.user.displayName} in meeting ${meetingId}`);
+      
+      // STABLE APPROACH: Update database every 12th heartbeat (60 seconds) for stable presence
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
-      const shouldUpdateDB = (now - lastUpdate) > 10000; // Update DB every 10 seconds (2 heartbeats)
+      const shouldUpdateDB = (now - lastUpdate) > 60000; // Update DB every 60 seconds (12 heartbeats)
 
       if (shouldUpdateDB) {
         // Update participant's lastSeenAt timestamp in database
@@ -1225,7 +1229,7 @@ export class SignalingGateway
       }
 
       // Always restart heartbeat timeout (lightweight operation)
-      this.startHeartbeatTimeout(client.user._id);
+      this.startHeartbeatTimeout(client.user._id, meetingId);
 
       // Send heartbeat acknowledgment (only if DB was updated)
       if (shouldUpdateDB) {
@@ -1245,6 +1249,71 @@ export class SignalingGateway
     } catch (error) {
       console.error('❌ [PRESENCE] Error updating heartbeat:', error);
     }
+  }
+
+  @SubscribeMessage('SEND_MESSAGE')
+  async handleSendMessage(
+    @MessageBody() data: { meetingId: string; message: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    try {
+      console.log(`[CHAT] User ${client.user.displayName} sending message to meeting ${data.meetingId}`);
+      
+      // Save message to database
+      const chatMessage = await this.chatService.createMessage({
+        meetingId: data.meetingId,
+        userId: client.user._id,
+        text: data.message.trim(),
+        displayName: client.user.displayName
+      });
+
+      // Broadcast to all participants in the meeting
+      client.to(data.meetingId).emit('NEW_MESSAGE', {
+        _id: chatMessage._id,
+        meetingId: data.meetingId,
+        userId: client.user._id,
+        displayName: client.user.displayName,
+        message: data.message.trim(),
+        timestamp: new Date().toISOString()
+      });
+
+      console.log(`[CHAT] Message broadcasted to meeting ${data.meetingId}`);
+    } catch (error) {
+      console.error('[CHAT] Error sending message:', error);
+      client.emit('CHAT_ERROR', { message: 'Failed to send message' });
+    }
+  }
+
+  @SubscribeMessage('TYPING_START')
+  async handleTypingStart(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+    
+    client.to(data.meetingId).emit('USER_TYPING', {
+      userId: client.user._id,
+      displayName: client.user.displayName,
+      isTyping: true,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  @SubscribeMessage('TYPING_STOP')
+  async handleTypingStop(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+    
+    client.to(data.meetingId).emit('USER_TYPING', {
+      userId: client.user._id,
+      displayName: client.user.displayName,
+      isTyping: false,
+      timestamp: new Date().toISOString()
+    });
   }
 
   @SubscribeMessage('LEAVE_MEETING')
@@ -1286,25 +1355,27 @@ export class SignalingGateway
     }
   }
 
-  // Start heartbeat timeout - if no heartbeat received within 60 seconds, mark as LEFT
-  private startHeartbeatTimeout(userId: string) {
+  // Start heartbeat timeout - if no heartbeat received within 90 seconds, mark as LEFT
+  private startHeartbeatTimeout(userId: string, meetingId: string) {
     // Clear existing timeout if any
     const existingTimeout = this.participantHeartbeats.get(userId);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
     }
 
-    // Set new timeout
+    // Create a new timeout (90 seconds grace period)
     const timeout = setTimeout(async () => {
-      console.log(`[PRESENCE] Heartbeat timeout for user ${userId}, marking as LEFT`);
+      console.log(`[PRESENCE] Heartbeat timeout for user ${userId} in meeting ${meetingId}, marking as LEFT`);
       try {
-        await this.participantService.markParticipantAsLeft(userId);
+        // IMPORTANT: mark as LEFT only for this specific meeting
+        await this.participantService.markParticipantAsLeftInMeeting(userId, meetingId);
+
         this.participantHeartbeats.delete(userId);
         this.lastHeartbeatUpdate.delete(userId);
       } catch (error) {
         console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
       }
-    }, 10000); // 10 seconds - AGGRESSIVE: 5s heartbeat + 5s grace period for fast ghost cleanup
+    }, 90000); // 90 seconds - More stable: 5s heartbeat + 85s grace period for stable presence
 
     this.participantHeartbeats.set(userId, timeout);
   }

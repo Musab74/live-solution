@@ -1,5 +1,5 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
-import { Session } from '../../schemas/Participant.model';
+import { Session } from '../../../schemas/Participant.model';
 import { MeetingStatus } from '../../enums/enums';
 
 @ObjectType()
