@@ -302,10 +302,7 @@ export class MeetingService {
       // Map meetings to ensure proper host data structure
       const mappedMeetings = meetings.map((meeting) => {
         const meetingObj = meeting.toObject();
-        this.logger.debug(
-          `[GET_MEETINGS] Meeting ${meetingObj._id} hostId:`,
-          meetingObj.hostId,
-        );
+        // Meeting processed
 
         // Check if hostId is populated (has email property) or just an ObjectId
         const hostData =
@@ -894,7 +891,7 @@ export class MeetingService {
         meetingId
       );
 
-      this.logger.debug(`[END_MEETING] Host validation result:`, hostValidation);
+      // Host validation completed
       
       // Allow end meeting if user is admin OR meeting host (not requiring host participant role for end meeting)
       if (!hostValidation.isAdmin && !hostValidation.isMeetingHost) {

@@ -362,17 +362,9 @@ export class ParticipantResolver {
       participant.status = ParticipantStatus.LEFT;
       await participant.save();
 
-      // 👇 FIXED: Always try to end meeting if user is the meeting host (by checking meeting.hostId)
-      // This bypasses the role check issue and ensures host can always end meeting
-      console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Attempting to end meeting for all participants');
-      try {
-        await this.meetingService.endMeeting(meetingId, user._id);
-        console.log('✅ BACKEND FORCE_LEAVE_MEETING: Meeting ended successfully');
-      } catch (error) {
-        console.error('❌ BACKEND FORCE_LEAVE_MEETING: Failed to end meeting', error);
-        // Don't throw error here - participant is already marked as LEFT
-        // Just log the error and continue
-      }
+      // FIXED: Only end meeting if this is the host AND they explicitly want to end the meeting
+      // Regular participant leaving should NOT end the entire meeting
+      console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Participant left meeting (meeting continues)');
 
       console.log('✅ BACKEND FORCE_LEAVE_MEETING: Success - Participant status set to LEFT');
       return `Successfully left meeting ${meetingId}`;
