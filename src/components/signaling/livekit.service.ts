@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Scope } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   AccessToken,
@@ -6,7 +6,7 @@ import {
   EgressClient,
 } from 'livekit-server-sdk';
 
-@Injectable()
+@Injectable({ scope: Scope.DEFAULT })
 export class LivekitService {
   private readonly apiKey: string;
   private readonly apiSecret: string;
@@ -21,6 +21,17 @@ export class LivekitService {
     const base = config.get<string>('LIVEKIT_URL')!; // https://...
     this.httpUrl = base.replace(/\/$/, '');
     this.wsUrl = this.httpUrl.replace('http', 'ws'); // wss://...
+    
+    // Log configuration (without exposing full credentials)
+    console.log('🔧 LiveKit Service Configuration:', {
+      httpUrl: this.httpUrl,
+      wsUrl: this.wsUrl,
+      hasApiKey: !!this.apiKey,
+      hasApiSecret: !!this.apiSecret,
+      apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 10) + '...' : 'MISSING',
+      apiSecretPrefix: this.apiSecret ? this.apiSecret.substring(0, 10) + '...' : 'MISSING',
+    });
+    
     this.rooms = new RoomServiceClient(
       this.httpUrl,
       this.apiKey,
@@ -38,27 +49,68 @@ export class LivekitService {
     identity: string;
     name: string;
     meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER';
-  }) {
-    const at = new AccessToken(this.apiKey, this.apiSecret, {
+  }): string | Promise<string> {
+    console.log('🎫 [LIVEKIT_SERVICE] Generating LiveKit token:', {
+      room: opts.room,
       identity: opts.identity,
       name: opts.name,
-      metadata: JSON.stringify({ meetingRole: opts.meetingRole }),
+      meetingRole: opts.meetingRole,
+      hasApiKey: !!this.apiKey,
+      hasApiSecret: !!this.apiSecret,
+      apiKeyLength: this.apiKey?.length || 0,
+      apiSecretLength: this.apiSecret?.length || 0,
     });
+    
+    try {
+      const at = new AccessToken(this.apiKey, this.apiSecret, {
+        identity: opts.identity,
+        name: opts.name,
+        metadata: JSON.stringify({ meetingRole: opts.meetingRole }),
+      });
 
-    const canPublish = opts.meetingRole !== 'VIEWER';
-    at.addGrant({
-      roomJoin: true,
-      room: opts.room,
-      canPublish,
-      canSubscribe: true,
-      canPublishData: true,
-      canUpdateOwnMetadata: true,
-      roomAdmin: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
-      roomCreate: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
-      roomList: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
-    });
+      console.log('🎫 [LIVEKIT_SERVICE] AccessToken created successfully');
 
-    return at.toJwt();
+      const canPublish = opts.meetingRole !== 'VIEWER';
+      const grants = {
+        roomJoin: true,
+        room: opts.room,
+        canPublish,
+        canSubscribe: true,
+        canPublishData: true,
+        canUpdateOwnMetadata: true,
+        roomAdmin: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
+        roomCreate: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
+        roomList: ['HOST', 'CO_HOST'].includes(opts.meetingRole),
+      };
+      
+      console.log('🎫 [LIVEKIT_SERVICE] Token grants:', grants);
+      at.addGrant(grants);
+      console.log('🎫 [LIVEKIT_SERVICE] Grants added successfully');
+
+      const token = at.toJwt();
+      console.log('🎫 [LIVEKIT_SERVICE] toJwt() called, result:', {
+        tokenType: typeof token,
+        isPromise: token instanceof Promise,
+        tokenValue: token
+      });
+
+      // Check if it's a Promise and handle accordingly
+      if (token instanceof Promise) {
+        console.log('🎫 [LIVEKIT_SERVICE] Token is a Promise, will be awaited in resolver');
+        return token;
+      } else {
+        const tokenString = token as string;
+        console.log('🎫 [LIVEKIT_SERVICE] Token is synchronous:', {
+          tokenType: typeof tokenString,
+          tokenLength: tokenString?.length || 0,
+          tokenPreview: tokenString ? tokenString.substring(0, 50) + '...' : 'EMPTY'
+        });
+        return tokenString;
+      }
+    } catch (error) {
+      console.error('🎫 [LIVEKIT_SERVICE] Error generating token:', error);
+      throw error;
+    }
   }
 
   // Admin ops

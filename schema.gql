@@ -346,6 +346,28 @@ type SimpleJoinMeetingResponse {
   user: Member
 }
 
+type ParticipantInfo {
+  identity: String!
+  name: String!
+  joinedAt: Float!
+  isPublisher: Boolean!
+  isSubscriber: Boolean!
+  isMuted: Boolean!
+  isCameraEnabled: Boolean!
+  metadata: String
+}
+
+type RecordingInfo {
+  sid: String!
+  roomName: String!
+  status: String!
+  startTime: Float!
+  endTime: Float
+  duration: Float!
+  filePath: String!
+  fileSize: Float!
+}
+
 type MeetingInfo {
   _id: ID!
   title: String!
@@ -397,28 +419,6 @@ type VodUrlResponse {
   title: String!
   url: String!
   message: String!
-}
-
-type ParticipantInfo {
-  identity: String!
-  name: String!
-  joinedAt: Float!
-  isPublisher: Boolean!
-  isSubscriber: Boolean!
-  isMuted: Boolean!
-  isCameraEnabled: Boolean!
-  metadata: String
-}
-
-type RecordingInfo {
-  sid: String!
-  roomName: String!
-  status: String!
-  startTime: Float!
-  endTime: Float
-  duration: Float!
-  filePath: String!
-  fileSize: Float!
 }
 
 type MeetingRecordingInfo {
@@ -491,11 +491,11 @@ type Query {
   getMeetings(input: MeetingQueryInput!): MeetingListResponse!
   getMeetingById(meetingId: ID!): MeetingWithHost!
   getMeetingStats: MeetingStats!
+  getRecording(recordingSid: String!): RecordingInfo!
+  listRecordings(roomName: String): [RecordingInfo!]!
   getAllVods(input: VodQueryInput): VodListResponse!
   getVodById(vodId: ID!): VodWithMeeting!
   getVodStats: VodStats!
-  getRecording(recordingSid: String!): RecordingInfo!
-  listRecordings(roomName: String): [RecordingInfo!]!
   health: String!
   getRecordingInfo(input: GetRecordingInput!): MeetingRecordingInfo!
   getRecordingStats: RecordingStats!
@@ -591,16 +591,16 @@ type Mutation {
   rotateInviteCode(meetingId: ID!): MeetingWithHost!
   lockRoom(meetingId: ID!): MeetingWithHost!
   unlockRoom(meetingId: ID!): MeetingWithHost!
-  uploadVodFile(input: CreateVodFileInput!, file: String!): VodUploadResponse!
-  createVodUrl(input: CreateVodUrlInput!): VodUrlResponse!
-  createVOD(input: CreateVodFileInput!): VodWithMeeting!
-  updateVod(input: UpdateVodInput!): VodWithMeeting!
-  deleteVod(vodId: ID!): ParticipantMessageResponse!
   createLivekitToken(meetingId: String!): String!
   endLivekitRoom(meetingId: String!): String!
   kickLivekitParticipant(meetingId: String!, identity: String!): String!
   startRecording(input: StartLivekitRecordingInput!): String!
   stopRecording(input: StopRecordingInput!): String!
+  uploadVodFile(input: CreateVodFileInput!, file: String!): VodUploadResponse!
+  createVodUrl(input: CreateVodUrlInput!): VodUrlResponse!
+  createVOD(input: CreateVodFileInput!): VodWithMeeting!
+  updateVod(input: UpdateVodInput!): VodWithMeeting!
+  deleteVod(vodId: ID!): ParticipantMessageResponse!
   startMeetingRecording(input: StartMeetingRecordingInput!): RecordingResponse!
   stopMeetingRecording(input: StopMeetingRecordingInput!): RecordingResponse!
   pauseMeetingRecording(input: PauseMeetingRecordingInput!): RecordingResponse!
@@ -768,6 +768,15 @@ input JoinMeetingInput {
   passcode: String
 }
 
+input StartLivekitRecordingInput {
+  roomName: String!
+  outputPath: String
+}
+
+input StopRecordingInput {
+  recordingSid: String!
+}
+
 input CreateVodFileInput {
   title: String!
   notes: String
@@ -788,15 +797,6 @@ input UpdateVodInput {
   title: String
   notes: String
   durationSec: Float
-}
-
-input StartLivekitRecordingInput {
-  roomName: String!
-  outputPath: String
-}
-
-input StopRecordingInput {
-  recordingSid: String!
 }
 
 input StartMeetingRecordingInput {
