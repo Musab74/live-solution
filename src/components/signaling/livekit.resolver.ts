@@ -28,21 +28,56 @@ export class LivekitResolver {
       `[CREATE_LIVEKIT_TOKEN] Attempt - Meeting ID: ${meetingId}, User ID: ${me._id}, Email: ${me.email}, Display Name: ${me.displayName}`,
     );
     try {
+      // CRITICAL FIX: Validate user data before token creation
+      if (!me || !me._id) {
+        throw new Error('User not authenticated or missing user ID');
+      }
+      
+      const userId = String(me._id);
+      const userName = me.displayName || me.email || `User_${userId}`;
+      
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Validated user data:', {
+        userId,
+        userName,
+        originalMe: {
+          _id: me._id,
+          email: me.email,
+          displayName: me.displayName
+        }
+      });
+      
       // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
       const meetingRole = await /* participantsService */ Promise.resolve(
         'PARTICIPANT' as const,
       );
 
-      const token = this.lk.generateAccessToken({
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Calling generateAccessToken...');
+      const token = await this.lk.generateAccessToken({
         room: meetingId,
-        identity: String(me._id),
-        name: me.displayName,
+        identity: userId,
+        name: userName,
         meetingRole,
       });
 
-      const result = JSON.stringify({ wsUrl: this.lk.getWsUrl(), token });
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Token generated:', {
+        tokenType: typeof token,
+        tokenLength: token?.length || 'no length',
+        tokenPreview: token ? token.substring(0, 50) + '...' : 'EMPTY',
+        isString: typeof token === 'string',
+        isObject: typeof token === 'object',
+      });
+
+      const wsUrl = this.lk.getWsUrl();
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] WebSocket URL:', wsUrl);
+
+      const tokenData = { wsUrl, token };
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Token data to stringify:', tokenData);
+
+      const result = JSON.stringify(tokenData);
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Final JSON result:', result);
+
       this.logger.log(
-        `[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, User ID: ${me._id}, Meeting Role: ${meetingRole}`,
+        `[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, User ID: ${me._id}, Meeting Role: ${meetingRole}, Token Length: ${token?.length || 0}`,
       );
       return result;
     } catch (error) {

@@ -10,7 +10,7 @@ import { Meeting, MeetingSchema } from '../../schemas/Meeting.model';
 import { Member, MemberSchema } from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
 import { MeetingModule } from '../meetings/meeting.module';
-import { LivekitService } from '../signaling/livekit.service';
+import { LivekitModule } from '../signaling/livekit.module';
 
 @Module({
   imports: [
@@ -21,8 +21,9 @@ import { LivekitService } from '../signaling/livekit.service';
     ]),
     AuthModule,
     forwardRef(() => MeetingModule),
+    LivekitModule, // Import LiveKit module instead of duplicating service
   ],
-  providers: [ParticipantService, ParticipantResolver, LivekitService],
+  providers: [ParticipantService, ParticipantResolver],
   exports: [ParticipantService],
 })
 export class ParticipantModule {}
