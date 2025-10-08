@@ -67,6 +67,11 @@ export class SignalingGateway
     console.log('🔌 Handshake auth:', client.handshake.auth);
     console.log('🔌 Handshake headers:', client.handshake.headers);
     
+    // Add catch-all event listener for debugging
+    client.onAny((eventName, ...args) => {
+      console.log(`🔍 [CATCH_ALL] Event received: ${eventName}`, args);
+    });
+    
     try {
       
       // Extract token from handshake
@@ -156,8 +161,8 @@ export class SignalingGateway
       this.lastHeartbeatUpdate.delete(client.user._id);
 
       // FIXED: Don't immediately mark as LEFT on disconnect
-      // Let the heartbeat timeout system handle it (60 seconds grace period)
-      console.log(`[DISCONNECT] User ${client.user._id} disconnected - will be marked as LEFT after 60s if no reconnection`);
+      // Let the heartbeat timeout system handle it (120 seconds grace period)
+      console.log(`[DISCONNECT] User ${client.user._id} disconnected - will be marked as LEFT after 120s if no reconnection`);
 
       // Remove from all rooms and notify others
       for (const [roomName, users] of this.roomUsers.entries()) {
@@ -1166,14 +1171,49 @@ export class SignalingGateway
 
   // ==================== PRESENCE SYSTEM ====================
 
+  @SubscribeMessage('TEST_EVENT')
+  async handleTestEvent(
+    @MessageBody() data: any,
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    console.log(`🧪 [TEST_EVENT] Event received:`, { 
+      data, 
+      userId: client.user?._id, 
+      displayName: client.user?.displayName,
+      socketId: client.id,
+      timestamp: new Date().toISOString()
+    });
+  }
+
   @SubscribeMessage('JOIN_MEETING')
   async handleJoinMeeting(
     @MessageBody() data: { meetingId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!client.user) return;
+    console.log(`🚨 [JOIN_MEETING] Event received:`, { 
+      data, 
+      userId: client.user?._id, 
+      displayName: client.user?.displayName,
+      socketId: client.id,
+      timestamp: new Date().toISOString(),
+      userExists: !!client.user,
+      dataType: typeof data,
+      dataKeys: data ? Object.keys(data) : 'no data'
+    });
+    
+    if (!client.user) {
+      console.log(`[JOIN_MEETING] No user found, returning`);
+      client.emit('ERROR', { message: 'User not authenticated' });
+      return;
+    }
 
     const { meetingId } = data;
+    
+    if (!meetingId) {
+      console.log(`[JOIN_MEETING] No meetingId provided`);
+      client.emit('ERROR', { message: 'Meeting ID is required' });
+      return;
+    }
 
     try {
       console.log(`[PRESENCE] User ${client.user.displayName} joining meeting ${meetingId}`);
@@ -1212,35 +1252,63 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
-      console.log(`[HEARTBEAT] Received heartbeat for ${client.user.displayName} in meeting ${meetingId}`);
+      console.log(`[HEARTBEAT] Received heartbeat for ${client.user.displayName} in meeting ${meetingId}`, {
+        userId: client.user._id,
+        meetingId,
+        socketId: client.id,
+        timestamp: new Date().toISOString()
+      });
       
-      // STABLE APPROACH: Update database every 12th heartbeat (60 seconds) for stable presence
+      // FIXED: Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
-      const shouldUpdateDB = (now - lastUpdate) > 60000; // Update DB every 60 seconds (12 heartbeats)
+      const shouldUpdateDB = (now - lastUpdate) > 30000; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
 
+      let dbUpdateSuccess = false;
+      
       if (shouldUpdateDB) {
-        // Update participant's lastSeenAt timestamp in database
-        await this.participantService.updateParticipantHeartbeat(
-          client.user._id,
-          meetingId
-        );
-        this.lastHeartbeatUpdate.set(client.user._id, now);
+        console.log(`[HEARTBEAT] Updating database for user ${client.user._id} in meeting ${meetingId}`);
+        try {
+          // Update participant's lastSeenAt timestamp in database
+          await this.participantService.updateParticipantHeartbeat(
+            client.user._id,
+            meetingId
+          );
+          this.lastHeartbeatUpdate.set(client.user._id, now);
+          dbUpdateSuccess = true;
+          console.log(`[HEARTBEAT] Database update completed successfully for user ${client.user._id}`);
+        } catch (error) {
+          console.error(`[HEARTBEAT] Database update failed for user ${client.user._id}:`, error);
+          dbUpdateSuccess = false;
+        }
+      } else {
+        console.log(`[HEARTBEAT] Database update throttled for user ${client.user._id} (optimization: last update ${Math.round((now - lastUpdate) / 1000)}s ago)`);
+        
+        // FIXED: Still update lastSeenAt in memory tracking even when DB is throttled
+        // This ensures the timeout system works correctly
+        console.log(`[HEARTBEAT] Heartbeat received but DB update throttled - user ${client.user._id} is still active`);
       }
 
       // Always restart heartbeat timeout (lightweight operation)
       this.startHeartbeatTimeout(client.user._id, meetingId);
 
-      // Send heartbeat acknowledgment (only if DB was updated)
-      if (shouldUpdateDB) {
+      // Send heartbeat acknowledgment with accurate dbUpdated status
+      if (shouldUpdateDB && dbUpdateSuccess) {
         client.emit('HEARTBEAT_ACK', {
           timestamp: new Date().toISOString(),
           meetingId,
           dbUpdated: true
         });
+      } else if (shouldUpdateDB && !dbUpdateSuccess) {
+        client.emit('HEARTBEAT_ACK', {
+          timestamp: new Date().toISOString(),
+          meetingId,
+          dbUpdated: false,
+          error: 'Database update failed'
+        });
       } else {
         // Lightweight ack without DB update
-        client.emit('HEARTBEAT_ACK_LIGHT', {
+        client.emit('HEARTBEAT_ACK', {
           timestamp: new Date().toISOString(),
           meetingId,
           dbUpdated: false
@@ -1363,7 +1431,7 @@ export class SignalingGateway
       clearTimeout(existingTimeout);
     }
 
-    // Create a new timeout (90 seconds grace period)
+    // Create a new timeout (120 seconds grace period) - OPTIMIZED for 10s heartbeat intervals
     const timeout = setTimeout(async () => {
       console.log(`[PRESENCE] Heartbeat timeout for user ${userId} in meeting ${meetingId}, marking as LEFT`);
       try {
@@ -1375,7 +1443,7 @@ export class SignalingGateway
       } catch (error) {
         console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
       }
-    }, 90000); // 90 seconds - More stable: 5s heartbeat + 85s grace period for stable presence
+    }, 120000); // 120 seconds - OPTIMIZED: 10s heartbeat + 110s grace period for stable presence
 
     this.participantHeartbeats.set(userId, timeout);
   }

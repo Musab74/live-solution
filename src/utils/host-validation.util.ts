@@ -15,11 +15,12 @@ export class HostValidationUtil {
 
   /**
    * Comprehensive host validation that checks multiple authorization methods
-   * @param meetingHostId - The host ID from the meeting document
+   * @param meetingHostId - The host ID from the meeting document (original tutor)
    * @param userId - The user ID to validate
    * @param userSystemRole - The user's system role
    * @param participantModel - Mongoose model for participants
    * @param meetingId - The meeting ID for participant lookup
+   * @param currentHostId - Optional current host ID (for transferred host)
    * @returns Promise<HostValidationResult>
    */
   static async validateHost(
@@ -27,12 +28,16 @@ export class HostValidationUtil {
     userId: any,
     userSystemRole: string,
     participantModel: any,
-    meetingId: string
+    meetingId: string,
+    currentHostId?: any
   ): Promise<HostValidationResult> {
     this.logger.debug(`[HOST_VALIDATION] Starting validation:`, {
       meetingHostId,
       meetingHostIdType: typeof meetingHostId,
       meetingHostIdString: meetingHostId?.toString(),
+      currentHostId,
+      currentHostIdType: typeof currentHostId,
+      currentHostIdString: currentHostId?.toString(),
       userId,
       userIdType: typeof userId,
       userIdString: userId?.toString(),
@@ -44,12 +49,20 @@ export class HostValidationUtil {
     const isAdmin = userSystemRole === 'ADMIN';
     this.logger.debug(`[HOST_VALIDATION] Admin check: ${isAdmin}`);
 
-    // Method 2: Check if user is the meeting host using improved utility
+    // Method 2: Check if user is the original meeting host
     const isMeetingHost = MeetingUtils.isMeetingHost(meetingHostId, userId);
-    this.logger.debug(`[HOST_VALIDATION] Meeting host check: ${isMeetingHost}`, {
+    this.logger.debug(`[HOST_VALIDATION] Original host check: ${isMeetingHost}`, {
       meetingHostIdString: meetingHostId?.toString(),
       userIdString: userId?.toString(),
       comparison: `${meetingHostId?.toString()} === ${userId?.toString()}`
+    });
+
+    // Method 2b: Check if user is the current host (for transferred host)
+    const isCurrentHost = currentHostId ? MeetingUtils.isMeetingHost(currentHostId, userId) : false;
+    this.logger.debug(`[HOST_VALIDATION] Current host check: ${isCurrentHost}`, {
+      currentHostIdString: currentHostId?.toString(),
+      userIdString: userId?.toString(),
+      comparison: currentHostId ? `${currentHostId?.toString()} === ${userId?.toString()}` : 'No currentHostId'
     });
 
     // Method 3: Check if user has HOST role in participants
@@ -77,11 +90,11 @@ export class HostValidationUtil {
       this.logger.warn(`[HOST_VALIDATION] Error checking host participant:`, error);
     }
 
-    const isAuthorized = isAdmin || isMeetingHost || isHostParticipant;
+    const isAuthorized = isAdmin || isMeetingHost || isCurrentHost || isHostParticipant;
     
     const result: HostValidationResult = {
       isAuthorized,
-      isMeetingHost,
+      isMeetingHost: isMeetingHost || isCurrentHost,
       isHostParticipant,
       isAdmin,
       reason: isAuthorized ? 'User is authorized' : 'User is not authorized to perform this action'

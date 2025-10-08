@@ -110,3 +110,4 @@ After running the script, you can:
 4. **Test Real-time**: Join the live meeting to see real-time updates
 
 The test data provides a realistic representation of how the attendance system works with actual user participation data!
+

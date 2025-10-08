@@ -882,13 +882,14 @@ export class MeetingService {
       // permissions: host or admin
       const user = await this.memberModel.findById(userId);
       
-      // 🔍 IMPROVED: Use comprehensive host validation utility
+      // 🔍 IMPROVED: Use comprehensive host validation utility with currentHostId support
       const hostValidation = await HostValidationUtil.validateHost(
         meeting.hostId,
         userId,
         user.systemRole,
         this.participantModel,
-        meetingId
+        meetingId,
+        meeting.currentHostId // Pass currentHostId for transferred host support
       );
 
       // Host validation completed
