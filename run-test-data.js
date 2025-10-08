@@ -25,3 +25,4 @@ exec('node populate-test-data-simple.js', (error, stdout, stderr) => {
   console.log('3. Login with: john.doe@university.edu / password123');
   console.log('4. Click "상세" button on any meeting to see attendance data!');
 });
+

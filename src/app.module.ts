@@ -22,6 +22,8 @@ import { ChatMessage, ChatMessageSchema } from './schemas/Chat.message.model';
 import { Invite, InviteSchema } from './schemas/Invite.model';
 import { Vod, VodSchema } from './schemas/Vod.model';
 import { PresenceCleanupService } from './services/presence-cleanup.service';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
 
 // Initialize global event emitter for meeting start notifications
 const meetingStartEmitter = new EventEmitter();
@@ -59,6 +61,7 @@ const meetingStartEmitter = new EventEmitter();
       { name: Vod.name, schema: VodSchema },
     ]),
   ],
-  providers: [PresenceCleanupService],
+  controllers: [AppController],
+  providers: [AppService, PresenceCleanupService],
 })
 export class AppModule {}

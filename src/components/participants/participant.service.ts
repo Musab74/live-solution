@@ -985,7 +985,8 @@ export class ParticipantService {
       currentHostId,
       user.systemRole,
       this.participantModel,
-      meetingId
+      meetingId,
+      meeting.currentHostId // Pass currentHostId for transferred host support
     );
 
     this.logger.debug(`[TRANSFER_HOST] Host validation result:`, hostValidation);
@@ -1889,49 +1890,6 @@ export class ParticipantService {
     }
   }
 
-  // Cleanup duplicate participants method
-  async cleanupDuplicateParticipants(meetingId: string): Promise<number> {
-    try {
-      const participants = await this.participantModel.find({
-        meetingId: new Types.ObjectId(meetingId)
-      });
-      
-      // Group by userId and remove duplicates
-      const groupedByUserId = participants.reduce((acc, participant) => {
-        const userId = participant.userId ? participant.userId.toString() : 'anonymous';
-        if (!acc[userId]) {
-          acc[userId] = [];
-        }
-        acc[userId].push(participant);
-        return acc;
-      }, {});
-      
-      let duplicateCount = 0;
-      for (const [userId, userParticipants] of Object.entries(groupedByUserId)) {
-        const participants = userParticipants as any[];
-        if (participants.length > 1) {
-          // Sort by createdAt, keep the most recent
-          const sorted = participants.sort((a, b) => 
-            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-          );
-          
-          // Delete all but the first (most recent)
-          const toDelete = sorted.slice(1);
-          for (const duplicate of toDelete) {
-            await this.participantModel.findByIdAndDelete(duplicate._id);
-            duplicateCount++;
-          }
-        }
-      }
-      
-      this.logger.log(`[CLEANUP_DUPLICATE_PARTICIPANTS] Cleaned up ${duplicateCount} duplicate participants for meeting ${meetingId}`);
-      return duplicateCount;
-    } catch (error) {
-      this.logger.error(`[CLEANUP_DUPLICATE_PARTICIPANTS] Error: ${error.message}`);
-      return 0;
-    }
-  }
-
   // ==================== PRESENCE SYSTEM METHODS ====================
 
   /**
@@ -1944,6 +1902,68 @@ export class ParticipantService {
       // For now, it's a placeholder for future implementation
     } catch (error) {
       this.logger.error(`[NOTIFY_MEETING_STARTED] Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Clean up duplicate participants - keep only the one with the most recent lastSeenAt
+   * FIXED: Remove duplicates caused by ObjectId vs string meetingId inconsistency
+   */
+  async cleanupDuplicateParticipants(meetingId: string): Promise<number> {
+    try {
+      console.log(`[CLEANUP_DUPLICATES] Starting cleanup for meeting ${meetingId}`);
+      
+      // Find all participants in this meeting (both ObjectId and string meetingId)
+      const allParticipants = await this.participantModel.find({
+        meetingId: { $in: [new Types.ObjectId(meetingId), meetingId] }
+      });
+      
+      console.log(`[CLEANUP_DUPLICATES] Found ${allParticipants.length} total participants in meeting`);
+      
+      // Group by userId to find duplicates
+      const participantsByUser = new Map<string, any[]>();
+      
+      for (const participant of allParticipants) {
+        const userId = participant.userId.toString();
+        if (!participantsByUser.has(userId)) {
+          participantsByUser.set(userId, []);
+        }
+        participantsByUser.get(userId)!.push(participant);
+      }
+      
+      let deletedCount = 0;
+      
+      // For each user with multiple entries, keep the one with the most recent lastSeenAt
+      for (const [userId, participants] of participantsByUser.entries()) {
+        if (participants.length > 1) {
+          console.log(`[CLEANUP_DUPLICATES] User ${userId} has ${participants.length} duplicate entries`);
+          
+          // Sort by lastSeenAt (most recent first) - this is the key fix!
+          participants.sort((a, b) => {
+            const aTime = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+            const bTime = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+            return bTime - aTime;
+          });
+          
+          // Keep the first (most recent lastSeenAt) entry, delete the rest
+          const toKeep = participants[0];
+          const toDelete = participants.slice(1);
+          
+          console.log(`[CLEANUP_DUPLICATES] Keeping participant ${toKeep._id} (lastSeenAt: ${toKeep.lastSeenAt})`);
+          
+          for (const duplicate of toDelete) {
+            console.log(`[CLEANUP_DUPLICATES] Deleting duplicate participant ${duplicate._id} (lastSeenAt: ${duplicate.lastSeenAt})`);
+            await this.participantModel.findByIdAndDelete(duplicate._id);
+            deletedCount++;
+          }
+        }
+      }
+      
+      console.log(`[CLEANUP_DUPLICATES] Cleanup completed - deleted ${deletedCount} duplicate participants`);
+      return deletedCount;
+    } catch (error) {
+      this.logger.error(`[CLEANUP_DUPLICATES] Error: ${error.message}`);
+      return 0;
     }
   }
 
@@ -2020,15 +2040,28 @@ export class ParticipantService {
    */
   async updateParticipantPresence(userId: string, meetingId: string, socketId: string): Promise<void> {
     try {
-      // First, try to update existing participant
+      console.log(`[UPDATE_PARTICIPANT_PRESENCE] Starting update for user ${userId} in meeting ${meetingId}`);
+      
+      // FIXED: Handle both ObjectId and string meetingId formats
+      const meetingIdQuery = Types.ObjectId.isValid(meetingId) 
+        ? { $in: [new Types.ObjectId(meetingId), meetingId] } // Search for both ObjectId and string
+        : meetingId; // If not valid ObjectId, use as string
+      
+      // First, try to update existing participant (handle both ObjectId and string meetingId)
       const updateResult = await this.participantModel.updateMany(
-        { userId, meetingId, status: { $ne: 'LEFT' } },
+        { 
+          userId: new Types.ObjectId(userId), 
+          meetingId: meetingIdQuery, 
+          status: { $ne: 'LEFT' } 
+        },
         {
           lastSeenAt: new Date(),
           socketId,
-          status: 'JOINED'
+          status: 'ADMITTED' // FIXED: Use proper status enum value
         }
       );
+
+      console.log(`[UPDATE_PARTICIPANT_PRESENCE] Update result: ${updateResult.modifiedCount} participants updated`);
 
       // If no participant was updated, create a new one
       if (updateResult.modifiedCount === 0) {
@@ -2040,12 +2073,17 @@ export class ParticipantService {
           throw new Error(`User ${userId} not found`);
         }
 
+        // FIXED: Always use ObjectId for meetingId to ensure consistency
+        const normalizedMeetingId = Types.ObjectId.isValid(meetingId) 
+          ? new Types.ObjectId(meetingId) 
+          : new Types.ObjectId(meetingId);
+
         // Create new participant record
         const newParticipant = new this.participantModel({
-          userId,
-          meetingId,
+          userId: new Types.ObjectId(userId),
+          meetingId: normalizedMeetingId,
           displayName: user.displayName,
-          status: 'JOINED',
+          status: 'ADMITTED', // FIXED: Use proper status enum value
           lastSeenAt: new Date(),
           socketId,
           joinedAt: new Date()
@@ -2054,7 +2092,7 @@ export class ParticipantService {
         await newParticipant.save();
 
         // Update meeting participant count
-        await this.meetingModel.findByIdAndUpdate(meetingId, {
+        await this.meetingModel.findByIdAndUpdate(normalizedMeetingId, {
           $inc: { participantCount: 1 }
         });
 
@@ -2073,14 +2111,56 @@ export class ParticipantService {
    */
   async updateParticipantHeartbeat(userId: string, meetingId: string): Promise<void> {
     try {
-      await this.participantModel.updateMany(
-        { userId, meetingId, status: { $ne: 'LEFT' } },
+      console.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Starting heartbeat update for user ${userId} in meeting ${meetingId}`);
+      
+      // FIXED: Handle both ObjectId and string meetingId formats
+      const meetingIdQuery = Types.ObjectId.isValid(meetingId) 
+        ? { $in: [new Types.ObjectId(meetingId), meetingId] } // Search for both ObjectId and string
+        : meetingId; // If not valid ObjectId, use as string
+      
+      // First, check if participants exist
+      const existingParticipants = await this.participantModel.find({ 
+        userId: new Types.ObjectId(userId), 
+        meetingId: meetingIdQuery 
+      });
+      console.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Found ${existingParticipants.length} existing participants:`, 
+        existingParticipants.map(p => ({ _id: p._id, status: p.status, lastSeenAt: p.lastSeenAt }))
+      );
+      
+      // Update heartbeat for ALL participants (including LEFT ones) - they're sending heartbeats so they're active
+      const updateResult = await this.participantModel.updateMany(
+        { 
+          userId: new Types.ObjectId(userId), 
+          meetingId: meetingIdQuery 
+        },
         {
-          lastSeenAt: new Date()
+          $set: {
+            lastSeenAt: new Date(),
+            status: 'ADMITTED' // FIXED: Always set to ADMITTED if they're sending heartbeats
+          }
         }
       );
-      this.logger.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Updated heartbeat for user ${userId} in meeting ${meetingId}`);
+      
+      console.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Database update result:`, {
+        userId,
+        meetingId,
+        modifiedCount: updateResult.modifiedCount,
+        matchedCount: updateResult.matchedCount,
+        acknowledged: updateResult.acknowledged
+      });
+      
+      // Verify the update worked
+      const updatedParticipants = await this.participantModel.find({ 
+        userId: new Types.ObjectId(userId), 
+        meetingId: meetingIdQuery 
+      });
+      console.log(`[UPDATE_PARTICIPANT_HEARTBEAT] After update - ${updatedParticipants.length} participants:`, 
+        updatedParticipants.map(p => ({ _id: p._id, status: p.status, lastSeenAt: p.lastSeenAt }))
+      );
+      
+      this.logger.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Updated heartbeat for user ${userId} in meeting ${meetingId}, modified: ${updateResult.modifiedCount}`);
     } catch (error) {
+      console.error(`[UPDATE_PARTICIPANT_HEARTBEAT] Error:`, error);
       this.logger.error(`[UPDATE_PARTICIPANT_HEARTBEAT] Error: ${error.message}`);
     }
   }

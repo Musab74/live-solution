@@ -14,6 +14,11 @@ export class AppController {
     return this.appService.getHello();
   }
 
+  @Get('test')
+  getTest(): string {
+    return 'Test endpoint working!';
+  }
+
   @Get('admin/stale-participants-stats')
   async getStaleParticipantsStats(@Query('thresholdSeconds') thresholdSeconds: string = '90') {
     const threshold = parseInt(thresholdSeconds, 10);

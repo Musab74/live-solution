@@ -11,14 +11,14 @@ export class PresenceCleanupService {
   ) {}
 
   /**
-   * Run every 2 minutes to clean up stale participants
+   * Run every 3 minutes to clean up stale participants
    * This ensures no ghost participants remain even if WebSocket disconnect is missed
-   * Using 90-second threshold to match heartbeat timeout
+   * Using 150-second threshold to allow for heartbeat grace period
    */
-  @Cron('0 */2 * * * *') // Every 2 minutes
+  @Cron('0 */3 * * * *') // Every 3 minutes
   async cleanupStaleParticipants() {
     try {
-      const cleanedCount = await this.participantService.cleanupStaleParticipants(90); // 90 seconds threshold - matches heartbeat timeout
+      const cleanedCount = await this.participantService.cleanupStaleParticipants(150); // 150 seconds threshold - allows for heartbeat grace period
       
       if (cleanedCount > 0) {
         this.logger.log(`[CLEANUP] Cleaned up ${cleanedCount} stale participants`);
