@@ -92,15 +92,14 @@ export class ParticipantService {
     console.log(`[DEBUG] getParticipantsByMeeting - Meeting found: ${meeting.title}, participantCount: ${meeting.participantCount}`);
 
     // Query participants with proper ObjectId conversion and populate user data
-    // For hosts: return all participants (including WAITING) for management
-    // For participants: only return admitted participants
+    // FIXED: ALL participants see the same list (only ADMITTED participants)
+    // This ensures consistent participant counts across all users
+    // Hosts can see WAITING participants separately via getWaitingParticipants query
     // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
     const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
     const isCurrentHost = meeting.currentHostId ? MeetingUtils.isMeetingHost(meeting.currentHostId, userId) : false;
     const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
-    const statusFilter = isHost
-      ? { $in: [ParticipantStatus.WAITING, ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] } // Host sees all active participants
-      : { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] }; // Participants only see admitted ones
+    const statusFilter = { $in: [ParticipantStatus.ADMITTED, ParticipantStatus.APPROVED] }; // FIXED: All users see only admitted participants
 
     console.log(`[DEBUG] getParticipantsByMeeting - Host detection: meeting.hostId:`, meeting.hostId, 'userId:', userId, 'isHost:', isHost);
 
