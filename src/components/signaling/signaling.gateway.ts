@@ -6,6 +6,7 @@ import {
   ConnectedSocket,
   OnGatewayConnection,
   OnGatewayDisconnect,
+  OnGatewayInit,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
 import { UseGuards } from '@nestjs/common';
@@ -28,12 +29,19 @@ interface AuthenticatedSocket extends Socket {
 
 @WebSocketGateway({
   cors: {
-    origin: '*',
+    origin: [
+      'https://live.hrdeedu.co.kr',
+      'https://api.hrdeedu.co.kr',
+      'http://localhost:3000',
+      'http://localhost:3001'
+    ],
+    credentials: true,
   },
   namespace: '/signaling',
+  transports: ['websocket', 'polling'],
 })
 export class SignalingGateway
-  implements OnGatewayConnection, OnGatewayDisconnect
+  implements OnGatewayConnection, OnGatewayDisconnect, OnGatewayInit
 {
   @WebSocketServer()
   server: Server;
@@ -52,6 +60,8 @@ export class SignalingGateway
     private participantService: ParticipantService,
     private chatService: ChatService,
   ) {
+    console.log('🔌 [SIGNALING_GATEWAY] Constructor called - Gateway initializing...');
+    
     // Listen for global meeting start events
     if ((global as any).meetingStartEmitter) {
       (global as any).meetingStartEmitter.on('meetingStarted', (meetingId: string) => {
@@ -60,6 +70,14 @@ export class SignalingGateway
       });
       console.log('[SIGNALING_GATEWAY] Registered global meeting start event listener');
     }
+    
+    console.log('✅ [SIGNALING_GATEWAY] Gateway constructor completed');
+  }
+
+  afterInit(server: Server) {
+    console.log('🚀 [SIGNALING_GATEWAY] Gateway afterInit called - WebSocket server ready');
+    console.log('🚀 [SIGNALING_GATEWAY] Namespace /signaling is now active');
+    this.server = server;
   }
 
   async handleConnection(client: AuthenticatedSocket) {

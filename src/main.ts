@@ -42,7 +42,9 @@ async function bootstrap() {
   app.use('/uploads', express.static('./uploads'));
 
   // WebSocket adapter
+  console.log('🔌 Configuring Socket.IO adapter...');
   app.useWebSocketAdapter(new IoAdapter(app));
+  console.log('✅ Socket.IO adapter configured successfully');
 
   // Health check endpoint using Express instance
   const expressApp = app.getHttpAdapter().getInstance();
@@ -56,12 +58,27 @@ async function bootstrap() {
     });
   });
 
+  // Add Socket.IO endpoint health check
+  expressApp.get('/socket.io/health', (req, res) => {
+    res.json({
+      status: 'Socket.IO server active',
+      timestamp: new Date().toISOString(),
+      namespaces: ['/signaling'],
+    });
+  });
+
   await app.listen(process.env.PORT ?? 3007);
   console.log(
     `Application is running on: http://localhost:${process.env.PORT ?? 3007}`,
   );
   console.log(
     `GraphQL endpoint: http://localhost:${process.env.PORT ?? 3007}/graphql`,
+  );
+  console.log(
+    `Socket.IO endpoint: http://localhost:${process.env.PORT ?? 3007}/socket.io/`,
+  );
+  console.log(
+    `WebSocket signaling: ws://localhost:${process.env.PORT ?? 3007}/signaling`,
   );
 }
 bootstrap();
