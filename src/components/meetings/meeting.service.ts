@@ -40,9 +40,6 @@ export class MeetingService {
 
   // CREATE MEETING
   async createMeeting(createInput: CreateMeetingInput, userId: string) {
-    this.logger.log(
-      `[CREATE_MEETING] Attempt - User ID: ${userId}, Title: ${createInput.title}`,
-    );
 
     try {
       const {
@@ -102,10 +99,6 @@ export class MeetingService {
 
       await savedMeeting.populate('hostId', 'email displayName systemRole');
 
-      this.logger.log(
-        `[CREATE_MEETING] Success - Meeting ID: ${savedMeeting._id}, Invite Code: ${inviteCode}`,
-      );
-
       return {
         _id: savedMeeting._id,
         title: savedMeeting.title,
@@ -133,9 +126,6 @@ export class MeetingService {
 
   // GET MEETINGS
   async getMeetings(queryInput: MeetingQueryInput, userId: string) {
-    this.logger.log(
-      `[GET_MEETINGS] Attempt - User ID: ${userId}, Page: ${queryInput.page}, Limit: ${queryInput.limit}`,
-    );
 
     try {
       const { page = 1, limit = 10, status, search, hostId } = queryInput;
@@ -155,33 +145,23 @@ export class MeetingService {
         // This allows members to see all meetings in the system
         const userObjectId = new Types.ObjectId(userId);
         
-        this.logger.log(`[GET_MEETINGS] DEBUG: Showing ALL meetings for member user ${userId}`);
         
         // Get user info to check if they are a member
         const user = await this.memberModel.findById(userId);
-        this.logger.log(`[GET_MEETINGS] DEBUG: User lookup result:`, user ? {
-          _id: user._id,
-          email: user.email,
-          systemRole: user.systemRole
-        } : 'User not found');
         
         if (user && user.systemRole === 'MEMBER') {
           // For members, show all meetings (no filter)
-          this.logger.log(`[GET_MEETINGS] User ${userId} is a MEMBER - showing all meetings`);
           // Don't add any filter - this will return all meetings
           // Set a flag to indicate this is a member query
           filter._isMemberQuery = true;
         } else {
           // For non-members (tutors, admins), show meetings where they are host or participant
-          this.logger.log(`[GET_MEETINGS] User ${userId} is not a member - showing host/participant meetings only`);
           
           // Get meeting IDs where user is a participant
           const participantMeetings = await this.participantModel.distinct('meetingId', {
             userId: userObjectId,
             status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED] }
           });
-
-          this.logger.log(`[GET_MEETINGS] DEBUG: Found ${participantMeetings.length} participant meetings:`, participantMeetings);
 
           // Also check what meetings exist where user is host
           const hostMeetings = await this.meetingModel.find({
@@ -191,22 +171,12 @@ export class MeetingService {
             ]
           }).select('_id title hostId currentHostId');
 
-          this.logger.log(`[GET_MEETINGS] DEBUG: Found ${hostMeetings.length} host meetings:`, hostMeetings.map(m => ({
-            _id: m._id,
-            title: m.title,
-            hostId: m.hostId,
-            currentHostId: m.currentHostId
-          })));
-
           filter.$or = [
             { hostId: userObjectId }, // Original tutor/creator
             { currentHostId: userObjectId }, // Current host
             { _id: { $in: participantMeetings } } // Meetings where user is a participant
           ];
           
-          this.logger.log(
-            `[GET_MEETINGS] Showing meetings for user ${userId} (host or participant). Found ${participantMeetings.length} meetings as participant, ${hostMeetings.length} as host`,
-          );
         }
       }
 
@@ -221,7 +191,6 @@ export class MeetingService {
         
         if (filter._isMemberQuery) {
           // For member queries, just apply the search filter directly
-          this.logger.log(`[GET_MEETINGS] Applying search filter for member query`);
           delete filter._isMemberQuery; // Remove the flag
           filter.$or = searchFilter.$or;
         } else if (filter.$or) {
@@ -236,15 +205,12 @@ export class MeetingService {
         }
       } else if (filter._isMemberQuery) {
         // For member queries without search, remove the flag and don't add any filter
-        this.logger.log(`[GET_MEETINGS] Member query without search - showing all meetings`);
         delete filter._isMemberQuery;
       }
       
       // Debug: Log the final filter before querying
-      this.logger.log(`[GET_MEETINGS] DEBUG: Final filter before query:`, JSON.stringify(filter, null, 2));
 
       // Get meetings with pagination
-      this.logger.log(`[GET_MEETINGS] DEBUG: Final filter applied:`, JSON.stringify(filter, null, 2));
       
       const meetings = await this.meetingModel
         .find(filter)
@@ -254,20 +220,11 @@ export class MeetingService {
         .skip(skip)
         .limit(limit);
 
-      this.logger.log(`[GET_MEETINGS] DEBUG: Query returned ${meetings.length} meetings:`, meetings.map(m => ({
-        _id: m._id,
-        title: m.title,
-        hostId: m.hostId,
-        currentHostId: m.currentHostId,
-        participantCount: m.participantCount
-      })));
-
       // 🔧 FIX: Handle existing meetings without currentHostId
       // For meetings created before the currentHostId field was added
       const meetingsToUpdate = meetings.filter(meeting => !meeting.currentHostId);
       
       if (meetingsToUpdate.length > 0) {
-        this.logger.log(`[GET_MEETINGS] Found ${meetingsToUpdate.length} meetings without currentHostId, updating...`);
         
         // Batch update all meetings without currentHostId
         const updatePromises = meetingsToUpdate.map(meeting => 
@@ -283,18 +240,9 @@ export class MeetingService {
           meeting.currentHostId = meeting.hostId;
         });
         
-        this.logger.log(`[GET_MEETINGS] Updated ${meetingsToUpdate.length} meetings with currentHostId = hostId`);
       }
 
       // 🔧 DEBUG: Log the filter and results for dashboard debugging
-      this.logger.log(`[GET_MEETINGS] Filter applied:`, JSON.stringify(filter, null, 2));
-      this.logger.log(`[GET_MEETINGS] Found ${meetings.length} meetings:`, meetings.map(m => ({
-        _id: m._id,
-        title: m.title,
-        status: m.status,
-        hostId: m.hostId,
-        currentHostId: m.currentHostId
-      })));
 
       // Get total count
       const total = await this.meetingModel.countDocuments(filter);
@@ -325,10 +273,6 @@ export class MeetingService {
         };
       });
 
-      this.logger.log(
-        `[GET_MEETINGS] Success - Found ${meetings.length} meetings, Total: ${total}`,
-      );
-
       return {
         meetings: mappedMeetings,
         total,
@@ -348,7 +292,6 @@ export class MeetingService {
   // GET MEETING BY ID
   async getMeetingByIdPublic(meetingId: string): Promise<any> {
     try {
-      this.logger.log(`[GET_MEETING_BY_ID_PUBLIC] Attempt - Meeting ID: ${meetingId}`);
 
       const meeting = await this.meetingModel
         .findById(meetingId)
@@ -358,8 +301,6 @@ export class MeetingService {
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
       }
-
-      this.logger.log(`[GET_MEETING_BY_ID_PUBLIC] Success - Meeting ID: ${meetingId}`);
 
       // Transform the meeting object to ensure hostId is a string, not populated object
       const transformedMeeting = {
@@ -376,9 +317,6 @@ export class MeetingService {
   }
 
   async getMeetingById(meetingId: string, userId: string): Promise<any> {
-    this.logger.log(
-      `[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -407,17 +345,9 @@ export class MeetingService {
           currentHostId: meeting.hostId
         });
         meeting.currentHostId = meeting.hostId;
-        this.logger.log(`[GET_MEETING_BY_ID] Updated meeting ${meetingId} with currentHostId = hostId`);
       }
 
       // Debug logging
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId: ${JSON.stringify(meeting.hostId)}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.currentHostId: ${JSON.stringify(meeting.currentHostId)}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - userId type: ${typeof userId}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - user.systemRole: ${user.systemRole}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id: ${meeting.hostId?._id}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - comparison: ${meeting.hostId?._id?.toString()} === ${userId.toString()} = ${meeting.hostId?._id?.toString() === userId.toString()}`);
 
       // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
       const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
@@ -425,23 +355,11 @@ export class MeetingService {
       const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - isOriginalHost: ${isOriginalHost}, isCurrentHost: ${isCurrentHost}, isHost: ${isHost}, isAdmin: ${isAdmin}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - meeting.hostId._id.toString(): ${meeting.hostId?._id?.toString()}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - userId: ${userId}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - Are they equal? ${meeting.hostId?._id?.toString() === userId}`);
-
       // Debug character codes to find hidden characters
       const hostIdStr = meeting.hostId?._id?.toString() || '';
       const userIdStr = String(userId || '');
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.length: ${hostIdStr.length}, userIdStr.length: ${userIdStr.length}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.charCodeAt(0): ${hostIdStr.charCodeAt(0)}, userIdStr.charCodeAt(0): ${userIdStr.charCodeAt(0)}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - hostIdStr.charCodeAt(23): ${hostIdStr.charCodeAt(23)}, userIdStr.charCodeAt(23): ${userIdStr.charCodeAt(23)}`);
 
       // Try different comparison methods
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - === comparison: ${hostIdStr === userIdStr}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - == comparison: ${hostIdStr == userIdStr}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - trim() comparison: ${hostIdStr.trim() === userIdStr.trim()}`);
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - JSON.stringify comparison: ${JSON.stringify(hostIdStr) === JSON.stringify(userIdStr)}`);
 
       if (!isAdmin && !isHost) {
         // Check if user is a participant in this meeting
@@ -459,10 +377,7 @@ export class MeetingService {
         }
       }
 
-      this.logger.log(`[GET_MEETING_BY_ID] Success - Meeting ID: ${meetingId}`);
-
       // Debug the meeting data before transformation
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - Raw meeting data:`, JSON.stringify(meeting, null, 2));
 
       // Transform the meeting object to ensure hostId is a string, not populated object
       const transformedMeeting = {
@@ -472,7 +387,6 @@ export class MeetingService {
       };
 
       // Debug the transformed data
-      this.logger.log(`[GET_MEETING_BY_ID] Debug - Transformed meeting data:`, JSON.stringify(transformedMeeting, null, 2));
 
       return transformedMeeting;
     } catch (error) {
@@ -486,9 +400,6 @@ export class MeetingService {
 
   // JOIN MEETING BY CODE
   async joinMeetingByCode(joinInput: JoinMeetingInput, userId: string) {
-    this.logger.log(
-      `[JOIN_MEETING_BY_CODE] Attempt - Invite Code: ${joinInput.inviteCode}, User ID: ${userId}`,
-    );
 
     try {
       const { inviteCode, passcode } = joinInput;
@@ -526,21 +437,7 @@ export class MeetingService {
       // Get user info
       const user = await this.memberModel.findById(userId).lean();
 
-      this.logger.log(
-        `[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${meeting._id}, User: ${user.email}`,
-      );
-
       // Debug the meeting object
-      this.logger.log(`[JOIN_MEETING_BY_CODE] Debug - Meeting object:`, JSON.stringify({
-        _id: meeting._id,
-        title: meeting.title,
-        status: meeting.status,
-        inviteCode: meeting.inviteCode,
-        isPrivate: meeting.isPrivate,
-        isLocked: meeting.isLocked,
-        participantCount: meeting.participantCount,
-        hostId: meeting.hostId
-      }, null, 2));
 
       // Ensure all required fields are present for MeetingWithHost
       const meetingData = {
@@ -568,8 +465,6 @@ export class MeetingService {
         },
       };
 
-      this.logger.log(`[JOIN_MEETING_BY_CODE] Debug - Final meeting data:`, JSON.stringify(meetingData, null, 2));
-
       return {
         meeting: meetingData,
         user: {
@@ -594,9 +489,6 @@ export class MeetingService {
     updateInput: UpdateMeetingInput,
     userId: string,
   ) {
-    this.logger.log(
-      `[UPDATE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -700,10 +592,6 @@ export class MeetingService {
         'email displayName systemRole avatarUrl',
       );
 
-      this.logger.log(
-        `[UPDATE_MEETING] Success - Meeting ID: ${meetingId}, Changes: [${changes.join(', ')}]`,
-      );
-
       return {
         _id: meeting._id,
         title: meeting.title,
@@ -734,9 +622,6 @@ export class MeetingService {
 
   // START MEETING
   async startMeeting(meetingId: string, userId: string) {
-    this.logger.log(
-      `[START_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -754,14 +639,7 @@ export class MeetingService {
       // Check permissions
       const user = await this.memberModel.findById(userId);
 
-      // Debug logging
-      console.log(`[DEBUG] startMeeting - meeting.hostId:`, JSON.stringify(meeting.hostId));
-      console.log(`[DEBUG] startMeeting - userId:`, userId);
-      console.log(`[DEBUG] startMeeting - meeting.hostId._id:`, meeting.hostId._id);
-      console.log(`[DEBUG] startMeeting - meeting.hostId._id.toString():`, meeting.hostId._id.toString());
-      console.log(`[DEBUG] startMeeting - userId.toString():`, userId.toString());
-      console.log(`[DEBUG] startMeeting - comparison:`, meeting.hostId._id.toString() === userId.toString());
-      console.log(`[DEBUG] startMeeting - user.systemRole:`, user.systemRole);
+      // Debug logging removed
 
       // 🔧 FIX: Check both original host (hostId) and current host (currentHostId)
       const isOriginalHost = MeetingUtils.isMeetingHost(meeting.hostId, userId);
@@ -769,10 +647,8 @@ export class MeetingService {
       const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
-      console.log(`[DEBUG] startMeeting - isOriginalHost: ${isOriginalHost}, isCurrentHost: ${isCurrentHost}, isHost: ${isHost}, isAdmin: ${isAdmin}`);
-
       if (!isAdmin && !isHost) {
-        console.log(`[DEBUG] startMeeting - THROWING FORBIDDEN EXCEPTION`);
+
         throw new ForbiddenException(
           'Only the meeting host can start the meeting',
         );
@@ -785,7 +661,6 @@ export class MeetingService {
 
       // 🔧 FIX: Don't delete participants when meeting starts!
       // This was causing participants to disappear from the list
-      this.logger.log(`[START_MEETING] Meeting ${meetingId} started successfully without clearing participants`);
 
       // FIXED: Send WebSocket notification to all waiting participants
       // Notify the participant service to trigger WebSocket notifications
@@ -799,8 +674,6 @@ export class MeetingService {
           meetingId: new Types.ObjectId(meetingId),
           status: ParticipantStatus.WAITING
         });
-
-        this.logger.log(`[START_MEETING] Found ${waitingParticipants.length} waiting participants`);
 
         // Admit all waiting participants
         const now = new Date();
@@ -821,7 +694,6 @@ export class MeetingService {
           });
         }
 
-        this.logger.log(`[START_MEETING] Admitted ${waitingParticipants.length} waiting participants for meeting ${meetingId}`);
       } catch (error) {
         this.logger.warn(`[START_MEETING] Failed to admit waiting participants: ${error.message}`);
         // Don't fail the meeting start if participant admission fails
@@ -830,13 +702,10 @@ export class MeetingService {
       // Fix: Create LiveKit room when meeting starts
       try {
         await this.livekitService.createRoom(meetingId, 50); // Create room with max 50 participants
-        this.logger.log(`[START_MEETING] LiveKit room created for meeting ${meetingId}`);
       } catch (error) {
         this.logger.error(`[START_MEETING] Failed to create LiveKit room: ${error.message}`);
         // Don't fail the meeting start if LiveKit fails
       }
-
-      this.logger.log(`[START_MEETING] Success - Meeting ID: ${meetingId}`);
 
       // Return the full meeting object as expected by MeetingWithHost
       return {
@@ -867,7 +736,6 @@ export class MeetingService {
 
   // END MEETING (close all participants + sessions)
   async endMeeting(meetingId: string, userId: string) {
-    this.logger.log(`[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`);
 
     try {
       if (!Types.ObjectId.isValid(meetingId)) {
@@ -908,8 +776,6 @@ export class MeetingService {
         const durationMs = meeting.endedAt.getTime() - meeting.actualStartAt.getTime();
         meeting.durationMin = Math.round(durationMs / (1000 * 60));
       }
-
-      this.logger.log(`[END_MEETING] Meeting status updated to ENDED - Meeting ID: ${meetingId}, Status: ${meeting.status}, EndedAt: ${meeting.endedAt}`);
 
       // 2) Mark ALL participants as LEFT and close any open sessions
       const now = new Date();
@@ -955,10 +821,6 @@ export class MeetingService {
       meeting.participantCount = 0;
 
       await meeting.save();
-
-      this.logger.log(
-        `[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${meeting.durationMin ?? 0} minutes, Closed participants: ${updates.length}`
-      );
 
       // 4) (Optional) publish subscriptions so UIs react immediately
       // await this.pubSub.publish('meetingUpdated', { meetingUpdated: { _id: meeting._id, status: meeting.status, endedAt: meeting.endedAt, durationMin: meeting.durationMin, participantCount: meeting.participantCount } });
@@ -1013,12 +875,8 @@ export class MeetingService {
     }
   }
 
-
   // DELETE MEETING
   async deleteMeeting(meetingId: string, userId: string) {
-    this.logger.log(
-      `[DELETE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -1044,8 +902,6 @@ export class MeetingService {
 
       await this.meetingModel.findByIdAndDelete(meetingId);
 
-      this.logger.log(`[DELETE_MEETING] Success - Meeting ID: ${meetingId}`);
-
       return {
         success: true,
         message: 'Meeting deleted successfully',
@@ -1060,9 +916,6 @@ export class MeetingService {
 
   // ROTATE INVITE CODE
   async rotateInviteCode(meetingId: string, userId: string) {
-    this.logger.log(
-      `[ROTATE_INVITE_CODE] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -1093,10 +946,6 @@ export class MeetingService {
       meeting.inviteCode = newInviteCode;
       await meeting.save();
 
-      this.logger.log(
-        `[ROTATE_INVITE_CODE] Success - Meeting ID: ${meetingId}, New Code: ${newInviteCode}`,
-      );
-
       return {
         _id: meeting._id,
         inviteCode: newInviteCode,
@@ -1112,7 +961,6 @@ export class MeetingService {
 
   // GET MEETING STATS
   async getMeetingStats(userId: string) {
-    this.logger.log(`[GET_MEETING_STATS] Attempt - User ID: ${userId}`);
 
     try {
       const user = await this.memberModel.findById(userId);
@@ -1155,10 +1003,6 @@ export class MeetingService {
         averageDuration: 0,
       };
 
-      this.logger.log(
-        `[GET_MEETING_STATS] Success - Total Meetings: ${result.totalMeetings}`,
-      );
-
       return result;
     } catch (error) {
       this.logger.error(
@@ -1170,9 +1014,6 @@ export class MeetingService {
 
   // LOCK ROOM
   async lockRoom(meetingId: string, userId: string) {
-    this.logger.log(
-      `[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -1205,10 +1046,6 @@ export class MeetingService {
       meeting.isLocked = true;
       await meeting.save();
 
-      this.logger.log(
-        `[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`,
-      );
-
       return {
         _id: meeting._id,
         isLocked: meeting.isLocked,
@@ -1224,9 +1061,6 @@ export class MeetingService {
 
   // UNLOCK ROOM
   async unlockRoom(meetingId: string, userId: string) {
-    this.logger.log(
-      `[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -1260,10 +1094,6 @@ export class MeetingService {
       // Unlock the room
       meeting.isLocked = false;
       await meeting.save();
-
-      this.logger.log(
-        `[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${meeting.isLocked}`,
-      );
 
       return {
         _id: meeting._id,

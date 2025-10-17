@@ -58,7 +58,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = savedUser.toObject();
 
-    this.logger.log(`[USER_SIGNUP] Success - Email: ${email}, Role: MEMBER`);
 
     return {
       user: userWithoutPassword,
@@ -98,7 +97,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = savedUser.toObject();
 
-    this.logger.log(`[TUTOR_SIGNUP] Success - Email: ${email}, Role: TUTOR`);
 
     return {
       user: userWithoutPassword,
@@ -178,9 +176,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = user.toObject();
 
-    this.logger.log(
-      `[TUTOR_LOGIN] Success - Email: ${email}, Role: ${user.systemRole}`,
-    );
 
     return {
       user: userWithoutPassword,
@@ -222,9 +217,6 @@ export class MemberService {
     // Return user data without password
     const { passwordHash: _, ...userWithoutPassword } = user.toObject();
 
-    this.logger.log(
-      `[ADMIN_LOGIN] Success - Email: ${email}, Role: ${user.systemRole}`,
-    );
 
     return {
       user: userWithoutPassword,
@@ -411,9 +403,6 @@ export class MemberService {
 
   // ADMIN: PROMOTE USER ROLE
   async promoteUserRole(userId: string, newRole: SystemRole, adminId: string) {
-    this.logger.log(
-      `[PROMOTE_USER_ROLE] Attempt - User ID: ${userId}, New Role: ${newRole}, Admin ID: ${adminId}`,
-    );
 
     try {
       // Verify admin has permission
@@ -433,9 +422,6 @@ export class MemberService {
       user.systemRole = newRole;
       await user.save();
 
-      this.logger.log(
-        `[PROMOTE_USER_ROLE] Success - User ID: ${userId}, ${oldRole} → ${newRole}`,
-      );
       return {
         success: true,
         message: `User role updated from ${oldRole} to ${newRole}`,
@@ -456,9 +442,6 @@ export class MemberService {
 
   // ADMIN: DELETE USER
   async deleteUser(userId: string, adminId: string) {
-    this.logger.log(
-      `[DELETE_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}`,
-    );
 
     try {
       // Verify admin has permission
@@ -486,9 +469,6 @@ export class MemberService {
       // Delete user
       await this.memberModel.findByIdAndDelete(userId);
 
-      this.logger.log(
-        `[DELETE_USER] Success - User ID: ${userId}, Email: ${user.email}`,
-      );
       return {
         success: true,
         message: `User ${user.email} deleted successfully`,
@@ -503,9 +483,6 @@ export class MemberService {
 
   // ADMIN: BLOCK USER
   async blockUser(userId: string, adminId: string, reason?: string) {
-    this.logger.log(
-      `[BLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}, Reason: ${reason || 'No reason provided'}`,
-    );
 
     try {
       // Verify admin has permission
@@ -537,9 +514,6 @@ export class MemberService {
       user.blockReason = reason || 'No reason provided';
       await user.save();
 
-      this.logger.log(
-        `[BLOCK_USER] Success - User ID: ${userId}, Email: ${user.email}`,
-      );
       return {
         success: true,
         message: `User ${user.email} blocked successfully`,
@@ -563,9 +537,6 @@ export class MemberService {
 
   // ADMIN: UNBLOCK USER
   async unblockUser(userId: string, adminId: string) {
-    this.logger.log(
-      `[UNBLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${adminId}`,
-    );
 
     try {
       // Verify admin has permission
@@ -594,9 +565,6 @@ export class MemberService {
       user.blockReason = undefined;
       await user.save();
 
-      this.logger.log(
-        `[UNBLOCK_USER] Success - User ID: ${userId}, Email: ${user.email}`,
-      );
       return {
         success: true,
         message: `User ${user.email} unblocked successfully`,
@@ -619,9 +587,6 @@ export class MemberService {
 
   // CREATE FIRST ADMIN (for initial setup only)
   async createFirstAdmin(adminInput: MemberInput) {
-    this.logger.log(
-      `[CREATE_FIRST_ADMIN] Attempt - Email: ${adminInput.email}`,
-    );
 
     try {
       const { email, password, displayName, department, phone } = adminInput;
@@ -661,9 +626,6 @@ export class MemberService {
       // Generate JWT token
       const token = await this.authService.createToken(savedAdmin);
 
-      this.logger.log(
-        `[CREATE_FIRST_ADMIN] Success - Admin ID: ${savedAdmin._id}, Email: ${email}`,
-      );
 
       return {
         token,

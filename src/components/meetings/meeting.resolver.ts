@@ -118,16 +118,10 @@ export class MeetingResolver {
     @Args('input') queryInput: MeetingQueryInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[GET_MEETINGS] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.getMeetings(
         queryInput,
         user._id,
-      );
-      this.logger.log(
-        `[GET_MEETINGS] Success - User ID: ${user._id}, Count: ${result.meetings.length}`,
       );
       return result;
     } catch (error) {
@@ -144,16 +138,10 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<any> {
-    this.logger.log(
-      `[GET_MEETING_BY_ID] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.getMeetingById(
         meetingId,
         user._id,
-      );
-      this.logger.log(
-        `[GET_MEETING_BY_ID] Success - Meeting ID: ${meetingId}, Title: ${result.title}`,
       );
       return result;
     } catch (error) {
@@ -166,7 +154,6 @@ export class MeetingResolver {
         this.logger.warn(`[GET_MEETING_BY_ID] Permission denied, trying public access for meeting ${meetingId}`);
         try {
           const result = await this.meetingService.getMeetingByIdPublic(meetingId);
-          this.logger.log(`[GET_MEETING_BY_ID] Public access success - Meeting ID: ${meetingId}, Title: ${result.title}`);
           return result;
         } catch (publicError) {
           this.logger.error(`[GET_MEETING_BY_ID] Public access also failed - Meeting ID: ${meetingId}, Error: ${publicError.message}`);
@@ -181,14 +168,8 @@ export class MeetingResolver {
   @Query(() => MeetingStats, { name: 'getMeetingStats' })
   @UseGuards(AuthGuard)
   async getMeetingStats(@AuthMember() user: Member) {
-    this.logger.log(
-      `[GET_MEETING_STATS] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.getMeetingStats(user._id);
-      this.logger.log(
-        `[GET_MEETING_STATS] Success - User ID: ${user._id}, Total Meetings: ${result.totalMeetings}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -207,16 +188,10 @@ export class MeetingResolver {
     @Args('input') createInput: CreateMeetingInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[CREATE_MEETING] Attempt - User ID: ${user._id}, Email: ${user.email}, Title: ${createInput.title}`,
-    );
     try {
       const result = await this.meetingService.createMeeting(
         createInput,
         user._id,
-      );
-      this.logger.log(
-        `[CREATE_MEETING] Success - User ID: ${user._id}, Meeting ID: ${result._id}, Invite Code: ${result.inviteCode}`,
       );
       return result;
     } catch (error) {
@@ -234,17 +209,11 @@ export class MeetingResolver {
     @Args('input') updateInput: UpdateMeetingInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[UPDATE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.updateMeeting(
         meetingId,
         updateInput,
         user._id,
-      );
-      this.logger.log(
-        `[UPDATE_MEETING] Success - Meeting ID: ${meetingId}, Title: ${result.title}`,
       );
       return result;
     } catch (error) {
@@ -261,16 +230,10 @@ export class MeetingResolver {
     @Args('input') joinInput: JoinMeetingInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[JOIN_MEETING_BY_CODE] Attempt - Invite Code: ${joinInput.inviteCode}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.joinMeetingByCode(
         joinInput,
         user._id,
-      );
-      this.logger.log(
-        `[JOIN_MEETING_BY_CODE] Success - Meeting ID: ${result.meeting._id}, User: ${user.email}`,
       );
       
       // Transform to SimpleMeetingInfo
@@ -313,16 +276,10 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[START_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.startMeeting(
         meetingId,
         user._id,
-      );
-      this.logger.log(
-        `[START_MEETING] Success - Meeting ID: ${meetingId}, Status: ${result.status}`,
       );
       return result;
     } catch (error) {
@@ -339,14 +296,8 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[END_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.endMeeting(meetingId, user._id);
-      this.logger.log(
-        `[END_MEETING] Success - Meeting ID: ${meetingId}, Duration: ${result.durationMin} minutes`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -362,15 +313,11 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[DELETE_MEETING] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.deleteMeeting(
         meetingId,
         user._id,
       );
-      this.logger.log(`[DELETE_MEETING] Success - Meeting ID: ${meetingId}`);
       return result;
     } catch (error) {
       this.logger.error(
@@ -386,16 +333,10 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[ROTATE_INVITE_CODE] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.rotateInviteCode(
         meetingId,
         user._id,
-      );
-      this.logger.log(
-        `[ROTATE_INVITE_CODE] Success - Meeting ID: ${meetingId}, New Code: ${result.inviteCode}`,
       );
       return result;
     } catch (error) {
@@ -412,14 +353,8 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[LOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.lockRoom(meetingId, user._id);
-      this.logger.log(
-        `[LOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -435,14 +370,8 @@ export class MeetingResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[UNLOCK_ROOM] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.meetingService.unlockRoom(meetingId, user._id);
-      this.logger.log(
-        `[UNLOCK_ROOM] Success - Meeting ID: ${meetingId}, Locked: ${result.isLocked}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(

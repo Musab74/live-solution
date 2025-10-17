@@ -37,9 +37,6 @@ export class RecordingService {
     input: StartMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-    this.logger.log(
-      `[START_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -99,10 +96,6 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(
-        `[START_RECORDING] Success - Meeting ID: ${input.meetingId}, Recording ID: ${recordingId}`,
-      );
-
       return {
         success: true,
         message: 'Recording started successfully',
@@ -132,9 +125,6 @@ export class RecordingService {
     input: StopMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-    this.logger.log(
-      `[STOP_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -187,10 +177,6 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(
-        `[STOP_RECORDING] Success - Meeting ID: ${input.meetingId}, Duration: ${meeting.recordingDuration}s`,
-      );
-
       return {
         success: true,
         message: 'Recording stopped successfully',
@@ -221,9 +207,6 @@ export class RecordingService {
     input: PauseMeetingRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-    this.logger.log(
-      `[PAUSE_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -268,10 +251,6 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(
-        `[PAUSE_RECORDING] Success - Meeting ID: ${input.meetingId}, Paused at: ${now}`,
-      );
-
       return {
         success: true,
         message: 'Recording paused successfully',
@@ -300,9 +279,6 @@ export class RecordingService {
     input: ResumeRecordingInput,
     userId: string,
   ): Promise<RecordingResponse> {
-    this.logger.log(
-      `[RESUME_RECORDING] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -349,10 +325,6 @@ export class RecordingService {
 
       await meeting.save();
 
-      this.logger.log(
-        `[RESUME_RECORDING] Success - Meeting ID: ${input.meetingId}, Resumed at: ${now}`,
-      );
-
       return {
         success: true,
         message: 'Recording resumed successfully',
@@ -381,9 +353,6 @@ export class RecordingService {
     input: GetRecordingInput,
     userId: string,
   ): Promise<MeetingRecordingInfo> {
-    this.logger.log(
-      `[GET_RECORDING_INFO] Attempt - Meeting ID: ${input.meetingId}, User ID: ${userId}`,
-    );
 
     try {
       // Validate ObjectId format
@@ -400,11 +369,7 @@ export class RecordingService {
 
       // Check permissions
       const user = await this.memberModel.findById(userId);
-      
-      console.log(`[GET_RECORDING_INFO] Debug - Meeting hostId: ${meeting.hostId}, User ID: ${userId}`);
-      console.log(`[GET_RECORDING_INFO] Debug - Are they equal? ${meeting.hostId.toString() === userId}`);
-      console.log(`[GET_RECORDING_INFO] Debug - User role: ${user.systemRole}`);
-      
+
       // Fix: Use proper string comparison
       const isHost = meeting.hostId && meeting.hostId.toString() === userId;
       const isAdmin = user.systemRole === SystemRole.ADMIN;
@@ -414,10 +379,6 @@ export class RecordingService {
           'Only the meeting host can view recording info',
         );
       }
-
-      this.logger.log(
-        `[GET_RECORDING_INFO] Success - Meeting ID: ${input.meetingId}`,
-      );
 
       return {
         meetingId: meeting._id,
@@ -454,7 +415,6 @@ export class RecordingService {
 
   // GET RECORDING STATS
   async getRecordingStats(userId: string): Promise<RecordingStats> {
-    this.logger.log(`[GET_RECORDING_STATS] Attempt - User ID: ${userId}`);
 
     try {
       const user = await this.memberModel.findById(userId);
@@ -486,10 +446,6 @@ export class RecordingService {
         totalRecordings > 0
           ? Math.floor(totalRecordingTime / totalRecordings)
           : 0;
-
-      this.logger.log(
-        `[GET_RECORDING_STATS] Success - Total: ${totalRecordings}, Active: ${activeRecordings}, Paused: ${pausedRecordings}`,
-      );
 
       return {
         totalRecordings,

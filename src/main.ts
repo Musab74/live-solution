@@ -35,16 +35,14 @@ async function bootstrap() {
   //   const { graphqlUploadExpress } = require('graphql-upload');
   //   app.use(graphqlUploadExpress({ maxSize: 50000000, maxFiles: 10 }));
   // } catch (error) {
-  //   console.log('GraphQL upload middleware not available');
   // }
 
   // Static file serving
   app.use('/uploads', express.static('./uploads'));
 
   // WebSocket adapter
-  console.log('🔌 Configuring Socket.IO adapter...');
+
   app.useWebSocketAdapter(new IoAdapter(app));
-  console.log('✅ Socket.IO adapter configured successfully');
 
   // Health check endpoint using Express instance
   const expressApp = app.getHttpAdapter().getInstance();
@@ -68,17 +66,6 @@ async function bootstrap() {
   });
 
   await app.listen(process.env.PORT ?? 3007);
-  console.log(
-    `Application is running on: http://localhost:${process.env.PORT ?? 3007}`,
-  );
-  console.log(
-    `GraphQL endpoint: http://localhost:${process.env.PORT ?? 3007}/graphql`,
-  );
-  console.log(
-    `Socket.IO endpoint: http://localhost:${process.env.PORT ?? 3007}/socket.io/`,
-  );
-  console.log(
-    `WebSocket signaling: ws://localhost:${process.env.PORT ?? 3007}/signaling`,
-  );
+
 }
 bootstrap();

@@ -31,45 +31,18 @@ export class HostValidationUtil {
     meetingId: string,
     currentHostId?: any
   ): Promise<HostValidationResult> {
-    this.logger.debug(`[HOST_VALIDATION] Starting validation:`, {
-      meetingHostId,
-      meetingHostIdType: typeof meetingHostId,
-      meetingHostIdString: meetingHostId?.toString(),
-      currentHostId,
-      currentHostIdType: typeof currentHostId,
-      currentHostIdString: currentHostId?.toString(),
-      userId,
-      userIdType: typeof userId,
-      userIdString: userId?.toString(),
-      userSystemRole,
-      meetingId
-    });
-
     // Method 1: Check if user is admin
     const isAdmin = userSystemRole === 'ADMIN';
-    this.logger.debug(`[HOST_VALIDATION] Admin check: ${isAdmin}`);
 
     // Method 2: Check if user is the original meeting host
     const isMeetingHost = MeetingUtils.isMeetingHost(meetingHostId, userId);
-    this.logger.debug(`[HOST_VALIDATION] Original host check: ${isMeetingHost}`, {
-      meetingHostIdString: meetingHostId?.toString(),
-      userIdString: userId?.toString(),
-      comparison: `${meetingHostId?.toString()} === ${userId?.toString()}`
-    });
 
     // Method 2b: Check if user is the current host (for transferred host)
     const isCurrentHost = currentHostId ? MeetingUtils.isMeetingHost(currentHostId, userId) : false;
-    this.logger.debug(`[HOST_VALIDATION] Current host check: ${isCurrentHost}`, {
-      currentHostIdString: currentHostId?.toString(),
-      userIdString: userId?.toString(),
-      comparison: currentHostId ? `${currentHostId?.toString()} === ${userId?.toString()}` : 'No currentHostId'
-    });
 
     // Method 3: Check if user has HOST role in participants
     let isHostParticipant = false;
     try {
-      this.logger.debug(`[HOST_VALIDATION] Searching for host participant with userId: ${userId}`);
-      
       const hostParticipant = await participantModel.findOne({
         meetingId: new Types.ObjectId(meetingId),
         $or: [
@@ -80,12 +53,6 @@ export class HostValidationUtil {
       });
       
       isHostParticipant = !!hostParticipant;
-      this.logger.debug(`[HOST_VALIDATION] Host participant check: ${isHostParticipant}`, {
-        foundParticipant: !!hostParticipant,
-        participantId: hostParticipant?._id,
-        participantUserId: hostParticipant?.userId,
-        participantRole: hostParticipant?.role
-      });
     } catch (error) {
       this.logger.warn(`[HOST_VALIDATION] Error checking host participant:`, error);
     }
@@ -99,8 +66,6 @@ export class HostValidationUtil {
       isAdmin,
       reason: isAuthorized ? 'User is authorized' : 'User is not authorized to perform this action'
     };
-
-    this.logger.debug(`[HOST_VALIDATION] Final result:`, result);
 
     return result;
   }

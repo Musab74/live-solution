@@ -21,7 +21,6 @@ export class PresenceCleanupService {
       const cleanedCount = await this.participantService.cleanupStaleParticipants(150); // 150 seconds threshold - allows for heartbeat grace period
       
       if (cleanedCount > 0) {
-        this.logger.log(`[CLEANUP] Cleaned up ${cleanedCount} stale participants`);
       }
     } catch (error) {
       this.logger.error(`[CLEANUP] Error during stale participant cleanup: ${error.message}`);
@@ -33,9 +32,7 @@ export class PresenceCleanupService {
    */
   async manualCleanup(thresholdSeconds: number = 90): Promise<number> {
     try {
-      this.logger.log(`[MANUAL_CLEANUP] Starting manual cleanup with ${thresholdSeconds}s threshold`);
       const cleanedCount = await this.participantService.cleanupStaleParticipants(thresholdSeconds);
-      this.logger.log(`[MANUAL_CLEANUP] Manual cleanup completed: ${cleanedCount} participants cleaned`);
       return cleanedCount;
     } catch (error) {
       this.logger.error(`[MANUAL_CLEANUP] Error during manual cleanup: ${error.message}`);
