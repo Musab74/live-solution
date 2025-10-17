@@ -45,7 +45,6 @@
 //   constructor(private readonly authService: AuthService) {}
 
 //   afterInit(server: Server) {
-//     this.logger.log('WS Gateway initialized');
 
 //     server.on('connection', async (socket: WebSocket, req) => {
 //       try {

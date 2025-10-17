@@ -10,10 +10,8 @@ export class HealthResolver {
 
   @Query(() => String, { name: 'health' })
   async getHealth() {
-    this.logger.log(`[HEALTH_CHECK] Attempt`);
     try {
       const health = await this.healthService.getHealth();
-      this.logger.log(`[HEALTH_CHECK] Success - Status: ${health.status}`);
       return JSON.stringify(health, null, 2);
     } catch (error) {
       this.logger.error(`[HEALTH_CHECK] Failed - Error: ${error.message}`);

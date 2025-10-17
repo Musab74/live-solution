@@ -28,19 +28,11 @@ export class LoggingInterceptor implements NestInterceptor {
       const parent = info?.parentType?.name;
 
       // Request log (masked + truncated)
-      this.logger.log(
-        `GQL ${parent}.${field} op=${opName} vars=${this.s(variables)}`,
-        'Request',
-      );
 
       return next.handle().pipe(
         tap({
           next: (res) => {
             const ms = Date.now() - started;
-            this.logger.log(
-              `GQL ${parent}.${field} -> ${this.s(res)} (${ms}ms)\n`,
-              'Response',
-            );
           },
           error: (err) => {
             const ms = Date.now() - started;

@@ -77,14 +77,8 @@ export class MemberResolver {
 
   @Mutation(() => AuthResponse, { name: 'signup' })
   async signup(@Args('input') memberInput: MemberInput) {
-    this.logger.log(
-      `[SIGNUP] Attempt - Email: ${memberInput.email}, DisplayName: ${memberInput.displayName}`,
-    );
     try {
       const result = await this.memberService.signup(memberInput);
-      this.logger.log(
-        `[SIGNUP] Success - User ID: ${result.user._id}, Email: ${result.user.email}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -99,12 +93,8 @@ export class MemberResolver {
     @Args('email') email: string,
     @Args('password') password: string,
   ) {
-    this.logger.log(`[LOGIN] Attempt - Email: ${email}`);
     try {
       const result = await this.memberService.login({ email, password });
-      this.logger.log(
-        `[LOGIN] Success - User ID: ${result.user._id}, Email: ${result.user.email}, Role: ${result.user.systemRole}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -117,14 +107,8 @@ export class MemberResolver {
   @Query(() => Member, { name: 'me' })
   @UseGuards(AuthGuard)
   async getProfile(@AuthMember() user: Member) {
-    this.logger.log(
-      `[GET_PROFILE] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.memberService.getProfile(user._id);
-      this.logger.log(
-        `[GET_PROFILE] Success - User ID: ${result._id}, Email: ${result.email}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -140,16 +124,10 @@ export class MemberResolver {
     @AuthMember() user: Member,
     @Args('input') updateData: UpdateMemberInput,
   ) {
-    this.logger.log(
-      `[UPDATE_PROFILE] Attempt - User ID: ${user._id}, Email: ${user.email}, Fields: ${Object.keys(updateData).join(', ')}`,
-    );
     try {
       const result = await this.memberService.updateProfile(
         user._id,
         updateData,
-      );
-      this.logger.log(
-        `[UPDATE_PROFILE] Success - User ID: ${result._id}, Email: ${result.email}`,
       );
       return result;
     } catch (error) {
@@ -166,17 +144,11 @@ export class MemberResolver {
     @AuthMember() user: Member,
     @Args('input') input: ChangePasswordInputType,
   ) {
-    this.logger.log(
-      `[CHANGE_PASSWORD] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.memberService.changePassword(
         user._id,
         input.currentPassword,
         input.newPassword,
-      );
-      this.logger.log(
-        `[CHANGE_PASSWORD] Success - User ID: ${user._id}, Email: ${user.email}`,
       );
       return result;
     } catch (error) {
@@ -190,10 +162,8 @@ export class MemberResolver {
   @Query(() => [Member], { name: 'members' })
   @UseGuards(AuthGuard)
   async getAllMembers() {
-    this.logger.log(`[GET_ALL_MEMBERS] Attempt`);
     try {
       const result = await this.memberService.getAllMembers();
-      this.logger.log(`[GET_ALL_MEMBERS] Success - Count: ${result.length}`);
       return result;
     } catch (error) {
       this.logger.error(`[GET_ALL_MEMBERS] Failed - Error: ${error.message}`);
@@ -204,10 +174,8 @@ export class MemberResolver {
   @Mutation(() => MessageResponse, { name: 'deleteMember' })
   @UseGuards(AuthGuard)
   async deleteMember(@Args('userId', { type: () => ID }) userId: string) {
-    this.logger.log(`[DELETE_MEMBER] Attempt - User ID: ${userId}`);
     try {
       const result = await this.memberService.deleteMember(userId);
-      this.logger.log(`[DELETE_MEMBER] Success - User ID: ${userId}`);
       return result;
     } catch (error) {
       this.logger.error(
@@ -220,14 +188,8 @@ export class MemberResolver {
   @Mutation(() => LogoutResponse, { name: 'logout' })
   @UseGuards(AuthGuard)
   async logout(@AuthMember() user: Member) {
-    this.logger.log(
-      `[LOGOUT] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.memberService.logout(user._id);
-      this.logger.log(
-        `[LOGOUT] Success - User ID: ${user._id}, Email: ${user.email}, Timestamp: ${result.timestamp}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -243,21 +205,12 @@ export class MemberResolver {
     @Args('file', { type: () => String }) file: any,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[UPLOAD_PROFILE_IMAGE] Attempt - User ID: ${user._id}, Email: ${user.email}, File: ${file?.originalname || file?.filename || 'unknown'}`,
-    );
     try {
       // Log file object structure for debugging
-      this.logger.log(
-        `[UPLOAD_PROFILE_IMAGE] File object keys: ${Object.keys(file || {}).join(', ')}`,
-      );
 
       const result = await this.memberService.uploadProfileImage(
         user._id,
         file,
-      );
-      this.logger.log(
-        `[UPLOAD_PROFILE_IMAGE] Success - User ID: ${user._id}, Avatar URL: ${result.avatarUrl}`,
       );
       return result;
     } catch (error) {
@@ -271,14 +224,8 @@ export class MemberResolver {
   @Mutation(() => ImageUploadResponse, { name: 'deleteProfileImage' })
   @UseGuards(AuthGuard)
   async deleteProfileImage(@AuthMember() user: Member) {
-    this.logger.log(
-      `[DELETE_PROFILE_IMAGE] Attempt - User ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.memberService.deleteProfileImage(user._id);
-      this.logger.log(
-        `[DELETE_PROFILE_IMAGE] Success - User ID: ${user._id}, Email: ${user.email}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -295,17 +242,11 @@ export class MemberResolver {
     @Args('newRole') newRole: string,
     @AuthMember() admin: Member,
   ) {
-    this.logger.log(
-      `[PROMOTE_USER_ROLE] Attempt - User ID: ${userId}, New Role: ${newRole}, Admin ID: ${admin._id}`,
-    );
     try {
       const result = await this.memberService.promoteUserRole(
         userId,
         newRole as any,
         admin._id,
-      );
-      this.logger.log(
-        `[PROMOTE_USER_ROLE] Success - User ID: ${userId}, New Role: ${newRole}`,
       );
       return result;
     } catch (error) {
@@ -322,12 +263,8 @@ export class MemberResolver {
     @Args('userId', { type: () => ID }) userId: string,
     @AuthMember() admin: Member,
   ) {
-    this.logger.log(
-      `[DELETE_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}`,
-    );
     try {
       const result = await this.memberService.deleteUser(userId, admin._id);
-      this.logger.log(`[DELETE_USER] Success - User ID: ${userId}`);
       return result;
     } catch (error) {
       this.logger.error(
@@ -344,16 +281,12 @@ export class MemberResolver {
     @AuthMember() admin: Member,
     @Args('reason', { nullable: true }) reason?: string,
   ) {
-    this.logger.log(
-      `[BLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}, Reason: ${reason || 'No reason provided'}`,
-    );
     try {
       const result = await this.memberService.blockUser(
         userId,
         admin._id,
         reason,
       );
-      this.logger.log(`[BLOCK_USER] Success - User ID: ${userId}`);
       return result;
     } catch (error) {
       this.logger.error(
@@ -369,12 +302,8 @@ export class MemberResolver {
     @Args('userId', { type: () => ID }) userId: string,
     @AuthMember() admin: Member,
   ) {
-    this.logger.log(
-      `[UNBLOCK_USER] Attempt - User ID: ${userId}, Admin ID: ${admin._id}`,
-    );
     try {
       const result = await this.memberService.unblockUser(userId, admin._id);
-      this.logger.log(`[UNBLOCK_USER] Success - User ID: ${userId}`);
       return result;
     } catch (error) {
       this.logger.error(
@@ -386,14 +315,8 @@ export class MemberResolver {
 
   @Mutation(() => AuthResponse, { name: 'createFirstAdmin' })
   async createFirstAdmin(@Args('input') adminInput: MemberInput) {
-    this.logger.log(
-      `[CREATE_FIRST_ADMIN] Attempt - Email: ${adminInput.email}`,
-    );
     try {
       const result = await this.memberService.createFirstAdmin(adminInput);
-      this.logger.log(
-        `[CREATE_FIRST_ADMIN] Success - Email: ${adminInput.email}, Role: ADMIN`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -405,12 +328,8 @@ export class MemberResolver {
 
   @Mutation(() => AuthResponse, { name: 'tutorLogin' })
   async tutorLogin(@Args('input') loginInput: LoginInput) {
-    this.logger.log(`[TUTOR_LOGIN] Attempt - Email: ${loginInput.email}`);
     try {
       const result = await this.memberService.tutorLogin(loginInput);
-      this.logger.log(
-        `[TUTOR_LOGIN] Success - Email: ${loginInput.email}, Role: ${result.user.systemRole}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -422,12 +341,8 @@ export class MemberResolver {
 
   @Mutation(() => AuthResponse, { name: 'adminLogin' })
   async adminLogin(@Args('input') loginInput: LoginInput) {
-    this.logger.log(`[ADMIN_LOGIN] Attempt - Email: ${loginInput.email}`);
     try {
       const result = await this.memberService.adminLogin(loginInput);
-      this.logger.log(
-        `[ADMIN_LOGIN] Success - Email: ${loginInput.email}, Role: ${result.user.systemRole}`,
-      );
       return result;
     } catch (error) {
       this.logger.error(
@@ -439,12 +354,8 @@ export class MemberResolver {
 
   @Mutation(() => AuthResponse, { name: 'tutorSignup' })
   async tutorSignup(@Args('input') memberInput: MemberInput) {
-    this.logger.log(`[TUTOR_SIGNUP] Attempt - Email: ${memberInput.email}`);
     try {
       const result = await this.memberService.tutorSignup(memberInput);
-      this.logger.log(
-        `[TUTOR_SIGNUP] Success - Email: ${memberInput.email}, Role: TUTOR`,
-      );
       return result;
     } catch (error) {
       this.logger.error(

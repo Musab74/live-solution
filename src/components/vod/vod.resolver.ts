@@ -40,17 +40,11 @@ export class VodResolver {
     @Args('input', { nullable: true }) queryInput: VodQueryInput,
     @AuthMember() user: Member,
   ): Promise<any> {
-    this.logger.log(
-      `[GET_ALL_VODS] Attempt - User ID: ${user._id}, Email: ${user.email}, Role: ${user.systemRole}, Query: ${JSON.stringify(queryInput)}`,
-    );
     try {
       const result = await this.vodService.getAllVods(
         queryInput || {},
         user._id,
         user.systemRole,
-      );
-      this.logger.log(
-        `[GET_ALL_VODS] Success - User ID: ${user._id}, Count: ${result.vods?.length || 0}`,
       );
       return result;
     } catch (error) {

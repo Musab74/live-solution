@@ -72,11 +72,6 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ): Promise<any[]> {
-    console.log('🔍 BACKEND GET_PARTICIPANTS: Query called', {
-      meetingId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const result = await this.participantService.getParticipantsByMeeting(
@@ -112,19 +107,8 @@ export class ParticipantResolver {
         updatedAt: p.updatedAt
       }));
 
-      console.log('✅ BACKEND GET_PARTICIPANTS: Success', {
-        meetingId,
-        count: transformedResult.length,
-        participants: transformedResult.map(p => ({
-          _id: p._id,
-          displayName: p.displayName,
-          role: p.role,
-          userId: p.user?._id
-        }))
-      });
       return transformedResult;
     } catch (error) {
-      console.error('❌ BACKEND GET_PARTICIPANTS: Error', error);
       throw error;
     }
   }
@@ -190,24 +174,11 @@ export class ParticipantResolver {
     @Args('input') joinInput: JoinParticipantInput,
     @AuthMember() user: Member,
   ) {
-    console.log('🚀 BACKEND JOIN_MEETING: Mutation called', {
-      input: joinInput,
-      userId: user._id,
-      userEmail: user.email,
-      userDisplayName: user.displayName,
-      userObject: user
-    });
 
     try {
       const result = await this.participantService.joinMeeting(joinInput, user._id);
-      console.log('✅ BACKEND JOIN_MEETING: Success', {
-        participantId: result._id,
-        displayName: result.displayName,
-        role: result.role
-      });
       return result;
     } catch (error) {
-      console.error('❌ BACKEND JOIN_MEETING: Error', error);
       throw error;
     }
   }
@@ -227,14 +198,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log(`[CLEAR_FAKE_PARTICIPANTS] Resolver called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
     
     try {
       const deletedCount = await this.participantService.clearFakeParticipants(meetingId);
-      console.log(`[CLEAR_FAKE_PARTICIPANTS] Success - Deleted ${deletedCount} participants`);
       return `Successfully cleared ${deletedCount} fake participants from meeting ${meetingId}`;
     } catch (error) {
-      console.error(`[CLEAR_FAKE_PARTICIPANTS] Error:`, error);
       throw error;
     }
   }
@@ -247,22 +215,14 @@ export class ParticipantResolver {
     @Args('micState', { nullable: true }) micState?: string,
     @Args('cameraState', { nullable: true }) cameraState?: string,
   ) {
-    console.log('🎤 BACKEND UPDATE_MEDIA_STATE: Mutation called', {
-      participantId,
-      micState,
-      cameraState,
-      userId: user._id
-    });
 
     try {
       const result = await this.participantService.updateParticipantMediaState(participantId, {
         micState: micState as any,
         cameraState: cameraState as any
       });
-      console.log('✅ BACKEND UPDATE_MEDIA_STATE: Success', result);
       return result;
     } catch (error) {
-      console.error('❌ BACKEND UPDATE_MEDIA_STATE: Error', error);
       throw error;
     }
   }
@@ -273,14 +233,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log(`[CLEANUP_DUPLICATES] Resolver called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
     
     try {
       const deletedCount = await this.participantService.cleanupDuplicateParticipants(meetingId);
-      console.log(`[CLEANUP_DUPLICATES] Success - Deleted ${deletedCount} duplicates`);
       return `Successfully cleaned up ${deletedCount} duplicate participants from meeting ${meetingId}`;
     } catch (error) {
-      console.error(`[CLEANUP_DUPLICATES] Error:`, error);
       throw error;
     }
   }
@@ -291,14 +248,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log(`[CLEANUP_STALE] Manual cleanup called - Meeting ID: ${meetingId}, User ID: ${user._id}`);
     
     try {
         const cleanedCount = await this.participantService.cleanupStaleParticipants(10); // 10 seconds threshold - AGGRESSIVE cleanup
-      console.log(`[CLEANUP_STALE] Success - Cleaned up ${cleanedCount} stale participants`);
       return `Successfully cleaned up ${cleanedCount} stale participants from meeting ${meetingId}`;
     } catch (error) {
-      console.error(`[CLEANUP_STALE] Error:`, error);
       throw error;
     }
   }
@@ -309,20 +263,14 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('🔍 BACKEND GET_PARTICIPANT_BY_USER_MEETING: Query called', {
-      meetingId,
-      userId: user._id
-    });
 
     try {
       const result = await this.participantService.getParticipantByUserAndMeeting(
         user._id,
         meetingId
       );
-      console.log('✅ BACKEND GET_PARTICIPANT_BY_USER_MEETING: Success', result);
       return result;
     } catch (error) {
-      console.error('❌ BACKEND GET_PARTICIPANT_BY_USER_MEETING: Error', error);
       throw error;
     }
   }
@@ -333,11 +281,6 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Mutation called', {
-      meetingId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const participant = await this.participantService.getParticipantByUserAndMeeting(
@@ -346,30 +289,25 @@ export class ParticipantResolver {
       );
 
       if (!participant) {
-        console.log('🚪 BACKEND FORCE_LEAVE_MEETING: No participant found');
         return 'No participant found for this meeting';
       }
 
       // 🔍 DEBUG: Log participant role and Role.HOST for comparison
-      console.log('🔍 BACKEND FORCE_LEAVE_MEETING: Role comparison debug', {
-        participantRole: participant.role,
-        roleHost: Role.HOST,
-        isEqual: participant.role === Role.HOST,
-        roleType: typeof participant.role,
-        hostType: typeof Role.HOST
-      });
 
       participant.status = ParticipantStatus.LEFT;
       await participant.save();
 
-      // FIXED: Only end meeting if this is the host AND they explicitly want to end the meeting
-      // Regular participant leaving should NOT end the entire meeting
-      console.log('🚪 BACKEND FORCE_LEAVE_MEETING: Participant left meeting (meeting continues)');
+      // 👇 FIXED: Always try to end meeting if user is the meeting host (by checking meeting.hostId)
+      // This bypasses the role check issue and ensures host can always end meeting
+      try {
+        await this.meetingService.endMeeting(meetingId, user._id);
+      } catch (error) {
+        // Don't throw error here - participant is already marked as LEFT
+        // Just log the error and continue
+      }
 
-      console.log('✅ BACKEND FORCE_LEAVE_MEETING: Success - Participant status set to LEFT');
       return `Successfully left meeting ${meetingId}`;
     } catch (error) {
-      console.error('❌ BACKEND FORCE_LEAVE_MEETING: Error', error);
       throw error;
     }
   }
@@ -478,22 +416,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('⏳ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Query called', {
-      meetingId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const result = await this.participantService.getWaitingParticipants(meetingId, user._id);
-      console.log('✅ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Success', {
-        meetingId,
-        count: result.length,
-        participants: result.map(p => ({ _id: p._id, displayName: p.displayName, status: p.status }))
-      });
       return result;
     } catch (error) {
-      console.error('❌ BACKEND GET_WAITING_PARTICIPANTS_SIMPLE: Error', error);
       throw error;
     }
   }
@@ -504,22 +431,11 @@ export class ParticipantResolver {
     @Args('participantId', { type: () => ID }) participantId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('✅ BACKEND APPROVE_PARTICIPANT_SIMPLE: Mutation called', {
-      participantId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const result = await this.participantService.approveParticipant(participantId, user._id);
-      console.log('✅ BACKEND APPROVE_PARTICIPANT_SIMPLE: Success', {
-        participantId: result._id,
-        displayName: result.displayName,
-        status: result.status
-      });
       return result;
     } catch (error) {
-      console.error('❌ BACKEND APPROVE_PARTICIPANT_SIMPLE: Error', error);
       throw error;
     }
   }
@@ -530,22 +446,11 @@ export class ParticipantResolver {
     @Args('participantId', { type: () => ID }) participantId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('❌ BACKEND REJECT_PARTICIPANT_SIMPLE: Mutation called', {
-      participantId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const result = await this.participantService.rejectParticipant(participantId, user._id);
-      console.log('✅ BACKEND REJECT_PARTICIPANT_SIMPLE: Success', {
-        participantId: result._id,
-        displayName: result.displayName,
-        status: result.status
-      });
       return result;
     } catch (error) {
-      console.error('❌ BACKEND REJECT_PARTICIPANT_SIMPLE: Error', error);
       throw error;
     }
   }
@@ -556,18 +461,11 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    console.log('🚀 BACKEND ADMIT_ALL_WAITING_SIMPLE: Mutation called', {
-      meetingId,
-      userId: user._id,
-      userEmail: user.email
-    });
 
     try {
       const result = await this.participantService.admitAllWaitingParticipants(meetingId, user._id);
-      console.log('✅ BACKEND ADMIT_ALL_WAITING_SIMPLE: Success', result);
       return result.message;
     } catch (error) {
-      console.error('❌ BACKEND ADMIT_ALL_WAITING_SIMPLE: Error', error);
       throw error;
     }
   }
@@ -587,22 +485,13 @@ export class ParticipantResolver {
     @Args('input') forceMuteInput: ForceMuteInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[FORCE_MUTE] Attempt - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}, Host ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.participantService.forceMuteParticipant(
         forceMuteInput,
         user._id,
       );
-      this.logger.log(
-        `[FORCE_MUTE] Success - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[FORCE_MUTE] Failed - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -613,22 +502,13 @@ export class ParticipantResolver {
     @Args('input') forceMuteInput: ForceMuteInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[FORCE_MUTE_PARTICIPANT] Attempt - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}, Host ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.participantService.forceMuteParticipant(
         forceMuteInput,
         user._id,
       );
-      this.logger.log(
-        `[FORCE_MUTE_PARTICIPANT] Success - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Track: ${forceMuteInput.track}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[FORCE_MUTE_PARTICIPANT] Failed - Meeting ID: ${forceMuteInput.meetingId}, Participant ID: ${forceMuteInput.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -639,22 +519,13 @@ export class ParticipantResolver {
     @Args('input') forceCameraOffInput: ForceCameraOffInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[FORCE_CAMERA_OFF] Attempt - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}, Host ID: ${user._id}, Email: ${user.email}`,
-    );
     try {
       const result = await this.participantService.forceCameraOffParticipant(
         forceCameraOffInput,
         user._id,
       );
-      this.logger.log(
-        `[FORCE_CAMERA_OFF] Success - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[FORCE_CAMERA_OFF] Failed - Meeting ID: ${forceCameraOffInput.meetingId}, Participant ID: ${forceCameraOffInput.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -665,32 +536,16 @@ export class ParticipantResolver {
     @Args('input') transferHostInput: TransferHostInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[TRANSFER_HOST] Attempt - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}, Current Host ID: ${user._id}, Email: ${user.email}`,
-    );
     
     // 🔍 ADDITIONAL DEBUG: Log detailed user information
-    this.logger.debug(`[TRANSFER_HOST] User details:`, {
-      userId: user._id,
-      userIdType: typeof user._id,
-      userEmail: user.email,
-      userSystemRole: user.systemRole,
-      userDisplayName: user.displayName
-    });
     
     try {
       const result = await this.participantService.transferHost(
         transferHostInput,
         user._id,
       );
-      this.logger.log(
-        `[TRANSFER_HOST] Success - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[TRANSFER_HOST] Failed - Meeting ID: ${transferHostInput.meetingId}, New Host Participant ID: ${transferHostInput.newHostParticipantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -707,13 +562,10 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(`[GET_MEETING_ATTENDANCE_RESOLVER] Called - Meeting ID: ${meetingId}, User ID: ${user._id}, Email: ${user.email}`);
     try {
       const result = await this.participantService.getMeetingAttendance(meetingId, user._id);
-      this.logger.log(`[GET_MEETING_ATTENDANCE_RESOLVER] Success - Meeting ID: ${meetingId}, Participants: ${result.totalParticipants}`);
       return result;
     } catch (error) {
-      this.logger.error(`[GET_MEETING_ATTENDANCE_RESOLVER] Error - Meeting ID: ${meetingId}, User ID: ${user._id}, Error: ${error.message}`);
       throw error;
     }
   }
@@ -726,19 +578,10 @@ export class ParticipantResolver {
     @Args('input') input: ForceScreenShareInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[FORCE_SCREEN_SHARE_CONTROL] Attempt - Meeting ID: ${input.meetingId}, Participant ID: ${input.participantId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.forceScreenShareControl(input, user._id);
-      this.logger.log(
-        `[FORCE_SCREEN_SHARE_CONTROL] Success - Participant ID: ${input.participantId}, Screen State: ${input.screenState}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[FORCE_SCREEN_SHARE_CONTROL] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -749,19 +592,10 @@ export class ParticipantResolver {
     @Args('input') input: UpdateScreenShareInfoInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[UPDATE_SCREEN_SHARE_INFO] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.updateScreenShareInfo(input, user._id);
-      this.logger.log(
-        `[UPDATE_SCREEN_SHARE_INFO] Success - Participant ID: ${input.participantId}, Screen Info: ${input.screenShareInfo}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[UPDATE_SCREEN_SHARE_INFO] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -772,19 +606,10 @@ export class ParticipantResolver {
     @Args('input') input: GetScreenShareStatusInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[GET_SCREEN_SHARE_STATUS] Attempt - Meeting ID: ${input.meetingId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.getScreenShareStatus(input, user._id);
-      this.logger.log(
-        `[GET_SCREEN_SHARE_STATUS] Success - Meeting ID: ${input.meetingId}, Currently Sharing: ${result.currentlySharingCount}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[GET_SCREEN_SHARE_STATUS] Failed - Meeting ID: ${input.meetingId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -795,19 +620,10 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[GET_ACTIVE_SCREEN_SHARERS] Attempt - Meeting ID: ${meetingId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.getActiveScreenSharers(meetingId);
-      this.logger.log(
-        `[GET_ACTIVE_SCREEN_SHARERS] Success - Meeting ID: ${meetingId}, Active Sharers: ${result.length}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[GET_ACTIVE_SCREEN_SHARERS] Failed - Meeting ID: ${meetingId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -820,29 +636,11 @@ export class ParticipantResolver {
     @Args('input') input: RaiseHandInput,
     @AuthMember() user: Member,
   ) {
-    console.log('🔍 GRAPHQL RAISE_HAND RESOLVER CALLED:', {
-      participantId: input.participantId,
-      reason: input.reason,
-      userId: user._id,
-      userEmail: user.email,
-      userDisplayName: user.displayName
-    });
     
-    this.logger.log(
-      `[RAISE_HAND] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.raiseHand(input, user._id);
-      console.log('✅ GRAPHQL RAISE_HAND SUCCESS:', result);
-      this.logger.log(
-        `[RAISE_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
-      );
       return result;
     } catch (error) {
-      console.error('❌ GRAPHQL RAISE_HAND ERROR:', error);
-      this.logger.error(
-        `[RAISE_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -853,19 +651,10 @@ export class ParticipantResolver {
     @Args('input') input: LowerHandInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[LOWER_HAND] Attempt - Participant ID: ${input.participantId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.lowerHand(input, user._id);
-      this.logger.log(
-        `[LOWER_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[LOWER_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -876,19 +665,10 @@ export class ParticipantResolver {
     @Args('input') input: HostLowerHandInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[HOST_LOWER_HAND] Attempt - Meeting ID: ${input.meetingId}, Participant ID: ${input.participantId}, Host ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.hostLowerHand(input, user._id);
-      this.logger.log(
-        `[HOST_LOWER_HAND] Success - Participant ID: ${input.participantId}, Reason: ${input.reason || 'No reason provided'}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[HOST_LOWER_HAND] Failed - Participant ID: ${input.participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -899,14 +679,8 @@ export class ParticipantResolver {
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[LOWER_ALL_HANDS] Attempt - Meeting ID: ${meetingId}, Host ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.lowerAllHands(meetingId, user._id);
-      this.logger.log(
-        `[LOWER_ALL_HANDS] Success - Meeting ID: ${meetingId}, Lowered: ${result.length} hands`,
-      );
       return {
         success: true,
         message: `Lowered ${result.length} hands`,
@@ -914,9 +688,6 @@ export class ParticipantResolver {
         loweredHandsCount: result.length
       };
     } catch (error) {
-      this.logger.error(
-        `[LOWER_ALL_HANDS] Failed - Meeting ID: ${meetingId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -927,19 +698,10 @@ export class ParticipantResolver {
     @Args('input') input: GetRaisedHandsInput,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[GET_RAISED_HANDS] Attempt - Meeting ID: ${input.meetingId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.getRaisedHands(input, user._id);
-      this.logger.log(
-        `[GET_RAISED_HANDS] Success - Meeting ID: ${input.meetingId}, Raised Hands: ${result.totalRaisedHands}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[GET_RAISED_HANDS] Failed - Meeting ID: ${input.meetingId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }
@@ -950,19 +712,10 @@ export class ParticipantResolver {
     @Args('participantId', { type: () => ID }) participantId: string,
     @AuthMember() user: Member,
   ) {
-    this.logger.log(
-      `[GET_PARTICIPANT_HAND_STATUS] Attempt - Participant ID: ${participantId}, User ID: ${user._id}`,
-    );
     try {
       const result = await this.participantService.getParticipantHandStatus(participantId);
-      this.logger.log(
-        `[GET_PARTICIPANT_HAND_STATUS] Success - Participant ID: ${participantId}, Hand Raised: ${result.hasHandRaised}`,
-      );
       return result;
     } catch (error) {
-      this.logger.error(
-        `[GET_PARTICIPANT_HAND_STATUS] Failed - Participant ID: ${participantId}, Error: ${error.message}`,
-      );
       throw error;
     }
   }

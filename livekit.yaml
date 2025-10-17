@@ -1,0 +1,45 @@
+# LiveKit Server Configuration
+port: 7880
+rtc:
+  # CORS configuration for LiveKit server
+  cors:
+    origins:
+      - "http://localhost:3000"
+      - "http://localhost:3001"
+      - "https://live.hrdeedu.co.kr"
+      - "https://api.hrdeedu.co.kr"
+    allow_credentials: true
+
+# Redis for LiveKit (optional but recommended for production)
+redis:
+  address: localhost:6379
+
+# Keys (these should match your backend configuration)
+keys:
+  APIkey: your-actual-livekit-api-key
+  APIsecret: your-actual-livekit-secret
+
+# Logging
+log_level: info
+
+# WebRTC configuration
+rtc:
+  # TURN server configuration (if you have one)
+  # turn:
+  #   enabled: true
+  #   domain: your-turn-domain.com
+  #   external_tls: false
+  #   udp_port: 3478
+  #   tcp_port: 3478
+  #   username: your-turn-username
+  #   password: your-turn-password
+
+# Room configuration
+room:
+  # Auto-end room when empty
+  auto_end: true
+  # Room timeout
+  empty_timeout: 300
+  # Enable recording
+  enable_recording: true
+

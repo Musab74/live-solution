@@ -171,11 +171,5 @@ export const isGraphQLError = (error: any): boolean => {
 // ========================================
 
 export const debugDataStructure = (data: any, label: string = 'Data') => {
-  console.log(`${label} Structure:`, {
-    type: typeof data,
-    isArray: Array.isArray(data),
-    keys: data && typeof data === 'object' ? Object.keys(data) : 'N/A',
-    length: Array.isArray(data) ? data.length : 'N/A',
-    data: data
-  });
+  // Debug helper - disabled in production
 };
