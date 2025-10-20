@@ -2017,19 +2017,72 @@ export class ParticipantService {
 
   /**
    * Mark a participant as LEFT in a specific meeting
+   * ✅ FIXED: Now properly closes active sessions to prevent ghost member attendance
    */
   async markParticipantAsLeftInMeeting(userId: string, meetingId: string): Promise<void> {
     try {
-      await this.participantModel.updateMany(
-        { userId, meetingId, status: { $ne: 'LEFT' } },
-        {
-          status: 'LEFT',
-          leftAt: new Date()
+      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Starting - user ${userId} in meeting ${meetingId}`);
+      
+      // Find all participants for this user in this meeting who aren't already LEFT
+      const participants = await this.participantModel.find({
+        userId: new Types.ObjectId(userId),
+        meetingId: new Types.ObjectId(meetingId),
+        status: { $ne: ParticipantStatus.LEFT }
+      });
+
+      if (participants.length === 0) {
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No active participants found for user ${userId} in meeting ${meetingId}`);
+        return;
+      }
+
+      const now = new Date();
+      
+      // Process each participant
+      for (const participant of participants) {
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Processing participant ${participant._id}`);
+        
+        // ✅ CRITICAL FIX: Close any open sessions
+        const sessions = participant.sessions || [];
+        if (sessions.length > 0) {
+          const lastSession = sessions[sessions.length - 1];
+          
+          // Check if the last session is still open
+          if (!lastSession.leftAt && lastSession.joinedAt) {
+            // Close the session
+            lastSession.leftAt = now;
+            lastSession.durationSec = Math.floor(
+              (now.getTime() - lastSession.joinedAt.getTime()) / 1000
+            );
+            
+            // Update total duration
+            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
+          } else {
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Last session already closed for participant ${participant._id}`);
+          }
+        } else {
+          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No sessions found for participant ${participant._id}`);
         }
+        
+        // Mark as LEFT
+        participant.status = ParticipantStatus.LEFT;
+        
+        // Save the participant with closed session
+        await participant.save();
+        
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Successfully marked participant ${participant._id} as LEFT with closed session`);
+      }
+      
+      // Decrement meeting participant count
+      await this.meetingModel.findByIdAndUpdate(
+        meetingId,
+        { $inc: { participantCount: -participants.length } }
       );
-      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Marked user ${userId} as LEFT in meeting ${meetingId}`);
+      
+      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Completed - Marked ${participants.length} participant(s) as LEFT for user ${userId} in meeting ${meetingId}`);
     } catch (error) {
-      this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Error: ${error.message}`);
+      this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Error: ${error.message}`, error.stack);
     }
   }
 
