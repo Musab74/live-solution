@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Test - SSO Integration</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        .header h1 {
+            font-size: 32px;
+            margin-bottom: 10px;
+        }
+        .header p {
+            opacity: 0.9;
+            font-size: 16px;
+        }
+        .content {
+            padding: 30px;
+        }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        .test-section h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+        .test-section p {
+            color: #666;
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn:active {
+            transform: translateY(0);
+        }
+        .result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .result.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .config {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        .config h3 {
+            color: #856404;
+            margin-bottom: 10px;
+        }
+        .config ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        .config li {
+            color: #856404;
+            margin-bottom: 5px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 CORS Test Suite</h1>
+            <p>Test Cross-Domain SSO Authentication</p>
+        </div>
+        
+        <div class="content">
+            <div class="config">
+                <h3>📋 Current Configuration</h3>
+                <ul id="config-list">
+                    <li>🌍 Origin: <span id="current-origin">Loading...</span></li>
+                    <li>🔗 API URL: <span id="api-url">https://live.hrdeedu.co.kr</span></li>
+                    <li>🔑 PHP Website: https://livekit1.hrdeedu.com</li>
+                </ul>
+            </div>
+
+            <!-- Test 1: Health Check -->
+            <div class="test-section">
+                <h2>Test 1: Health Check (Simple CORS Test)</h2>
+                <p>Tests if basic CORS is working between domains.</p>
+                <button class="btn" onclick="testHealthCheck()">Run Health Check</button>
+                <div id="health-result"></div>
+            </div>
+
+            <!-- Test 2: SSO Health -->
+            <div class="test-section">
+                <h2>Test 2: SSO Service Health</h2>
+                <p>Checks if SSO endpoints are accessible.</p>
+                <button class="btn" onclick="testSSOHealth()">Test SSO Health</button>
+                <div id="sso-health-result"></div>
+            </div>
+
+            <!-- Test 3: Full SSO Login -->
+            <div class="test-section">
+                <h2>Test 3: Full SSO Login</h2>
+                <p>Tests complete SSO authentication flow with JWT token.</p>
+                <div class="input-group">
+                    <label>JWT Token (from localStorage or manual entry):</label>
+                    <input type="text" id="jwt-token" placeholder="Paste JWT token or it will auto-load from localStorage">
+                </div>
+                <button class="btn" onclick="testSSOLogin()">Test SSO Login</button>
+                <div id="sso-login-result"></div>
+            </div>
+
+            <!-- Test 4: Preflight Request -->
+            <div class="test-section">
+                <h2>Test 4: CORS Preflight (OPTIONS)</h2>
+                <p>Tests CORS preflight request handling.</p>
+                <button class="btn" onclick="testPreflight()">Test Preflight</button>
+                <div id="preflight-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = 'https://live.hrdeedu.co.kr';
+        
+        // Display current origin
+        document.getElementById('current-origin').textContent = window.location.origin;
+
+        // Auto-load JWT from localStorage
+        window.addEventListener('load', () => {
+            const jwt = localStorage.getItem('JWT') || localStorage.getItem('TOKEN');
+            if (jwt) {
+                document.getElementById('jwt-token').value = jwt;
+            }
+        });
+
+        // Helper function to display results
+        function displayResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.className = `result ${type}`;
+            element.textContent = message;
+        }
+
+        // Test 1: Health Check
+        async function testHealthCheck() {
+            displayResult('health-result', '⏳ Testing health endpoint...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/health`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResult('health-result', 
+                        `✅ CORS Test Passed!\n\n` +
+                        `Status: ${response.status}\n` +
+                        `Server Status: ${data.status}\n` +
+                        `Timestamp: ${data.timestamp}\n\n` +
+                        `CORS headers received successfully!`,
+                        'success'
+                    );
+                } else {
+                    displayResult('health-result', 
+                        `⚠️ Received response but status: ${response.status}\n\n` +
+                        JSON.stringify(data, null, 2),
+                        'error'
+                    );
+                }
+            } catch (error) {
+                displayResult('health-result', 
+                    `❌ CORS Test Failed!\n\n` +
+                    `Error: ${error.message}\n\n` +
+                    `Possible causes:\n` +
+                    `1. Server is not running\n` +
+                    `2. CORS not configured for ${window.location.origin}\n` +
+                    `3. Network connectivity issue`,
+                    'error'
+                );
+            }
+        }
+
+        // Test 2: SSO Health
+        async function testSSOHealth() {
+            displayResult('sso-health-result', '⏳ Testing SSO service...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/sso-health`, {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    displayResult('sso-health-result', 
+                        `✅ SSO Service is Operational!\n\n` +
+                        `Service: ${data.service}\n` +
+                        `Status: ${data.status}\n` +
+                        `Timestamp: ${data.timestamp}\n\n` +
+                        `Available Endpoints:\n` +
+                        `POST: ${data.endpoints.post}\n` +
+                        `GraphQL: ${data.endpoints.graphql}`,
+                        'success'
+                    );
+                } else {
+                    displayResult('sso-health-result', 
+                        `⚠️ SSO service responded with status: ${response.status}`,
+                        'error'
+                    );
+                }
+            } catch (error) {
+                displayResult('sso-health-result', 
+                    `❌ SSO Health Check Failed!\n\n` +
+                    `Error: ${error.message}`,
+                    'error'
+                );
+            }
+        }
+
+        // Test 3: Full SSO Login
+        async function testSSOLogin() {
+            const token = document.getElementById('jwt-token').value.trim();
+            
+            if (!token) {
+                displayResult('sso-login-result', 
+                    `❌ Please provide a JWT token\n\n` +
+                    `You can:\n` +
+                    `1. Copy JWT from localStorage after PHP login\n` +
+                    `2. Generate test token using test-sso.js\n` +
+                    `3. Get token from PHP website`,
+                    'error'
+                );
+                return;
+            }
+
+            displayResult('sso-login-result', '⏳ Authenticating with SSO...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Origin': window.location.origin
+                    },
+                    body: JSON.stringify({ token })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    // Store NestJS token
+                    localStorage.setItem('NEST_TOKEN', data.token);
+                    
+                    displayResult('sso-login-result', 
+                        `✅ SSO Login Successful!\n\n` +
+                        `User Email: ${data.user.email}\n` +
+                        `Display Name: ${data.user.displayName}\n` +
+                        `Role: ${data.user.systemRole}\n` +
+                        `Existed: ${data.existed ? 'Yes (updated)' : 'No (newly created)'}\n` +
+                        `Message: ${data.message}\n\n` +
+                        `NestJS Token: ${data.token.substring(0, 50)}...\n` +
+                        `(Stored in localStorage as 'NEST_TOKEN')`,
+                        'success'
+                    );
+                } else {
+                    displayResult('sso-login-result', 
+                        `❌ SSO Login Failed!\n\n` +
+                        `Status: ${response.status}\n` +
+                        `Response: ${JSON.stringify(data, null, 2)}`,
+                        'error'
+                    );
+                }
+            } catch (error) {
+                displayResult('sso-login-result', 
+                    `❌ SSO Login Error!\n\n` +
+                    `Error: ${error.message}\n\n` +
+                    `Possible causes:\n` +
+                    `1. Invalid JWT token\n` +
+                    `2. Token expired\n` +
+                    `3. JWT secret mismatch\n` +
+                    `4. CORS issue`,
+                    'error'
+                );
+            }
+        }
+
+        // Test 4: Preflight Request
+        async function testPreflight() {
+            displayResult('preflight-result', '⏳ Testing CORS preflight...', 'info');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/auth/sso-login`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Content-Type, Authorization'
+                    }
+                });
+
+                const headers = {};
+                response.headers.forEach((value, key) => {
+                    if (key.toLowerCase().includes('access-control')) {
+                        headers[key] = value;
+                    }
+                });
+
+                if (response.ok) {
+                    displayResult('preflight-result', 
+                        `✅ CORS Preflight Successful!\n\n` +
+                        `Status: ${response.status}\n\n` +
+                        `CORS Headers:\n` +
+                        JSON.stringify(headers, null, 2),
+                        'success'
+                    );
+                } else {
+                    displayResult('preflight-result', 
+                        `⚠️ Preflight returned status: ${response.status}`,
+                        'error'
+                    );
+                }
+            } catch (error) {
+                displayResult('preflight-result', 
+                    `❌ Preflight Test Failed!\n\n` +
+                    `Error: ${error.message}`,
+                    'error'
+                );
+            }
+        }
+    </script>
+</body>
+</html>
+

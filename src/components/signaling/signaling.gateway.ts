@@ -1449,11 +1449,12 @@ export class SignalingGateway
       clearTimeout(existingTimeout);
     }
 
-    // Create a new timeout (120 seconds grace period) - OPTIMIZED for 10s heartbeat intervals
+    // Create a new timeout (45 seconds grace period) - OPTIMIZED for 10s heartbeat intervals
     const timeout = setTimeout(async () => {
-      console.log(`[PRESENCE] Heartbeat timeout for user ${userId} in meeting ${meetingId}, marking as LEFT`);
+      console.log(`[PRESENCE] Heartbeat timeout for user ${userId} in meeting ${meetingId} - 45s grace period expired, marking as LEFT and closing session`);
       try {
         // IMPORTANT: mark as LEFT only for this specific meeting
+        // ✅ This now properly closes active sessions to prevent ghost member attendance
         await this.participantService.markParticipantAsLeftInMeeting(userId, meetingId);
 
         this.participantHeartbeats.delete(userId);
@@ -1461,7 +1462,7 @@ export class SignalingGateway
       } catch (error) {
         console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
       }
-    }, 120000); // 120 seconds - OPTIMIZED: 10s heartbeat + 110s grace period for stable presence
+    }, 45000); // 45 seconds - User can stay 45s after losing connection before session closes
 
     this.participantHeartbeats.set(userId, timeout);
   }

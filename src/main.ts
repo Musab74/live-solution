@@ -17,10 +17,40 @@ async function bootstrap() {
     }),
   );
 
-  // CORS configuration
+  // CORS configuration for cross-domain SSO
+  const allowedOrigins = [
+    process.env.PHP_WEBSITE_URL || 'https://livekit1.hrdeedu.com',  // PHP website domain
+    process.env.NESTJS_FRONTEND_URL || 'https://live.hrdeedu.co.kr', // NestJS frontend domain
+    'http://localhost:3000',  // Development frontend
+    'http://localhost:3001',  // Alternative dev frontend
+    'http://localhost:3007',  // Development backend
+  ];
+
   app.enableCors({
-    origin: true,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'Accept',
+      'Origin',
+      'Access-Control-Request-Method',
+      'Access-Control-Request-Headers',
+    ],
+    exposedHeaders: ['Authorization'],
     credentials: true,
+    optionsSuccessStatus: 200, // For legacy browser support
   });
 
   // Global interceptors
@@ -65,7 +95,20 @@ async function bootstrap() {
     });
   });
 
-  await app.listen(process.env.PORT ?? 3007);
+  const port = process.env.PORT ?? 3007;
+  await app.listen(port);
 
+  console.log('\n' + '='.repeat(80));
+  console.log('🚀 NestJS Live Solution Server Started');
+  console.log('='.repeat(80));
+  console.log(`📡 Server running on: http://localhost:${port}`);
+  console.log(`🔐 SSO Endpoint: http://localhost:${port}/auth/sso-login`);
+  console.log(`🏥 Health Check: http://localhost:${port}/health`);
+  console.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
+  console.log('\n🌐 CORS Configuration:');
+  console.log(`   ✅ PHP Website: ${process.env.PHP_WEBSITE_URL || 'https://livekit1.hrdeedu.com'}`);
+  console.log(`   ✅ Frontend: ${process.env.NESTJS_FRONTEND_URL || 'https://live.hrdeedu.co.kr'}`);
+  console.log(`   ✅ Credentials: Enabled`);
+  console.log('='.repeat(80) + '\n');
 }
 bootstrap();
