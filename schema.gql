@@ -27,6 +27,23 @@ A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date
 """
 scalar DateTime
 
+type SSOLoginResult {
+  """Whether the SSO login was successful"""
+  success: Boolean!
+
+  """Whether the user existed before (true) or was newly created (false)"""
+  existed: Boolean!
+
+  """The authenticated user"""
+  user: Member!
+
+  """JWT token for future requests (NestJS-generated)"""
+  token: String!
+
+  """Success or error message"""
+  message: String!
+}
+
 type AuthResponse {
   token: String!
   user: Member!
@@ -537,6 +554,8 @@ input GetRecordingInput {
 }
 
 type Mutation {
+  """SSO Login - Authenticate using JWT token from PHP website"""
+  ssoLogin(input: SSOLoginInput!): SSOLoginResult!
   signup(input: MemberInput!): AuthResponse!
   login(email: String!, password: String!): AuthResponse!
   updateProfile(input: UpdateMemberInput!): Member!
@@ -605,6 +624,11 @@ type Mutation {
   stopMeetingRecording(input: StopMeetingRecordingInput!): RecordingResponse!
   pauseMeetingRecording(input: PauseMeetingRecordingInput!): RecordingResponse!
   resumeMeetingRecording(input: ResumeRecordingInput!): RecordingResponse!
+}
+
+input SSOLoginInput {
+  """JWT token from PHP website (from localStorage)"""
+  token: String!
 }
 
 input MemberInput {
