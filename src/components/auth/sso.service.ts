@@ -99,7 +99,7 @@ export class SSOService {
         existingUser.systemRole = systemRole as SystemRole;
         existingUser.lastSeenAt = new Date(lastSeenAt);
         existingUser.isBlocked = isBlocked;
-        existingUser.updatedAt = new Date();
+        // updatedAt is automatically managed by Mongoose timestamps
 
         const updatedUser = await existingUser.save();
 
@@ -120,8 +120,7 @@ export class SSOService {
           lastSeenAt: new Date(lastSeenAt),
           isBlocked,
           passwordHash: '', // SSO users don't have password - they login via PHP
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          // createdAt and updatedAt are automatically managed by Mongoose timestamps
         });
 
         const savedUser = await newUser.save();
