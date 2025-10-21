@@ -9,7 +9,7 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { PHPJwtPayload, UserSyncResult } from '../../libs/DTO/auth/sso.input';
+import { PHPJwtPayload, UserSyncResult, mapMemberType } from '../../libs/DTO/auth/sso.input';
 import { SystemRole } from '../../libs/enums/enums';
 import { AuthService } from './auth.service';
 
@@ -49,12 +49,12 @@ export class SSOService {
         algorithms: ['HS256'], // PHP typically uses HS256
       }) as PHPJwtPayload;
 
-      this.logger.log(`✅ JWT verified for user: ${decoded.email}`);
+      this.logger.log(`✅ JWT verified for user: ${decoded.user_id} (${decoded.name})`);
 
-      // Validate required fields
-      if (!decoded.email || !decoded.displayName || !decoded.systemRole) {
+      // Validate required fields for PHP JWT structure
+      if (!decoded.user_id || !decoded.name || !decoded.member_type) {
         throw new BadRequestException(
-          'JWT payload missing required fields (email, displayName, or systemRole)',
+          'JWT payload missing required fields (user_id, name, or member_type)',
         );
       }
 
@@ -84,21 +84,32 @@ export class SSOService {
    * @returns UserSyncResult with existed flag and user document
    */
   async syncUserFromJWT(jwtPayload: PHPJwtPayload): Promise<UserSyncResult> {
-    const { email, displayName, systemRole, lastSeenAt, isBlocked } =
-      jwtPayload;
+    const { user_id, name, email, member_type, platform } = jwtPayload;
 
     try {
-      // Check if user exists
-      const existingUser = await this.memberModel.findOne({ email });
+      // Map PHP member_type to NestJS SystemRole
+      const systemRole = mapMemberType(member_type) as SystemRole;
+      
+      // Check if user exists by user_id or email (since email might be encrypted)
+      const existingUser = await this.memberModel.findOne({
+        $or: [
+          { user_id: user_id },
+          { email: email }
+        ]
+      });
+
+      const currentTime = new Date();
 
       if (existingUser) {
         // ✅ USER EXISTS - UPDATE
-        this.logger.log(`🔄 Updating existing user: ${email}`);
+        this.logger.log(`🔄 Updating existing user: ${user_id} (${name})`);
 
-        existingUser.displayName = displayName;
-        existingUser.systemRole = systemRole as SystemRole;
-        existingUser.lastSeenAt = new Date(lastSeenAt);
-        existingUser.isBlocked = isBlocked;
+        existingUser.user_id = user_id;
+        existingUser.displayName = name;
+        existingUser.email = email; // Update email in case it changed
+        existingUser.systemRole = systemRole;
+        existingUser.lastSeenAt = currentTime;
+        existingUser.isBlocked = false; // Default to not blocked
         // updatedAt is automatically managed by Mongoose timestamps
 
         const updatedUser = await existingUser.save();
@@ -106,20 +117,21 @@ export class SSOService {
         return {
           existed: true,
           user: updatedUser,
-          message: `User ${email} updated successfully via SSO`,
+          message: `User ${user_id} (${name}) updated successfully via SSO`,
         };
       } else {
         // ✅ USER DOESN'T EXIST - CREATE
-        this.logger.log(`✨ Creating new user from SSO: ${email}`);
+        this.logger.log(`✨ Creating new user from SSO: ${user_id} (${name})`);
 
         // Create new user WITHOUT password (SSO users don't need password in this system)
         const newUser = new this.memberModel({
-          email,
-          displayName,
-          systemRole: systemRole as SystemRole,
-          lastSeenAt: new Date(lastSeenAt),
-          isBlocked,
-          passwordHash: '', // SSO users don't have password - they login via PHP
+          user_id: user_id,
+          email: email,
+          displayName: name,
+          systemRole: systemRole,
+          lastSeenAt: currentTime,
+          isBlocked: false,
+          // passwordHash is optional for SSO users - they login via PHP
           // createdAt and updatedAt are automatically managed by Mongoose timestamps
         });
 
@@ -128,11 +140,11 @@ export class SSOService {
         return {
           existed: false,
           user: savedUser,
-          message: `New user ${email} created successfully via SSO`,
+          message: `New user ${user_id} (${name}) created successfully via SSO`,
         };
       }
     } catch (error) {
-      this.logger.error(`❌ User sync failed for ${email}: ${error.message}`);
+      this.logger.error(`❌ User sync failed for ${user_id} (${name}): ${error.message}`);
       throw new BadRequestException(
         `Failed to sync user: ${error.message}`,
       );

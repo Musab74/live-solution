@@ -4,6 +4,7 @@
 
 type Member {
   _id: ID!
+  user_id: String
   email: String!
   displayName: String!
   avatarUrl: String

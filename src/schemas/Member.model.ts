@@ -9,6 +9,10 @@ export class Member {
   @Field(() => ID)
   _id!: string;
 
+  @Prop({ required: false, unique: true, index: true, trim: true })
+  @Field({ nullable: true })
+  user_id?: string; // PHP user ID for SSO integration
+
   @Prop({
     required: true,
     unique: true,
@@ -19,8 +23,8 @@ export class Member {
   @Field()
   email!: string;
 
-  @Prop({ required: true }) // store hash, not raw password
-  passwordHash!: string;
+  @Prop({ required: false, default: '' }) // store hash, not raw password - optional for SSO users
+  passwordHash?: string;
 
   @Prop({ required: true, trim: true })
   @Field()

@@ -18,19 +18,30 @@ export class SSOLoginInput {
 
 /**
  * JWT Payload from PHP website
- * Must match exactly what PHP generates
+ * Updated to match actual PHP JWT structure
  */
 export interface PHPJwtPayload {
-  email: string;
-  displayName: string;
-  systemRole: string; // 'MEMBER', 'TUTOR', 'ADMIN'
-  lastSeenAt: string; // ISO 8601 date string
-  isBlocked: boolean;
-  createdAt: string; // ISO 8601 date string
-  updatedAt: string; // ISO 8601 date string
-  iat: number; // issued at (Unix timestamp)
-  exp: number; // expiration (Unix timestamp)
+  user_id: string;        // PHP user ID (primary identifier)
+  name: string;           // PHP user display name
+  email: string;          // PHP email (may be encrypted)
+  member_type: string;    // PHP member type (A, T, M, S)
+  platform: string;       // PHP platform identifier
+  iat: number;            // issued at (Unix timestamp)
+  exp: number;            // expiration (Unix timestamp)
 }
+
+/**
+ * Map PHP member_type to NestJS SystemRole
+ */
+export const mapMemberType = (memberType: string): string => {
+  switch (memberType) {
+    case 'A': return 'ADMIN';
+    case 'T': return 'TUTOR';
+    case 'M': return 'MEMBER';
+    case 'S': return 'MEMBER'; // Students as members
+    default: return 'MEMBER';
+  }
+};
 
 /**
  * Result of user sync operation
@@ -81,5 +92,6 @@ export interface SSOLoginResponse {
   user: Member;
   token: string;
   message: string;
+  redirectUrl?: string; // Dashboard URL based on user role
 }
 
