@@ -1,5 +1,7 @@
 import { Resolver, Mutation, Args, Query } from '@nestjs/graphql';
 import { UseGuards, Logger } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
 import { LivekitService } from './livekit.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -11,12 +13,18 @@ import {
   StopRecordingInput,
 } from '../../libs/DTO/signaling/livekit.input';
 import { RecordingInfo } from '../../libs/DTO/signaling/livekit.query';
+import { Meeting } from '../../schemas/Meeting.model';
+import { Participant } from '../../schemas/Participant.model';
 
 @Resolver()
 export class LivekitResolver {
   private readonly logger = new Logger(LivekitResolver.name);
 
-  constructor(private readonly lk: LivekitService) {}
+  constructor(
+    private readonly lk: LivekitService,
+    @InjectModel(Meeting.name) private meetingModel: Model<Meeting>,
+    @InjectModel(Participant.name) private participantModel: Model<Participant>,
+  ) {}
 
   @UseGuards(AuthGuard)
   @Mutation(() => String, { name: 'createLivekitToken' })
@@ -47,9 +55,30 @@ export class LivekitResolver {
       });
       
       // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
-      const meetingRole = await /* participantsService */ Promise.resolve(
-        'PARTICIPANT' as const,
-      );
+      let meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER' = 'PARTICIPANT';
+      
+      try {
+        // Check if user is the meeting host
+        const meeting = await this.meetingModel.findById(meetingId);
+        if (meeting && meeting.hostId && meeting.hostId.toString() === userId) {
+          meetingRole = 'HOST';
+          console.log('🔍 [CREATE_LIVEKIT_TOKEN] User is meeting HOST');
+        } else {
+          // Check participant record for role
+          const participant = await this.participantModel
+            .findOne({ meetingId: meetingId, userId: userId, status: { $ne: 'LEFT' } })
+            .exec();
+          
+          if (participant && participant.role) {
+            meetingRole = participant.role as any;
+            console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Participant role from DB: ${participant.role}`);
+          }
+        }
+      } catch (roleError) {
+        console.error('🔍 [CREATE_LIVEKIT_TOKEN] Error determining role, using PARTICIPANT:', roleError.message);
+      }
+      
+      console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Final meeting role: ${meetingRole}`);
 
       console.log('🔍 [CREATE_LIVEKIT_TOKEN] Calling generateAccessToken...');
       const token = await this.lk.generateAccessToken({

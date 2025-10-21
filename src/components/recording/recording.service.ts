@@ -9,7 +9,8 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Meeting } from '../../schemas/Meeting.model';
 import { Member } from '../../schemas/Member.model';
-import { SystemRole, RecordingStatus } from '../../libs/enums/enums';
+import { Vod } from '../../schemas/Vod.model';
+import { SystemRole, RecordingStatus, VodSourceType } from '../../libs/enums/enums';
 import {
   StartMeetingRecordingInput,
   StopMeetingRecordingInput,
@@ -22,6 +23,9 @@ import {
   RecordingResponse,
   RecordingStats,
 } from '../../libs/DTO/recording/recording.query';
+import { LivekitService } from '../signaling/livekit.service';
+import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class RecordingService {
@@ -30,6 +34,8 @@ export class RecordingService {
   constructor(
     @InjectModel(Meeting.name) private meetingModel: Model<Meeting>,
     @InjectModel(Member.name) private memberModel: Model<Member>,
+    @InjectModel(Vod.name) private vodModel: Model<Vod>,
+    private readonly livekitService: LivekitService,
   ) {}
 
   // START RECORDING
@@ -76,19 +82,49 @@ export class RecordingService {
         );
       }
 
-      // Generate recording ID
+      // Generate recording ID and file name
       const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const fileName = `${meeting._id}_${Date.now()}.mp4`;
+      
+      // Get recording path (VOD server mount or local fallback)
+      const filePath = this.livekitService.getRecordingPath(fileName);
+      this.logger.log(`[START_RECORDING] Recording will be saved to: ${filePath}`);
+      
+      // Ensure local recordings directory exists (for fallback)
+      const localRecordingsDir = path.join(process.cwd(), 'uploads', 'recordings');
+      if (!fs.existsSync(localRecordingsDir)) {
+        fs.mkdirSync(localRecordingsDir, { recursive: true });
+        this.logger.log(`[START_RECORDING] Created local recordings directory: ${localRecordingsDir}`);
+      }
+
+      // Start LiveKit recording
+      let livekitEgressId: string;
+      try {
+        livekitEgressId = await this.livekitService.startRecording(
+          meeting._id.toString(),
+          filePath
+        );
+        this.logger.log(`[START_RECORDING] ✅ LiveKit egress started: ${livekitEgressId}`);
+        this.logger.log(`[START_RECORDING] 📹 Recording to: ${filePath.includes('/mnt/vod-server') ? 'REMOTE VOD SERVER' : 'LOCAL DISK (FALLBACK)'}`);
+      } catch (error) {
+        this.logger.error(`[START_RECORDING] ❌ LiveKit egress failed: ${error.message}`);
+        livekitEgressId = recordingId; // Fallback
+      }
 
       // Start recording
       const now = new Date();
       meeting.isRecording = true;
-      meeting.recordingId = recordingId;
+      meeting.recordingId = livekitEgressId;
       meeting.recordingStartedAt = now;
       meeting.recordingStatus = RecordingStatus.RECORDING;
       meeting.recordingDuration = 0;
       meeting.recordingPausedAt = undefined;
       meeting.recordingResumedAt = undefined;
       meeting.recordingEndedAt = undefined;
+      // Recording on .91 server (same server as LiveKit)
+      meeting.recordingUrl = `http://39.116.130.91/recordings/${fileName}`;
+      this.logger.log(`[START_RECORDING] 📹 Recording URL: ${meeting.recordingUrl}`);
+      this.logger.log(`[START_RECORDING] 💾 Recording saved on LiveKit server (.91): ${filePath}`);
 
       // Set quality and format defaults
       const quality = input.quality || '720p';
@@ -157,6 +193,14 @@ export class RecordingService {
         );
       }
 
+      // Stop LiveKit recording
+      try {
+        await this.livekitService.stopRecording(meeting.recordingId);
+        this.logger.log(`[STOP_RECORDING] LiveKit egress stopped: ${meeting.recordingId}`);
+      } catch (error) {
+        this.logger.error(`[STOP_RECORDING] Failed to stop LiveKit egress: ${error.message}`);
+      }
+
       // Stop recording
       const now = new Date();
       meeting.isRecording = false;
@@ -171,11 +215,51 @@ export class RecordingService {
         meeting.recordingDuration = totalDuration;
       }
 
-      // Generate mock recording URL (in real implementation, this would come from LiveKit)
-      const recordingUrl = `https://recordings.example.com/${meeting.recordingId}.mp4`;
+      const recordingUrl = meeting.recordingUrl || `/uploads/recordings/${meeting.recordingId}.mp4`;
       meeting.recordingUrl = recordingUrl;
 
       await meeting.save();
+
+      // Auto-create VOD entry from recording
+      try {
+        const fileName = recordingUrl.split('/').pop() || `${meeting.recordingId}.mp4`;
+        const storageKey = `recordings/${fileName}`;
+        
+        // Determine file size
+        let fileSize = 0;
+        const isRemote = recordingUrl.includes('39.116.130.91');
+        
+        if (isRemote) {
+          // Recording on remote VOD server
+          // Estimate size based on duration (can't access remote file directly)
+          fileSize = Math.round(meeting.recordingDuration * 312500); // ~2.5 Mbps = 312.5 KB/s
+          this.logger.log(`[STOP_RECORDING] 🌐 Remote recording, estimated size: ${fileSize} bytes`);
+        } else {
+          // Recording on local disk
+          const filePath = path.join(process.cwd(), 'uploads', 'recordings', fileName);
+          if (fs.existsSync(filePath)) {
+            const stats = fs.statSync(filePath);
+            fileSize = stats.size;
+            this.logger.log(`[STOP_RECORDING] 💾 Local recording, actual size: ${fileSize} bytes`);
+          }
+        }
+
+        const newVod = new this.vodModel({
+          title: `${meeting.title || 'Meeting'} - Recording`,
+          notes: `Automatically created from meeting recording on ${now.toLocaleDateString()}. ${isRemote ? 'Stored on VOD server.' : 'Stored locally (fallback).'}`,
+          meetingId: meeting._id,
+          source: VodSourceType.FILE,
+          storageKey: storageKey,
+          sizeBytes: fileSize,
+          durationSec: meeting.recordingDuration,
+        });
+
+        await newVod.save();
+        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} (${isRemote ? 'Remote' : 'Local'})`);
+      } catch (vodError) {
+        this.logger.error(`[STOP_RECORDING] ❌ Failed to create VOD entry: ${vodError.message}`);
+        // Don't fail the recording stop if VOD creation fails
+      }
 
       return {
         success: true,
