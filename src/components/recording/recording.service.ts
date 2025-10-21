@@ -56,24 +56,54 @@ export class RecordingService {
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
       }
-
-      // Check permissions
-      const user = await this.memberModel.findById(userId);
-      if (
-        user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
-      ) {
-        throw new ForbiddenException(
-          'Only the meeting host can start recording',
-        );
+      
+      // DEBUG LOGGING - Meeting data
+      this.logger.log(`[DEBUG] Meeting ID: ${input.meetingId}`);
+      this.logger.log(`[DEBUG] Meeting found: ${meeting ? 'YES' : 'NO'}`);
+      if (meeting) {
+        this.logger.log(`[DEBUG] Meeting title: ${meeting.title}`);
+        this.logger.log(`[DEBUG] Meeting hostId: ${meeting.hostId} (type: ${typeof meeting.hostId})`);
+        this.logger.log(`[DEBUG] Meeting status: ${meeting.status}`);
+        this.logger.log(`[DEBUG] Meeting isRecording: ${meeting.isRecording}`);
       }
 
-      // Check if meeting is active
+      // Check if meeting is active FIRST
       if (meeting.status === 'ENDED') {
+        this.logger.error(`[MEETING_ENDED] Cannot start recording for ended meeting: ${meeting._id}`);
         throw new BadRequestException(
           'Cannot start recording for a meeting that has ended',
         );
       }
+      
+      this.logger.log(`[MEETING_ACTIVE] Meeting ${meeting._id} is active, checking permissions...`);
+
+      // Check permissions AFTER confirming meeting is active
+      const user = await this.memberModel.findById(userId);
+      
+      // DEBUG LOGGING - Check all values
+      this.logger.log(`[DEBUG] User ID: ${userId} (type: ${typeof userId})`);
+      this.logger.log(`[DEBUG] User found: ${user ? 'YES' : 'NO'}`);
+      if (user) {
+        this.logger.log(`[DEBUG] User systemRole: ${user.systemRole}`);
+        this.logger.log(`[DEBUG] User _id: ${user._id} (type: ${typeof user._id})`);
+      }
+      this.logger.log(`[DEBUG] Meeting hostId: ${meeting.hostId} (type: ${typeof meeting.hostId})`);
+      this.logger.log(`[DEBUG] Meeting hostId.toString(): ${meeting.hostId.toString()}`);
+      this.logger.log(`[DEBUG] userId.toString(): ${userId.toString()}`);
+      this.logger.log(`[DEBUG] Comparison: ${meeting.hostId.toString()} !== ${userId.toString()} = ${meeting.hostId.toString() !== userId.toString()}`);
+      this.logger.log(`[DEBUG] Is Admin: ${user?.systemRole === SystemRole.ADMIN}`);
+      
+      if (
+        user.systemRole !== SystemRole.ADMIN &&
+        meeting.hostId.toString() !== userId.toString()
+      ) {
+        this.logger.error(`[PERMISSION_DENIED] User ${userId} is not the host ${meeting.hostId.toString()}`);
+        throw new ForbiddenException(
+          'Only the meeting host can start recording',
+        );
+      }
+      
+      this.logger.log(`[PERMISSION_GRANTED] User ${userId} can start recording`);
 
       // Check if already recording
       if (meeting.isRecording) {
@@ -179,7 +209,7 @@ export class RecordingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        meeting.hostId.toString() !== userId.toString()
       ) {
         throw new ForbiddenException(
           'Only the meeting host can stop recording',
@@ -309,7 +339,7 @@ export class RecordingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        meeting.hostId.toString() !== userId.toString()
       ) {
         throw new ForbiddenException(
           'Only the meeting host can pause recording',
@@ -381,7 +411,7 @@ export class RecordingService {
       const user = await this.memberModel.findById(userId);
       if (
         user.systemRole !== SystemRole.ADMIN &&
-        meeting.hostId.toString() !== userId
+        meeting.hostId.toString() !== userId.toString()
       ) {
         throw new ForbiddenException(
           'Only the meeting host can resume recording',
