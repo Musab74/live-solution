@@ -1094,13 +1094,19 @@ export class ParticipantService {
       throw new NotFoundException('User not found');
     }
 
-    // Check permissions:
-    // 1. If requester is the host of the meeting
-    // 2. If requester is a tutor and this is their course (hostId matches requesterId)
-    const isHost = meeting.hostId.toString() === requesterId;
-    const isTutor = requester.systemRole === SystemRole.TUTOR && isHost;
 
-    if (!isHost && !isTutor) {
+    // Check permissions:
+    // 1. If requester is the host of the meeting (original host)
+    // 2. If requester is the current host
+    // 3. If requester is a tutor and this is their course
+    // 4. If requester is an admin (temporary bypass for testing)
+    const isOriginalHost = meeting.hostId?.toString() === requesterId?.toString();
+    const isCurrentHost = meeting.currentHostId?.toString() === requesterId?.toString();
+    const isTutor = requester.systemRole === SystemRole.TUTOR && isOriginalHost;
+    const isAdmin = requester.systemRole === SystemRole.ADMIN;
+
+
+    if (!isOriginalHost && !isCurrentHost && !isTutor && !isAdmin) {
       throw new ForbiddenException(
         'Only meeting hosts and tutors can view attendance for their own courses',
       );
@@ -1109,9 +1115,10 @@ export class ParticipantService {
     // Get all participants with their session data
     const participants = await this.participantModel
       .find({ meetingId })
-      .populate('userId', 'email displayName firstName lastName')
+      .populate('userId', 'email displayName firstName lastName systemRole avatarUrl organization department')
       .sort({ createdAt: 1 })
       .lean();
+
 
     // Calculate attendance data
     const attendanceData = participants.map((participant) => {
@@ -1143,12 +1150,23 @@ export class ParticipantService {
             displayName: (participant.userId as any).displayName,
             firstName: (participant.userId as any).firstName,
             lastName: (participant.userId as any).lastName,
+            systemRole: (participant.userId as any).systemRole,
+            avatarUrl: (participant.userId as any).avatarUrl,
+            organization: (participant.userId as any).organization,
+            department: (participant.userId as any).department,
           }
           : null;
 
       return {
         _id: participant._id,
-        user: userData,
+        displayName: userData?.displayName || participant.displayName,
+        email: userData?.email,
+        firstName: userData?.firstName,
+        lastName: userData?.lastName,
+        systemRole: userData?.systemRole,
+        avatarUrl: userData?.avatarUrl,
+        organization: userData?.organization,
+        department: userData?.department,
         role: participant.role,
         status: participant.status,
         joinedAt:
@@ -1157,15 +1175,19 @@ export class ParticipantService {
           validSessions.length > 0 && validSessions[validSessions.length - 1].leftAt
             ? sessions[sessions.length - 1].leftAt
             : null,
-        totalDuration,
+        totalTime: totalDuration,
         sessionCount: validSessions.length,
         isCurrentlyOnline:
           validSessions.length > 0 && !validSessions[validSessions.length - 1].leftAt,
+        micState: participant.micState,
+        cameraState: participant.cameraState,
+        hasHandRaised: participant.hasHandRaised,
+        handRaisedAt: participant.handRaisedAt,
+        handLoweredAt: participant.handLoweredAt,
         sessions: validSessions.map((session, index) => ({
-          sessionId: session.joinedAt.getTime().toString() + '_' + index,
           joinedAt: session.joinedAt,
           leftAt: session.leftAt,
-          duration: session.leftAt
+          durationSec: session.leftAt
             ? Math.floor(
               (new Date(session.leftAt).getTime() -
                 new Date(session.joinedAt).getTime()) /
@@ -1178,14 +1200,24 @@ export class ParticipantService {
       };
     });
 
+    const presentParticipants = attendanceData.filter(p => p.status === ParticipantStatus.ADMITTED || p.status === ParticipantStatus.APPROVED).length;
+    const totalMeetingDuration = meeting.endedAt && meeting.actualStartAt 
+      ? Math.floor((new Date(meeting.endedAt).getTime() - new Date(meeting.actualStartAt).getTime()) / 1000)
+      : 0;
+    const averageAttendanceTime = attendanceData.length > 0 
+      ? Math.floor(attendanceData.reduce((sum, p) => sum + p.totalTime, 0) / attendanceData.length)
+      : 0;
+    const attendanceRate = participants.length > 0 ? Math.round((presentParticipants / participants.length) * 100) : 0;
+
+
     return {
       meetingId,
       totalParticipants: participants.length,
-      currentlyOnline: participants.filter((p) => {
-        const sessions = p.sessions || [];
-        return sessions.length > 0 && !sessions[sessions.length - 1].leftAt;
-      }).length,
-      attendance: attendanceData,
+      presentParticipants,
+      absentParticipants: participants.length - presentParticipants,
+      averageAttendanceTime,
+      attendanceRate,
+      participants: attendanceData,
     };
   }
 
