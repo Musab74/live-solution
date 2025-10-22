@@ -18,7 +18,7 @@ NODE_ENV=development
 
 # LiveKit Configuration
 # LiveKit is running on server .91
-LIVEKIT_URL=http://39.116.130.91:7880
+LIVEKIT_URL=https://livekit1.hrdeedu.co.kr
 # Default development keys (replace with actual production keys from .91 server)
 LIVEKIT_API_KEY=devkey
 LIVEKIT_API_SECRET=secret
@@ -48,6 +48,6 @@ VOD_SERVER_PORT=2222
 VOD_SERVER_USER=root
 VOD_SERVER_REMOTE_PATH=/root/Desktop/Live-Solution/Recordings
 
-# Public URL to access recordings (served from .91)
-VOD_SERVER_PUBLIC_URL=http://39.116.130.91/recordings
+# Videos are stored privately (no public access)
+# VOD_SERVER_PUBLIC_URL=http://39.116.130.91/recordings
 

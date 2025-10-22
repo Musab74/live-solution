@@ -574,20 +574,11 @@ export class ParticipantService {
       const lastSession = sessions[sessions.length - 1];
       if (!lastSession.leftAt && lastSession.joinedAt) {
         const now = new Date();
-        const durationSec = Math.floor(
+        lastSession.leftAt = now;
+        lastSession.durationSec = Math.floor(
           (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
         );
-        
-        // 🔧 FIX: Only update if duration is positive (prevent invalid sessions)
-        if (durationSec >= 0) {
-          lastSession.leftAt = now;
-          lastSession.durationSec = durationSec;
-          participant.totalDurationSec += lastSession.durationSec;
-        } else {
-          // If duration would be negative, remove this invalid session
-          console.warn(`[LEAVE_MEETING] Removing invalid session with negative duration for participant ${participantId}`);
-          sessions.pop();
-        }
+        participant.totalDurationSec += lastSession.durationSec;
       }
     }
 
@@ -1116,23 +1107,12 @@ export class ParticipantService {
     // Calculate attendance data
     const attendanceData = participants.map((participant) => {
       const sessions = participant.sessions || [];
-      
-      // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt)
-      const validSessions = sessions.filter(session => {
-        if (!session.joinedAt) return false;
-        if (!session.leftAt) return true; // Currently active session is valid
-        
-        const joinedTime = new Date(session.joinedAt).getTime();
-        const leftTime = new Date(session.leftAt).getTime();
-        return leftTime >= joinedTime; // Only keep sessions where leftAt >= joinedAt
-      });
-      
-      const totalDuration = validSessions.reduce((total, session) => {
+      const totalDuration = sessions.reduce((total, session) => {
         const sessionDuration = session.leftAt
           ? new Date(session.leftAt).getTime() -
           new Date(session.joinedAt).getTime()
           : Date.now() - new Date(session.joinedAt).getTime();
-        return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
+        return total + Math.floor(sessionDuration / 1000);
       }, 0);
 
       const userData =
@@ -1152,16 +1132,16 @@ export class ParticipantService {
         role: participant.role,
         status: participant.status,
         joinedAt:
-          validSessions.length > 0 ? validSessions[0].joinedAt : participant.createdAt,
+          sessions.length > 0 ? sessions[0].joinedAt : participant.createdAt,
         leftAt:
-          validSessions.length > 0 && validSessions[validSessions.length - 1].leftAt
+          sessions.length > 0 && sessions[sessions.length - 1].leftAt
             ? sessions[sessions.length - 1].leftAt
             : null,
         totalDuration,
-        sessionCount: validSessions.length,
+        sessionCount: sessions.length,
         isCurrentlyOnline:
-          validSessions.length > 0 && !validSessions[validSessions.length - 1].leftAt,
-        sessions: validSessions.map((session, index) => ({
+          sessions.length > 0 && !sessions[sessions.length - 1].leftAt,
+        sessions: sessions.map((session, index) => ({
           sessionId: session.joinedAt.getTime().toString() + '_' + index,
           joinedAt: session.joinedAt,
           leftAt: session.leftAt,

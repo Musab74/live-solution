@@ -793,9 +793,18 @@ export class MeetingService {
         if (sessions.length > 0) {
           const last = sessions[sessions.length - 1];
           if (!last.leftAt && last.joinedAt) {
-            last.leftAt = now;
-            last.durationSec = Math.floor((now.getTime() - last.joinedAt.getTime()) / 1000);
-            totalIncrement += last.durationSec;
+            const durationSec = Math.floor((now.getTime() - last.joinedAt.getTime()) / 1000);
+            
+            // 🔧 FIX: Only close session if duration is positive
+            if (durationSec >= 0) {
+              last.leftAt = now;
+              last.durationSec = durationSec;
+              totalIncrement += last.durationSec;
+            } else {
+              // If duration would be negative, remove this invalid session
+              this.logger.warn(`[END_MEETING] Removing invalid session for participant ${p._id}`);
+              sessions.pop();
+            }
           }
         }
         p.totalDurationSec = (p.totalDurationSec || 0) + totalIncrement;
