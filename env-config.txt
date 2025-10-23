@@ -34,20 +34,18 @@ MAX_FILE_SIZE=50000000
 UPLOAD_PATH=./uploads
 
 # VOD Server Configuration (Recording Storage)
-# Recording path: /root/Desktop/Live-Solution/Recordings
+# VOD Server: i-vod1.hrdeedu.co.kr (39.116.130.93)
+# Upload endpoint: https://i-vod1.hrdeedu.co.kr/upload
+# Playback URL: https://i-vod1.hrdeedu.co.kr/recordings/<filename>.mp4
 
-# Disable mount (not needed in this setup)
-VOD_SERVER_ENABLED=false
+# VOD Server Details
+VOD_SERVER_URL=https://i-vod1.hrdeedu.co.kr
+VOD_SERVER_UPLOAD_URL=https://i-vod1.hrdeedu.co.kr/upload
+VOD_SERVER_RECORDINGS_URL=https://i-vod1.hrdeedu.co.kr/recordings
+VOD_SERVER_HOST=39.116.130.93
+VOD_SERVER_PORT=443
+VOD_SERVER_UPLOAD_FIELD=recording
 
-# Recording path on .91 server (where LiveKit is running)
-VOD_SERVER_FALLBACK_PATH=/root/Desktop/Live-Solution/Recordings
-
-# VOD Server Details (for reference)
-VOD_SERVER_HOST=39.116.130.91
-VOD_SERVER_PORT=2222
-VOD_SERVER_USER=root
-VOD_SERVER_REMOTE_PATH=/root/Desktop/Live-Solution/Recordings
-
-# Videos are stored privately (no public access)
-# VOD_SERVER_PUBLIC_URL=http://39.116.130.91/recordings
+# Enable VOD server integration
+VOD_SERVER_ENABLED=true
 

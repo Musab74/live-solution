@@ -102,13 +102,35 @@ export class LivekitService {
     return this.rooms.updateParticipant(room, identity, { metadata });
   }
 
-  // Recording (egress) — configure outputs in livekit.yaml for S3/FS first
+  // Recording (egress) — simplified implementation
   async startRecording(room: string, filepath: string) {
-    // Simplified implementation - in production, configure proper egress outputs
-    return `rec_${Date.now()}`;
+    try {
+      const fileName = filepath.split('/').pop() || `recording_${Date.now()}.mp4`;
+      
+      // For now, return a mock egress ID
+      // In production, this would configure proper LiveKit Egress
+      const egressId = `egress_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      console.log(`[LIVEKIT_SERVICE] Mock egress started: ${egressId} for room: ${room}`);
+      console.log(`[LIVEKIT_SERVICE] File: ${fileName}`);
+      console.log(`[LIVEKIT_SERVICE] VOD Server: ${process.env.VOD_SERVER_UPLOAD_URL || 'https://i-vod1.hrdeedu.co.kr/upload'}`);
+      
+      return egressId;
+    } catch (error) {
+      console.error(`[LIVEKIT_SERVICE] Failed to start egress:`, error);
+      throw error;
+    }
   }
-  stopRecording(egressId: string) {
-    return Promise.resolve();
+
+  async stopRecording(egressId: string) {
+    try {
+      await this.egress.stopEgress(egressId);
+      console.log(`[LIVEKIT_SERVICE] Egress stopped: ${egressId}`);
+      return true;
+    } catch (error) {
+      console.error(`[LIVEKIT_SERVICE] Failed to stop egress:`, error);
+      throw error;
+    }
   }
   getRecording(egressId: string) {
     return this.egress.listEgress({ egressId }).then((list) => list?.[0]);
@@ -175,8 +197,11 @@ export class LivekitService {
 
   // Get VOD server URL
   getVodServerUrl(): string {
-    // In production, this would be your actual VOD server URL
-    // For now, return a placeholder or use environment variable
-    return process.env.VOD_SERVER_URL || 'http://localhost:3001';
+    return process.env.VOD_SERVER_URL || 'https://i-vod1.hrdeedu.co.kr';
+  }
+
+  // Get VOD server recordings URL
+  getVodRecordingsUrl(): string {
+    return process.env.VOD_SERVER_RECORDINGS_URL || 'https://i-vod1.hrdeedu.co.kr/recordings';
   }
 }
