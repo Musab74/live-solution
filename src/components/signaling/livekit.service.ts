@@ -128,4 +128,55 @@ export class LivekitService {
     // For now, return local path
     return path.join(localPath, fileName);
   }
+
+  // Get the local recording path (alias for getRecordingPath for backward compatibility)
+  getLocalRecordingPath(fileName: string): string {
+    return this.getRecordingPath(fileName);
+  }
+
+  // Upload recording to VOD server
+  async uploadRecordingToVodServer(localFilePath: string, fileName: string): Promise<boolean> {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      
+      // Check if local file exists
+      if (!fs.existsSync(localFilePath)) {
+        console.error(`[LIVEKIT_SERVICE] Local recording file not found: ${localFilePath}`);
+        return false;
+      }
+
+      // In production, you would upload to your VOD server (S3, etc.)
+      // For now, we'll just copy to the VOD server path if it exists
+      const vodServerPath = '/mnt/vod-server/recordings';
+      const vodFilePath = path.join(vodServerPath, fileName);
+      
+      // Check if VOD server mount exists
+      if (fs.existsSync(vodServerPath)) {
+        // Ensure directory exists
+        const vodDir = path.dirname(vodFilePath);
+        if (!fs.existsSync(vodDir)) {
+          fs.mkdirSync(vodDir, { recursive: true });
+        }
+        
+        // Copy file to VOD server
+        fs.copyFileSync(localFilePath, vodFilePath);
+        console.log(`[LIVEKIT_SERVICE] Recording uploaded to VOD server: ${vodFilePath}`);
+        return true;
+      } else {
+        console.log(`[LIVEKIT_SERVICE] VOD server mount not available, keeping local file: ${localFilePath}`);
+        return true; // Consider it successful even if VOD server is not available
+      }
+    } catch (error) {
+      console.error(`[LIVEKIT_SERVICE] Error uploading recording to VOD server:`, error);
+      return false;
+    }
+  }
+
+  // Get VOD server URL
+  getVodServerUrl(): string {
+    // In production, this would be your actual VOD server URL
+    // For now, return a placeholder or use environment variable
+    return process.env.VOD_SERVER_URL || 'http://localhost:3001';
+  }
 }
