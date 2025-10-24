@@ -128,34 +128,26 @@ export class RecordingService {
       
       this.logger.log(`[START_RECORDING] Recording will be saved to: ${filePath}`);
       
-      // Start LiveKit recording with VOD server upload
-      let livekitEgressId: string;
-      try {
-        livekitEgressId = await this.livekitService.startRecording(
-          meeting._id.toString(),
-          filePath
-        );
-        this.logger.log(`[START_RECORDING] ✅ LiveKit egress started: ${livekitEgressId}`);
-        this.logger.log(`[START_RECORDING] 📹 Recording will be uploaded to: https://i-vod1.hrdeedu.co.kr/upload`);
-      } catch (error) {
-        this.logger.error(`[START_RECORDING] ❌ LiveKit egress failed: ${error.message}`);
-        throw new BadRequestException(`Failed to start recording: ${error.message}`);
-      }
+      // Client-side recording - no server-side egress needed
+      this.logger.log(`[START_RECORDING] Client-side recording enabled for meeting: ${meeting._id}`);
+      this.logger.log(`[START_RECORDING] Users can record using the frontend recording component`);
+      this.logger.log(`[START_RECORDING] Recordings will be uploaded to: https://i-vod1.hrdeedu.co.kr/recordings/`);
 
       // Start recording
       const now = new Date();
       meeting.isRecording = true;
-      meeting.recordingId = livekitEgressId;
+      meeting.recordingId = `client_recording_${Date.now()}`;
       meeting.recordingStartedAt = now;
       meeting.recordingStatus = RecordingStatus.RECORDING;
       meeting.recordingDuration = 0;
       meeting.recordingPausedAt = undefined;
       meeting.recordingResumedAt = undefined;
       meeting.recordingEndedAt = undefined;
-      // Recording saved locally first
-      meeting.recordingUrl = `/uploads/recordings/${fileName}`;
+      // Recording will be saved to VOD server
+      const vodServerUrl = this.livekitService.getVodRecordingsUrl();
+      meeting.recordingUrl = `${vodServerUrl}/${fileName}`;
       this.logger.log(`[START_RECORDING] 📹 Recording URL: ${meeting.recordingUrl}`);
-      this.logger.log(`[START_RECORDING] 💾 Recording will be saved locally: ${filePath}`);
+      this.logger.log(`[START_RECORDING] 💾 Recording will be saved to VOD server: /mnt/vod-server/recordings/${fileName}`);
 
       // Set quality and format defaults
       const quality = input.quality || '720p';
@@ -224,13 +216,8 @@ export class RecordingService {
         );
       }
 
-      // Stop LiveKit recording
-      try {
-        await this.livekitService.stopRecording(meeting.recordingId);
-        this.logger.log(`[STOP_RECORDING] LiveKit egress stopped: ${meeting.recordingId}`);
-      } catch (error) {
-        this.logger.error(`[STOP_RECORDING] Failed to stop LiveKit egress: ${error.message}`);
-      }
+      // Client-side recording - no server-side egress to stop
+      this.logger.log(`[STOP_RECORDING] Client-side recording stopped for meeting: ${meeting._id}`);
 
       // Stop recording
       const now = new Date();

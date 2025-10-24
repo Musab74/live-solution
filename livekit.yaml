@@ -1,6 +1,10 @@
-# LiveKit Server Configuration
+# LiveKit Server Config
 port: 7880
+
 rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
   # CORS configuration for LiveKit server
   cors:
     origins:
@@ -10,29 +14,16 @@ rtc:
       - "https://api.hrdeedu.co.kr"
     allow_credentials: true
 
+turn:
+  enabled: false
+
+# Keys configuration
+keys:
+  devkey: hrdesolutionsolutionhrde12345765432165651253434563242dfhjvbfd
+
 # Redis for LiveKit (optional but recommended for production)
 redis:
   address: localhost:6379
-
-# Keys (these should match your backend configuration)
-keys:
-  APIkey: your-actual-livekit-api-key
-  APIsecret: your-actual-livekit-secret
-
-# Logging
-log_level: info
-
-# WebRTC configuration
-rtc:
-  # TURN server configuration (if you have one)
-  # turn:
-  #   enabled: true
-  #   domain: your-turn-domain.com
-  #   external_tls: false
-  #   udp_port: 3478
-  #   tcp_port: 3478
-  #   username: your-turn-username
-  #   password: your-turn-password
 
 # Room configuration
 room:
@@ -43,3 +34,51 @@ room:
   # Enable recording
   enable_recording: true
 
+# Egress configuration for recording
+egress:
+  # Enable egress (recording) functionality
+  enabled: true
+  
+  # Webhook configuration for recording events
+  webhook:
+    url: "https://api.hrdeedu.co.kr/webhooks/egress"
+    api_key: "hrdesolutionsolutionhrde12345765432165651253434563242dfhjvbfd"
+  
+  # Output configuration
+  outputs:
+    # File output to VOD server mount
+    - type: file
+      filepath: "/mnt/vod-server/recordings/{room_name}_{timestamp}.mp4"
+      file_type: MP4
+      video_codec: H264
+      audio_codec: AAC
+      video_bitrate: 2000000  # 2 Mbps
+      audio_bitrate: 128000   # 128 kbps
+      video_width: 1280
+      video_height: 720
+      framerate: 30
+      
+    # Fallback local file output
+    - type: file
+      filepath: "/tmp/recordings/{room_name}_{timestamp}.mp4"
+      file_type: MP4
+      video_codec: H264
+      audio_codec: AAC
+      video_bitrate: 2000000
+      audio_bitrate: 128000
+      video_width: 1280
+      video_height: 720
+      framerate: 30
+
+# Recording configuration
+recording:
+  # Enable recording
+  enabled: true
+  # Recording quality
+  quality: high
+  # Recording format
+  format: mp4
+
+logging:
+  level: info
+  json: false

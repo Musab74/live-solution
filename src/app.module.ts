@@ -11,6 +11,7 @@ import { VodModule } from './components/vod/vod.module';
 import { SignalingModule } from './components/signaling/signaling.module';
 import { HealthModule } from './components/health/health.module';
 import { RecordingModule } from './components/recording/recording.module';
+import { RecordingUploadController } from './components/recording/recording-upload.controller';
 import { SocketModule } from './socket/socket.module';
 import { MongooseModule } from '@nestjs/mongoose';
 import { GraphQLModule } from '@nestjs/graphql';
@@ -61,7 +62,7 @@ const meetingStartEmitter = new EventEmitter();
       { name: Vod.name, schema: VodSchema },
     ]),
   ],
-  controllers: [AppController],
+  controllers: [AppController, RecordingUploadController],
   providers: [AppService, PresenceCleanupService],
 })
 export class AppModule {}

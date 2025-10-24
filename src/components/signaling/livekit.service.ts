@@ -3,7 +3,6 @@ import { ConfigService } from '@nestjs/config';
 import {
   AccessToken,
   RoomServiceClient,
-  EgressClient,
 } from 'livekit-server-sdk';
 
 @Injectable({ scope: Scope.DEFAULT })
@@ -13,7 +12,6 @@ export class LivekitService {
   private readonly httpUrl: string;
   private readonly wsUrl: string;
   private readonly rooms: RoomServiceClient;
-  private readonly egress: EgressClient;
 
   constructor(config: ConfigService) {
     this.apiKey = config.get<string>('LIVEKIT_API_KEY')!;
@@ -27,7 +25,6 @@ export class LivekitService {
       this.apiKey,
       this.apiSecret,
     );
-    this.egress = new EgressClient(this.httpUrl, this.apiKey, this.apiSecret);
   }
 
   getWsUrl() {
@@ -102,102 +99,8 @@ export class LivekitService {
     return this.rooms.updateParticipant(room, identity, { metadata });
   }
 
-  // Recording (egress) — simplified implementation for now
-  async startRecording(room: string, filepath: string) {
-    try {
-      const fileName = filepath.split('/').pop() || `recording_${Date.now()}.mp4`;
-      
-      console.log(`[LIVEKIT_SERVICE] Starting recording for room: ${room}`);
-      console.log(`[LIVEKIT_SERVICE] Output file: ${fileName}`);
-      console.log(`[LIVEKIT_SERVICE] File path: ${filepath}`);
-      
-      // For now, return a mock egress ID
-      // TODO: Implement proper LiveKit Egress when server is configured
-      const egressId = `egress_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      console.log(`[LIVEKIT_SERVICE] ✅ Mock egress started: ${egressId}`);
-      console.log(`[LIVEKIT_SERVICE] Note: This is a mock implementation. Real recording requires LiveKit server configuration.`);
-      
-      return egressId;
-    } catch (error) {
-      console.error(`[LIVEKIT_SERVICE] ❌ Failed to start egress:`, error);
-      console.error(`[LIVEKIT_SERVICE] Error details:`, error.message);
-      throw error;
-    }
-  }
-
-  async stopRecording(egressId: string) {
-    try {
-      await this.egress.stopEgress(egressId);
-      console.log(`[LIVEKIT_SERVICE] Egress stopped: ${egressId}`);
-      return true;
-    } catch (error) {
-      console.error(`[LIVEKIT_SERVICE] Failed to stop egress:`, error);
-      throw error;
-    }
-  }
-  getRecording(egressId: string) {
-    return this.egress.listEgress({ egressId }).then((list) => list?.[0]);
-  }
-  listRecordings(room?: string) {
-    return this.egress.listEgress({ roomName: room });
-  }
-  
-  // Get the path where recordings should be saved
-  getRecordingPath(fileName: string): string {
-    const path = require('path');
-    // Check if VOD server mount exists, otherwise use local uploads
-    const vodServerPath = '/mnt/vod-server/recordings';
-    const localPath = path.join(process.cwd(), 'uploads', 'recordings');
-    
-    // In production, you would check if the VOD mount exists
-    // For now, return local path
-    return path.join(localPath, fileName);
-  }
-
-  // Get the local recording path (alias for getRecordingPath for backward compatibility)
-  getLocalRecordingPath(fileName: string): string {
-    return this.getRecordingPath(fileName);
-  }
-
-  // Upload recording to VOD server
-  async uploadRecordingToVodServer(localFilePath: string, fileName: string): Promise<boolean> {
-    try {
-      const fs = require('fs');
-      const path = require('path');
-      
-      // Check if local file exists
-      if (!fs.existsSync(localFilePath)) {
-        console.error(`[LIVEKIT_SERVICE] Local recording file not found: ${localFilePath}`);
-        return false;
-      }
-
-      // In production, you would upload to your VOD server (S3, etc.)
-      // For now, we'll just copy to the VOD server path if it exists
-      const vodServerPath = '/mnt/vod-server/recordings';
-      const vodFilePath = path.join(vodServerPath, fileName);
-      
-      // Check if VOD server mount exists
-      if (fs.existsSync(vodServerPath)) {
-        // Ensure directory exists
-        const vodDir = path.dirname(vodFilePath);
-        if (!fs.existsSync(vodDir)) {
-          fs.mkdirSync(vodDir, { recursive: true });
-        }
-        
-        // Copy file to VOD server
-        fs.copyFileSync(localFilePath, vodFilePath);
-        console.log(`[LIVEKIT_SERVICE] Recording uploaded to VOD server: ${vodFilePath}`);
-        return true;
-      } else {
-        console.log(`[LIVEKIT_SERVICE] VOD server mount not available, keeping local file: ${localFilePath}`);
-        return true; // Consider it successful even if VOD server is not available
-      }
-    } catch (error) {
-      console.error(`[LIVEKIT_SERVICE] Error uploading recording to VOD server:`, error);
-      return false;
-    }
-  }
+  // Client-side recording support (no server-side egress needed)
+  // All recording is handled by the frontend and uploaded via the recording-upload controller
 
   // Get VOD server URL
   getVodServerUrl(): string {

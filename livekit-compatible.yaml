@@ -1,0 +1,18 @@
+# LiveKit Server Config - Compatible Version
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: true
+
+turn:
+  enabled: false
+
+# Keys configuration
+keys:
+  devkey: hrdesolutionsolutionhrde12345765432165651253434563242dfhjvbfd
+
+logging:
+  level: info
+  json: false
