@@ -102,22 +102,26 @@ export class LivekitService {
     return this.rooms.updateParticipant(room, identity, { metadata });
   }
 
-  // Recording (egress) — simplified implementation
+  // Recording (egress) — simplified implementation for now
   async startRecording(room: string, filepath: string) {
     try {
       const fileName = filepath.split('/').pop() || `recording_${Date.now()}.mp4`;
       
+      console.log(`[LIVEKIT_SERVICE] Starting recording for room: ${room}`);
+      console.log(`[LIVEKIT_SERVICE] Output file: ${fileName}`);
+      console.log(`[LIVEKIT_SERVICE] File path: ${filepath}`);
+      
       // For now, return a mock egress ID
-      // In production, this would configure proper LiveKit Egress
+      // TODO: Implement proper LiveKit Egress when server is configured
       const egressId = `egress_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      console.log(`[LIVEKIT_SERVICE] Mock egress started: ${egressId} for room: ${room}`);
-      console.log(`[LIVEKIT_SERVICE] File: ${fileName}`);
-      console.log(`[LIVEKIT_SERVICE] VOD Server: ${process.env.VOD_SERVER_UPLOAD_URL || 'https://i-vod1.hrdeedu.co.kr/upload'}`);
+      console.log(`[LIVEKIT_SERVICE] ✅ Mock egress started: ${egressId}`);
+      console.log(`[LIVEKIT_SERVICE] Note: This is a mock implementation. Real recording requires LiveKit server configuration.`);
       
       return egressId;
     } catch (error) {
-      console.error(`[LIVEKIT_SERVICE] Failed to start egress:`, error);
+      console.error(`[LIVEKIT_SERVICE] ❌ Failed to start egress:`, error);
+      console.error(`[LIVEKIT_SERVICE] Error details:`, error.message);
       throw error;
     }
   }

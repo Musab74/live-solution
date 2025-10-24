@@ -116,9 +116,17 @@ export class RecordingService {
       const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const fileName = `${meeting._id}_${Date.now()}.mp4`;
       
-      // Configure recording for VOD server upload
-      const filePath = `recordings/${fileName}`; // Path relative to VOD server
-      this.logger.log(`[START_RECORDING] Recording will be uploaded to VOD server: ${filePath}`);
+      // Configure recording for local file output first
+      const recordingsDir = path.join(process.cwd(), 'uploads', 'recordings');
+      const filePath = path.join(recordingsDir, fileName);
+      
+      // Ensure recordings directory exists
+      if (!fs.existsSync(recordingsDir)) {
+        fs.mkdirSync(recordingsDir, { recursive: true });
+        this.logger.log(`[START_RECORDING] Created recordings directory: ${recordingsDir}`);
+      }
+      
+      this.logger.log(`[START_RECORDING] Recording will be saved to: ${filePath}`);
       
       // Start LiveKit recording with VOD server upload
       let livekitEgressId: string;
@@ -144,11 +152,10 @@ export class RecordingService {
       meeting.recordingPausedAt = undefined;
       meeting.recordingResumedAt = undefined;
       meeting.recordingEndedAt = undefined;
-      // Recording uploaded to VOD server
-      const vodRecordingsUrl = this.livekitService.getVodRecordingsUrl();
-      meeting.recordingUrl = `${vodRecordingsUrl}/${fileName}`;
+      // Recording saved locally first
+      meeting.recordingUrl = `/uploads/recordings/${fileName}`;
       this.logger.log(`[START_RECORDING] 📹 Recording URL: ${meeting.recordingUrl}`);
-      this.logger.log(`[START_RECORDING] 💾 Recording will be uploaded to VOD server: ${filePath}`);
+      this.logger.log(`[START_RECORDING] 💾 Recording will be saved locally: ${filePath}`);
 
       // Set quality and format defaults
       const quality = input.quality || '720p';
@@ -239,10 +246,9 @@ export class RecordingService {
         meeting.recordingDuration = totalDuration;
       }
 
-      // Update recording URL to point to VOD server
+      // Update recording URL to point to local file
       const fileName = `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`;
-      const vodRecordingsUrl = this.livekitService.getVodRecordingsUrl();
-      const recordingUrl = `${vodRecordingsUrl}/${fileName}`;
+      const recordingUrl = `/uploads/recordings/${fileName}`;
       meeting.recordingUrl = recordingUrl;
 
       await meeting.save();
@@ -252,23 +258,33 @@ export class RecordingService {
         const fileName = recordingUrl.split('/').pop() || `${meeting.recordingId}.mp4`;
         const storageKey = `recordings/${fileName}`;
         
-        // Estimate file size based on duration (VOD server file not directly accessible)
-        const fileSize = Math.round(meeting.recordingDuration * 312500); // ~2.5 Mbps = 312.5 KB/s
-        this.logger.log(`[STOP_RECORDING] 🌐 VOD server recording, estimated size: ${fileSize} bytes`);
+        // Get actual file size from local file
+        let fileSize = 0;
+        const localFilePath = path.join(process.cwd(), 'uploads', 'recordings', fileName);
+        
+        if (fs.existsSync(localFilePath)) {
+          const stats = fs.statSync(localFilePath);
+          fileSize = stats.size;
+          this.logger.log(`[STOP_RECORDING] 💾 Local recording, actual size: ${fileSize} bytes`);
+        } else {
+          // Estimate size based on duration if file doesn't exist yet
+          fileSize = Math.round(meeting.recordingDuration * 312500); // ~2.5 Mbps = 312.5 KB/s
+          this.logger.log(`[STOP_RECORDING] ⚠️ File not found, estimated size: ${fileSize} bytes`);
+        }
 
         const newVod = new this.vodModel({
           title: `${meeting.title || 'Meeting'} - Recording`,
-          notes: `Automatically created from meeting recording on ${now.toLocaleDateString()}. Stored on VOD server (i-vod1.hrdeedu.co.kr).`,
+          notes: `Automatically created from meeting recording on ${now.toLocaleDateString()}. Stored locally.`,
           meetingId: meeting._id,
           source: VodSourceType.FILE,
           storageKey: storageKey,
           sizeBytes: fileSize,
           durationSec: meeting.recordingDuration,
-          url: recordingUrl, // Store the VOD server URL
+          url: recordingUrl, // Store the local file URL
         });
 
         await newVod.save();
-        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} (VOD Server)`);
+        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} (Local)`);
       } catch (vodError) {
         this.logger.error(`[STOP_RECORDING] ❌ Failed to create VOD entry: ${vodError.message}`);
         // Don't fail the recording stop if VOD creation fails

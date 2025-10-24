@@ -24,12 +24,21 @@ async function bootstrap() {
     'http://localhost:3000',  // Development frontend
     'http://localhost:3001',  // Alternative dev frontend
     'http://localhost:3007',  // Development backend
+    'http://127.0.0.1:3000',  // Alternative localhost
+    'http://127.0.0.1:3001',  // Alternative localhost
+    'http://127.0.0.1:3007',  // Alternative localhost
+    'null',  // For file:// protocol requests
   ];
 
   app.enableCors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, Postman, etc.)
       if (!origin) return callback(null, true);
+      
+      // Allow localhost and 127.0.0.1 for development
+      if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
+        return callback(null, true);
+      }
       
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
