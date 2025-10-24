@@ -37,7 +37,7 @@ export class RecordingUploadController {
     storage: diskStorage({
       destination: '/tmp/recordings',
       filename: (req, file, cb) => {
-        const uniqueName = `${randomUUID()}${extname(file.originalname)}`;
+        const uniqueName = `${randomUUID()}`;
         cb(null, uniqueName);
       },
     }),
@@ -66,10 +66,15 @@ export class RecordingUploadController {
         throw new BadRequestException('Meeting ID and User ID are required');
       }
 
-      // Generate final filename
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      // Generate final filename with readable format
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
       const fileExtension = file.originalname.split('.').pop() || 'webm';
-      const finalFileName = `${body.meetingId}_${timestamp}_${file.filename}.${fileExtension}`;
+      
+      // Create readable filename: MeetingName_YYYY-MM-DD_HH-MM-SS.webm
+      const meetingName = body.recordingName || body.meetingId || 'Meeting';
+      const finalFileName = `${meetingName}_${dateStr}_${timeStr}.${fileExtension}`;
       
       this.logger.log(`[CLIENT_RECORDING] Generated filename: ${finalFileName}`);
 
@@ -96,9 +101,8 @@ export class RecordingUploadController {
 
       return {
         success: true,
-        message: 'Recording uploaded successfully',
-        recordingUrl: recordingUrl,
-        fileName: finalFileName,
+        message: 'Recording saved successfully!',
+        recordingId: finalFileName.split('.')[0], // Just the ID without extension
         size: file.size,
         meetingId: body.meetingId,
         userId: body.userId,
