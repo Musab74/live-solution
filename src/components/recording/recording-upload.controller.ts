@@ -2,10 +2,24 @@ import { Controller, Post, UseInterceptors, UploadedFile, Body, Logger, BadReque
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+const FormData = require('form-data');
+
+// Fix for Multer type
+interface MulterFile {
+  fieldname: string;
+  originalname: string;
+  encoding: string;
+  mimetype: string;
+  size: number;
+  destination: string;
+  filename: string;
+  path: string;
+  buffer: Buffer;
+}
 
 interface RecordingUploadDto {
   meetingId: string;
@@ -23,7 +37,7 @@ export class RecordingUploadController {
     storage: diskStorage({
       destination: '/tmp/recordings',
       filename: (req, file, cb) => {
-        const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+        const uniqueName = `${randomUUID()}${extname(file.originalname)}`;
         cb(null, uniqueName);
       },
     }),
@@ -32,7 +46,7 @@ export class RecordingUploadController {
     },
   }))
   async uploadClientRecording(
-    @UploadedFile() file: Express.Multer.File,
+    @UploadedFile() file: MulterFile,
     @Body() body: RecordingUploadDto,
   ) {
     try {
