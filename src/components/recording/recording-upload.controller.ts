@@ -68,7 +68,8 @@ export class RecordingUploadController {
 
       // Generate final filename
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const finalFileName = `${body.meetingId}_${timestamp}_${file.filename}`;
+      const fileExtension = file.originalname.split('.').pop() || 'webm';
+      const finalFileName = `${body.meetingId}_${timestamp}_${file.filename}.${fileExtension}`;
       
       this.logger.log(`[CLIENT_RECORDING] Generated filename: ${finalFileName}`);
 
@@ -126,9 +127,13 @@ export class RecordingUploadController {
       const FormData = require('form-data');
       const formData = new FormData();
       
+      // Determine content type based on file extension
+      const isMP4 = fileName.toLowerCase().endsWith('.mp4');
+      const contentType = isMP4 ? 'video/mp4' : 'video/webm';
+      
       formData.append('recording', fs.createReadStream(localFilePath), {
         filename: fileName,
-        contentType: 'video/mp4'
+        contentType: contentType
       });
 
       const response = await axios.post('https://i-vod1.hrdeedu.co.kr/upload', formData, {
