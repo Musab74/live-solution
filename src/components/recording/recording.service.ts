@@ -233,9 +233,13 @@ export class RecordingService {
         meeting.recordingDuration = totalDuration;
       }
 
-      // Update recording URL to point to local file
-      const fileName = `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`;
-      const recordingUrl = `/uploads/recordings/${fileName}`;
+      // Get the recording filename from the existing recordingUrl or generate new one
+      const fileName = meeting.recordingUrl 
+        ? meeting.recordingUrl.split('/').pop() || `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`
+        : `${meeting._id}_${meeting.recordingStartedAt?.getTime() || Date.now()}.mp4`;
+      
+      // Keep the VOD server URL if it exists, otherwise use local path
+      const recordingUrl = meeting.recordingUrl || `/uploads/recordings/${fileName}`;
       meeting.recordingUrl = recordingUrl;
 
       await meeting.save();
@@ -243,16 +247,24 @@ export class RecordingService {
       // Auto-create VOD entry from recording
       try {
         const fileName = recordingUrl.split('/').pop() || `${meeting.recordingId}.mp4`;
+        // Use the correct storageKey based on VOD server path
         const storageKey = `recordings/${fileName}`;
         
-        // Get actual file size from local file
+        // Get actual file size from file if accessible
         let fileSize = 0;
+        
+        // Check if file is on VOD server
+        const vodServerPath = `/mnt/vod-server/recordings/${fileName}`;
         const localFilePath = path.join(process.cwd(), 'uploads', 'recordings', fileName);
         
-        if (fs.existsSync(localFilePath)) {
+        if (fs.existsSync(vodServerPath)) {
+          const stats = fs.statSync(vodServerPath);
+          fileSize = stats.size;
+          this.logger.log(`[STOP_RECORDING] 💾 VOD server recording found, size: ${fileSize} bytes`);
+        } else if (fs.existsSync(localFilePath)) {
           const stats = fs.statSync(localFilePath);
           fileSize = stats.size;
-          this.logger.log(`[STOP_RECORDING] 💾 Local recording, actual size: ${fileSize} bytes`);
+          this.logger.log(`[STOP_RECORDING] 💾 Local recording, size: ${fileSize} bytes`);
         } else {
           // Estimate size based on duration if file doesn't exist yet
           fileSize = Math.round(meeting.recordingDuration * 312500); // ~2.5 Mbps = 312.5 KB/s
@@ -261,17 +273,17 @@ export class RecordingService {
 
         const newVod = new this.vodModel({
           title: `${meeting.title || 'Meeting'} - Recording`,
-          notes: `Automatically created from meeting recording on ${now.toLocaleDateString()}. Stored locally.`,
+          notes: `Automatically created from meeting recording on ${now.toLocaleDateString()}. Stored on VOD server.`,
           meetingId: meeting._id,
           source: VodSourceType.FILE,
           storageKey: storageKey,
           sizeBytes: fileSize,
           durationSec: meeting.recordingDuration,
-          url: recordingUrl, // Store the local file URL
+          url: recordingUrl, // Store the recording URL
         });
 
         await newVod.save();
-        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} (Local)`);
+        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} for meeting ${meeting._id}`);
       } catch (vodError) {
         this.logger.error(`[STOP_RECORDING] ❌ Failed to create VOD entry: ${vodError.message}`);
         // Don't fail the recording stop if VOD creation fails

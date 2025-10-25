@@ -35,7 +35,7 @@ export class VodResolver {
 
   @Query(() => VodListResponse, { name: 'getAllVods' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async getAllVods(
     @Args('input', { nullable: true }) queryInput: VodQueryInput,
     @AuthMember() user: Member,
@@ -66,7 +66,7 @@ export class VodResolver {
 
   @Query(() => VodStats, { name: 'getVodStats' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async getVodStats(@AuthMember() user: Member) {
     return this.vodService.getVodStats(user._id, user.systemRole);
   }
@@ -75,7 +75,7 @@ export class VodResolver {
 
   @Mutation(() => VodUploadResponse, { name: 'uploadVodFile' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async uploadVodFile(
     @Args('input') createInput: CreateVodFileInput,
     @Args('file', { type: () => String }) file: string,
@@ -91,7 +91,7 @@ export class VodResolver {
 
   @Mutation(() => VodUrlResponse, { name: 'createVodUrl' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async createVodUrl(
     @Args('input') createInput: CreateVodUrlInput,
     @AuthMember() user: Member,
@@ -105,7 +105,7 @@ export class VodResolver {
 
   @Mutation(() => VodWithMeeting, { name: 'createVOD' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async createVOD(
     @Args('input') createInput: CreateVodFileInput,
     @AuthMember() user: Member,
@@ -120,7 +120,7 @@ export class VodResolver {
 
   @Mutation(() => VodWithMeeting, { name: 'updateVod' })
   @UseGuards(AuthGuard, RolesGuard)
-  @Roles(SystemRole.ADMIN, SystemRole.MEMBER)
+  @Roles(SystemRole.ADMIN, SystemRole.TUTOR)
   async updateVod(
     @Args('input') updateInput: UpdateVodInput,
     @AuthMember() user: Member,

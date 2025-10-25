@@ -6,6 +6,11 @@ import { randomUUID } from 'crypto';
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { Vod, VodDocument } from '../../schemas/Vod.model';
+import { Meeting, MeetingDocument } from '../../schemas/Meeting.model';
+import { VodSourceType } from '../../libs/enums/enums';
 const FormData = require('form-data');
 
 // Fix for Multer type
@@ -31,6 +36,11 @@ interface RecordingUploadDto {
 @Controller('recording-upload')
 export class RecordingUploadController {
   private readonly logger = new Logger(RecordingUploadController.name);
+
+  constructor(
+    @InjectModel(Vod.name) private vodModel: Model<VodDocument>,
+    @InjectModel(Meeting.name) private meetingModel: Model<MeetingDocument>,
+  ) {}
 
   @Post('client-recording')
   @UseInterceptors(FileInterceptor('recording', {
@@ -98,6 +108,29 @@ export class RecordingUploadController {
       const recordingUrl = `${vodServerUrl}/${finalFileName}`;
 
       this.logger.log(`[CLIENT_RECORDING] ✅ Recording uploaded successfully: ${recordingUrl}`);
+
+      // Auto-create VOD entry in database
+      try {
+        const meeting = await this.meetingModel.findById(body.meetingId);
+        const recordingDuration = body.duration || 0; // Duration in seconds
+        
+        const newVod = new this.vodModel({
+          title: `${meeting?.title || 'Meeting'} - Recording`,
+          notes: `Automatically created from client recording on ${new Date().toLocaleDateString()}. Uploaded to VOD server.`,
+          meetingId: body.meetingId,
+          source: VodSourceType.FILE,
+          storageKey: `recordings/${finalFileName}`,
+          sizeBytes: file.size,
+          durationSec: recordingDuration,
+          url: recordingUrl,
+        });
+
+        await newVod.save();
+        this.logger.log(`[CLIENT_RECORDING] ✅ VOD entry created: ${newVod._id} for meeting ${body.meetingId}`);
+      } catch (vodError) {
+        this.logger.error(`[CLIENT_RECORDING] ❌ Failed to create VOD entry: ${vodError.message}`);
+        // Don't fail the upload if VOD creation fails
+      }
 
       return {
         success: true,

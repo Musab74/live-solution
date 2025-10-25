@@ -58,9 +58,14 @@ export class VodService {
       const userMeetings = await this.meetingModel
         .find({ hostId: new Types.ObjectId(userId) })
         .select('_id');
-      const meetingIds = userMeetings.map((meeting) => meeting._id);
+      const meetingIds = userMeetings.map((meeting) => meeting._id.toString());
+      console.log(`🔍 [VOD Service] User ${userId} (role: ${userRole}) has ${userMeetings.length} meetings`);
+      console.log(`🔍 [VOD Service] Meeting IDs (string):`, meetingIds);
+      // VOD.meetingId is stored as string, so we need to match against strings
       filter.meetingId = { $in: meetingIds };
     }
+
+    console.log(`🔍 [VOD Service] Filter:`, JSON.stringify(filter, null, 2));
 
     const vods = await this.vodModel
       .find(filter)
@@ -70,7 +75,13 @@ export class VodService {
       .skip(offset)
       .lean();
 
+    console.log(`🔍 [VOD Service] Found ${vods.length} VODs`);
+    vods.forEach((vod: any, idx: number) => {
+      console.log(`📹 VOD ${idx + 1}: id="${vod._id}", title="${vod.title}", meetingId="${vod.meetingId}", source="${vod.source}"`);
+    });
+
     const total = await this.vodModel.countDocuments(filter);
+    console.log(`🔍 [VOD Service] Total VODs matching filter: ${total}`);
 
     const vodsWithMeeting = vods.map((vod) => {
       const meetingData =
@@ -83,8 +94,17 @@ export class VodService {
             }
           : null;
 
+      // Convert meetingId to string ID if it's a populated object
+      const meetingIdValue = 
+        vod.meetingId && typeof vod.meetingId === 'object' 
+          ? (vod.meetingId as any)._id?.toString() 
+          : vod.meetingId?.toString();
+
+      console.log(`🔧 Transforming VOD: original meetingId type: ${typeof vod.meetingId}, value: ${JSON.stringify(vod.meetingId)}, transformed: ${meetingIdValue}`);
+
       return {
         ...vod,
+        meetingId: meetingIdValue, // Convert to string ID
         meeting: meetingData,
       };
     });
@@ -138,8 +158,15 @@ export class VodService {
           }
         : null;
 
+    // Convert meetingId to string ID if it's a populated object
+    const meetingIdValue = 
+      vod.meetingId && typeof vod.meetingId === 'object' 
+        ? (vod.meetingId as any)._id?.toString() 
+        : vod.meetingId?.toString();
+
     return {
       ...vod,
+      meetingId: meetingIdValue, // Convert to string ID
       meeting: meetingData,
     };
   }
