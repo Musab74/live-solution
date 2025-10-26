@@ -9,7 +9,7 @@ export class Member {
   @Field(() => ID)
   _id!: string;
 
-  @Prop({ required: false, unique: true, index: true, trim: true })
+  @Prop({ required: false, unique: true, sparse: true, trim: true })
   @Field({ nullable: true })
   user_id?: string; // PHP user ID for SSO integration
 
