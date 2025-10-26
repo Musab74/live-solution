@@ -2,8 +2,8 @@ import * as mongoose from 'mongoose';
 
 async function fixUserIdIndex() {
   try {
-    // Connect to MongoDB
-    const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/LiveProd';
+    // Connect to MongoDB - USE PRODUCTION URI
+    const MONGODB_URI = process.env.MONGODB_PROD || 'mongodb://localhost:27017/LiveProd';
     
     console.log('Connecting to MongoDB...');
     await mongoose.connect(MONGODB_URI);
