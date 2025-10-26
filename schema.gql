@@ -110,7 +110,7 @@ type ParticipantWithLoginInfo {
   hasHandRaised: Boolean
   handRaisedAt: DateTime
   handLoweredAt: DateTime
-  loginInfo: LoginInfo!
+  loginInfo: LoginInfo
   createdAt: DateTime!
   updatedAt: DateTime!
 }
@@ -473,7 +473,7 @@ type Query {
   getParticipantsByMeeting(meetingId: ID!): [ParticipantWithLoginInfo!]!
   getParticipantStats(meetingId: ID!): ParticipantStats!
   getParticipantById(participantId: ID!): ParticipantWithLoginInfo!
-  getParticipantByUserAndMeeting(meetingId: ID!): ParticipantWithLoginInfo!
+  getParticipantByUserAndMeeting(meetingId: ID!): ParticipantWithLoginInfo
   getWaitingParticipants(meetingId: ID!): [WaitingParticipant!]!
   getWaitingRoomStats(meetingId: ID!): WaitingRoomStats!
   getWaitingParticipantsSimple(meetingId: ID!): [ParticipantWithLoginInfo!]!

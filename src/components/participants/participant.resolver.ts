@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, Parent } from '@nestjs/graphql';
 import { ParticipantService } from './participant.service';
 import { MeetingService } from '../meetings/meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -57,7 +57,7 @@ import {
   DeviceTestResult,
 } from '../../libs/DTO/participant/waiting-room.query';
 
-@Resolver()
+@Resolver(() => ParticipantWithLoginInfo)
 export class ParticipantResolver {
   private readonly logger = new Logger(ParticipantResolver.name);
 
@@ -65,6 +65,69 @@ export class ParticipantResolver {
     private readonly participantService: ParticipantService,
     private readonly meetingService: MeetingService,
   ) { }
+
+  // Field resolver for loginInfo - calculates attendance data from sessions
+  @Resolver(() => ParticipantWithLoginInfo)
+  loginInfo(@Parent() participant: any) {
+    if (!participant || !participant.sessions) {
+      return {
+        totalSessions: 0,
+        firstLogin: null,
+        lastLogin: null,
+        totalDurationMinutes: 0,
+        isCurrentlyOnline: participant?.status === 'ADMITTED' || participant?.status === 'APPROVED',
+        sessions: []
+      };
+    }
+
+    const sessions = Array.isArray(participant.sessions) ? participant.sessions : [];
+    const now = new Date();
+    
+    // Calculate total duration from sessions
+    let totalDurationSec = participant.totalDurationSec || 0;
+    
+    // If there's an active session (joinedAt exists but leftAt is null), calculate current duration
+    if (sessions.length > 0) {
+      const lastSession = sessions[sessions.length - 1];
+      if (lastSession.joinedAt && !lastSession.leftAt) {
+        const durationMs = now.getTime() - new Date(lastSession.joinedAt).getTime();
+        totalDurationSec += Math.floor(durationMs / 1000);
+      }
+    }
+
+    const totalDurationMinutes = Math.floor(totalDurationSec / 60);
+    
+    // Find first and last login
+    let firstLogin = null;
+    let lastLogin = null;
+    
+    if (sessions.length > 0) {
+      const joinedTimes = sessions
+        .filter(s => s.joinedAt)
+        .map(s => new Date(s.joinedAt).getTime());
+      
+      if (joinedTimes.length > 0) {
+        firstLogin = new Date(Math.min(...joinedTimes));
+        lastLogin = new Date(Math.max(...joinedTimes));
+      }
+    }
+
+    // Convert sessions to SessionInfo format
+    const sessionInfos = sessions.map(session => ({
+      joinedAt: session.joinedAt,
+      leftAt: session.leftAt,
+      durationMinutes: Math.floor((session.durationSec || 0) / 60)
+    }));
+
+    return {
+      totalSessions: sessions.length,
+      firstLogin,
+      lastLogin,
+      totalDurationMinutes,
+      isCurrentlyOnline: participant.status === 'ADMITTED' || participant.status === 'APPROVED',
+      sessions: sessionInfos
+    };
+  }
 
   @Query(() => [ParticipantWithLoginInfo], { name: 'getParticipantsByMeeting' })
   @UseGuards(AuthGuard)
@@ -257,20 +320,120 @@ export class ParticipantResolver {
     }
   }
 
-  @Query(() => ParticipantWithLoginInfo, { name: 'getParticipantByUserAndMeeting' })
+  @Query(() => ParticipantWithLoginInfo, { 
+    name: 'getParticipantByUserAndMeeting',
+    nullable: true 
+  })
   @UseGuards(AuthGuard)
   async getParticipantByUserAndMeeting(
     @Args('meetingId', { type: () => ID }) meetingId: string,
     @AuthMember() user: Member,
-  ) {
+  ): Promise<ParticipantWithLoginInfo | null> {
 
     try {
       const result = await this.participantService.getParticipantByUserAndMeeting(
         user._id,
         meetingId
       );
-      return result;
+      
+      // Return null if no participation found (instead of throwing error)
+      if (!result) {
+        console.log(`[GET_PARTICIPANT_BY_USER_MEETING] No participation found for user ${user._id} in meeting ${meetingId}`);
+        return null;
+      }
+
+      // Calculate loginInfo from sessions - filter out invalid sessions without joinedAt
+      const sessions = (result.sessions || []).filter(s => s.joinedAt);
+      const now = new Date();
+      
+      // Calculate total duration
+      let totalDurationSec = result.totalDurationSec || 0;
+      if (sessions.length > 0) {
+        const lastSession = sessions[sessions.length - 1];
+        if (lastSession.joinedAt && !lastSession.leftAt) {
+          const durationMs = now.getTime() - new Date(lastSession.joinedAt).getTime();
+          totalDurationSec += Math.floor(durationMs / 1000);
+        }
+      }
+
+      const totalDurationMinutes = Math.floor(totalDurationSec / 60);
+      
+      // Find first and last login
+      let firstLogin = null;
+      let lastLogin = null;
+      if (sessions.length > 0) {
+        const joinedTimes = sessions
+          .filter(s => s.joinedAt)
+          .map(s => new Date(s.joinedAt).getTime());
+        
+        if (joinedTimes.length > 0) {
+          firstLogin = new Date(Math.min(...joinedTimes));
+          lastLogin = new Date(Math.max(...joinedTimes));
+        }
+      }
+
+      // Debug: Log the raw sessions from database
+      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Raw sessions from DB:`, JSON.stringify(sessions, null, 2));
+      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Total sessions: ${sessions.length}`);
+      
+      const sessionInfos = sessions
+        .filter(session => {
+          const hasJoinedAt = !!session.joinedAt;
+          if (!hasJoinedAt) {
+            console.warn(`[GET_PARTICIPANT_BY_USER_MEETING] Filtering out session without joinedAt:`, session);
+          }
+          return hasJoinedAt;
+        })
+        .map(session => {
+          // If session is active (no leftAt), calculate current duration
+          let durationSec = session.durationSec || 0;
+          if (session.joinedAt && !session.leftAt) {
+            const durationMs = now.getTime() - new Date(session.joinedAt).getTime();
+            durationSec = Math.floor(durationMs / 1000);
+          }
+          
+          return {
+            joinedAt: session.joinedAt,
+            leftAt: session.leftAt,
+            durationMinutes: Math.floor(durationSec / 60)
+          };
+        });
+      
+      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Valid sessions after filtering: ${sessionInfos.length}`);
+
+      return {
+        _id: result._id.toString(),
+        meetingId: result.meetingId.toString(),
+        user: result.userId ? {
+          _id: result.userId._id.toString(),
+          email: (result.userId as any).email,
+          displayName: (result.userId as any).displayName,
+          avatarUrl: (result.userId as any).avatarUrl,
+          organization: (result.userId as any).organization,
+          department: (result.userId as any).department,
+        } : undefined,
+        displayName: result.displayName,
+        role: result.role,
+        status: result.status,
+        micState: result.micState,
+        cameraState: result.cameraState,
+        socketId: result.socketId,
+        hasHandRaised: result.hasHandRaised,
+        handRaisedAt: result.handRaisedAt,
+        handLoweredAt: result.handLoweredAt,
+        createdAt: result.createdAt,
+        updatedAt: result.updatedAt,
+        loginInfo: {
+          totalSessions: sessions.length,
+          firstLogin,
+          lastLogin,
+          totalDurationMinutes,
+          isCurrentlyOnline: result.status === 'ADMITTED' || result.status === 'APPROVED',
+          sessions: sessionInfos
+        }
+      };
     } catch (error) {
+      console.error(`[GET_PARTICIPANT_BY_USER_MEETING] Error:`, error);
       throw error;
     }
   }

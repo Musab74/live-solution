@@ -22,6 +22,15 @@ const SessionSchema = SchemaFactory.createForClass(Session);
 // Disable _id for embedded subdocuments to prevent Mongoose from treating them as separate documents
 SessionSchema.set('_id', false);
 
+// Add pre-save middleware to ensure joinedAt is always set
+SessionSchema.pre('validate', function(next) {
+  if (!this.joinedAt) {
+    console.warn('[SESSION_SCHEMA] Session without joinedAt detected, setting to current time');
+    this.joinedAt = new Date();
+  }
+  next();
+});
+
 @Schema({ timestamps: true })
 @ObjectType()
 export class Participant {

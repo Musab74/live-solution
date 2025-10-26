@@ -2123,12 +2123,34 @@ export class ParticipantService {
       });
 
       let cleanedCount = 0;
+      const now = new Date();
+      
       for (const participant of staleParticipants) {
+        // Close any open sessions
+        const sessions = participant.sessions || [];
+        if (sessions.length > 0) {
+          const lastSession = sessions[sessions.length - 1];
+          
+          // Check if the last session is still open
+          if (!lastSession.leftAt && lastSession.joinedAt) {
+            // Close the session
+            lastSession.leftAt = now;
+            lastSession.durationSec = Math.floor(
+              (now.getTime() - new Date(lastSession.joinedAt).getTime()) / 1000
+            );
+            
+            // Update total duration
+            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            
+            this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
+          }
+        }
+        
         // Mark as LEFT
-        await this.participantModel.findByIdAndUpdate(participant._id, {
-          status: 'LEFT',
-          leftAt: new Date()
-        });
+        participant.status = ParticipantStatus.LEFT;
+        
+        // Save the participant with closed session
+        await participant.save();
         cleanedCount++;
       }
 

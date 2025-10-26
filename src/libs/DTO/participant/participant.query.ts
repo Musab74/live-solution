@@ -92,8 +92,8 @@ export class ParticipantWithLoginInfo {
   @Field({ nullable: true })
   handLoweredAt?: Date;
 
-  @Field(() => LoginInfo)
-  loginInfo: LoginInfo;
+  @Field(() => LoginInfo, { nullable: true })
+  loginInfo?: LoginInfo;
 
   @Field()
   createdAt: Date;

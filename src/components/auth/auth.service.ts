@@ -27,13 +27,19 @@ export class AuthService {
   }
 
   async verifyToken(token: string): Promise<Member> {
-    const claims = await this.jwt.verifyAsync(token);
-    // shape to what the app expects as "authMember"
-    return {
-      _id: shapeIntoMongoObjectId(claims.sub),
-      email: claims.email,
-      displayName: claims.displayName,
-      systemRole: claims.systemRole,
-    } as any;
+    try {
+      const claims = await this.jwt.verifyAsync(token);
+      // shape to what the app expects as "authMember"
+      return {
+        _id: shapeIntoMongoObjectId(claims.sub),
+        email: claims.email,
+        displayName: claims.displayName,
+        systemRole: claims.systemRole,
+      } as any;
+    } catch (error: any) {
+      // Log the error for debugging
+      console.error('❌ JWT verification failed:', error.message);
+      throw new Error(`Token verification failed: ${error.message}`);
+    }
   }
 }
