@@ -110,8 +110,20 @@ export class ParticipantService {
 
     console.log(`[DEBUG] getParticipantsByMeeting - Found ${participants.length} active participants (excluding LEFT)`);
 
+    // ✅ FIX: Filter out participants where userId populate failed (user was deleted)
+    const validParticipants = participants.filter(participant => {
+      // Check if userId is null (population failed due to deleted user)
+      if (!participant.userId) {
+        console.warn(`⚠️ [DEBUG] Skipping participant ${participant._id} - userId is null (user deleted)`);
+        return false;
+      }
+      return true;
+    });
+
+    console.log(`[DEBUG] getParticipantsByMeeting - Returning ${validParticipants.length} valid participants (${participants.length - validParticipants.length} skipped due to deleted users)`);
+
     // Debug each participant
-    participants.forEach((participant, index) => {
+    validParticipants.forEach((participant, index) => {
       console.log(`[DEBUG] Participant ${index}:`, {
         _id: participant._id,
         meetingId: participant.meetingId,
@@ -123,7 +135,7 @@ export class ParticipantService {
       });
     });
 
-    return participants;
+    return validParticipants;
   }
 
   async getParticipantStats(meetingId: string, userId: string) {
@@ -1183,7 +1195,15 @@ export class ParticipantService {
 
     // Calculate attendance data
     const attendanceData = participants
-      .filter(participant => participant && participant._id) // Filter out null/undefined participants
+      .filter(participant => {
+        // ✅ FIX: Filter out participants with null userId (deleted users)
+        if (!participant || !participant._id) return false;
+        if (!participant.userId) {
+          console.warn(`⚠️ [ATTENDANCE] Skipping participant ${participant._id} - userId is null (user deleted)`);
+          return false;
+        }
+        return true;
+      })
       .map((participant) => {
         try {
           const sessions = participant.sessions || [];
@@ -1206,20 +1226,28 @@ export class ParticipantService {
             return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
           }, 0);
 
-          const userData =
-            participant.userId && typeof participant.userId === 'object'
-              ? {
-                _id: (participant.userId as any)?._id,
-                email: (participant.userId as any)?.email,
-                displayName: (participant.userId as any)?.displayName || 'Unknown User',
-                firstName: (participant.userId as any)?.firstName,
-                lastName: (participant.userId as any)?.lastName,
-                systemRole: (participant.userId as any)?.systemRole,
-                avatarUrl: (participant.userId as any)?.avatarUrl,
-                organization: (participant.userId as any)?.organization,
-                department: (participant.userId as any)?.department,
-              }
-              : null;
+          // ✅ SAFER: Handle case where populate failed (user deleted)
+          let userData = null;
+          try {
+            if (participant.userId && typeof participant.userId === 'object' && !participant.userId.constructor.name.includes('ObjectId')) {
+              const userId = participant.userId as any;
+              userData = {
+                _id: userId?._id,
+                email: userId?.email,
+                displayName: userId?.displayName || 'Unknown User',
+                firstName: userId?.firstName || null,
+                lastName: userId?.lastName || null,
+                systemRole: userId?.systemRole || null,
+                avatarUrl: userId?.avatarUrl || null,
+                organization: userId?.organization || null,
+                department: userId?.department || null,
+              };
+            }
+          } catch (err) {
+            console.error('❌ [ATTENDANCE] Error extracting user data:', err);
+            // Set default values
+            userData = null;
+          }
 
           // Get first join time from sessions or fallback to createdAt
           const firstJoinedAt = validSessions.length > 0 && validSessions[0]?.joinedAt
@@ -1873,9 +1901,18 @@ export class ParticipantService {
       .populate('userId', 'email displayName systemRole avatarUrl')
       .sort({ createdAt: 1 });
 
-    console.log(`[GET_WAITING_PARTICIPANTS] Found ${waitingParticipants.length} waiting participants`);
+    // ✅ FIX: Filter out participants where userId populate failed (user was deleted)
+    const validWaitingParticipants = waitingParticipants.filter(participant => {
+      if (!participant.userId) {
+        console.warn(`⚠️ [GET_WAITING_PARTICIPANTS] Skipping participant ${participant._id} - userId is null (user deleted)`);
+        return false;
+      }
+      return true;
+    });
 
-    return waitingParticipants;
+    console.log(`[GET_WAITING_PARTICIPANTS] Found ${validWaitingParticipants.length} valid waiting participants (${waitingParticipants.length - validWaitingParticipants.length} skipped)`);
+
+    return validWaitingParticipants;
   }
 
   // Approve a participant from waiting room
