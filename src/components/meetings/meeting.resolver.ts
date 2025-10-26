@@ -380,4 +380,19 @@ export class MeetingResolver {
       throw error;
     }
   }
+
+  // ✅ CLEANUP: Admin-only endpoint to fix orphaned meetings
+  @Mutation(() => String, { name: 'cleanupOrphanedMeetings' })
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(SystemRole.ADMIN)
+  async cleanupOrphanedMeetings(@AuthMember() user: Member) {
+    try {
+      const result = await this.meetingService.cleanupOrphanedMeetings();
+      this.logger.log(`[CLEANUP] Admin ${user._id} ran cleanup - Fixed: ${result.fixed}, Deleted: ${result.deleted}`);
+      return `Cleanup complete: Fixed ${result.fixed} meetings, Deleted ${result.deleted} orphaned meetings`;
+    } catch (error) {
+      this.logger.error(`[CLEANUP] Failed - User ID: ${user._id}, Error: ${error.message}`);
+      throw error;
+    }
+  }
 }

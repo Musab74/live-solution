@@ -1,0 +1,57 @@
+================================================
+PRODUCTION DEPLOYMENT GUIDE
+================================================
+
+🚨 CURRENT STATUS:
+- ✅ Backend code has `sparse: true` fix (commit 33f92e7)
+- ✅ Database index is now sparse (only 1 user with user_id: null)
+- ❌ Production server still running OLD code without the fix
+
+================================================
+STEP-BY-STEP DEPLOYMENT
+================================================
+
+1. SSH into your production server:
+
+   ssh hrde@39.116.130.91 -p 2222
+
+2. Navigate to the backend directory:
+
+   cd /web/hrde/html/Live-solution
+
+3. Pull the latest code:
+
+   git pull origin master
+
+4. Install dependencies:
+
+   npm install --legacy-peer-deps
+
+5. Build the application:
+
+   npm run build
+
+6. Restart the backend:
+
+   pm2 restart live-backend
+
+7. Check logs to verify it's working:
+
+   pm2 logs live-backend --lines 50
+
+================================================
+WHAT THIS FIXES:
+================================================
+
+✅ Signup errors (E11000 duplicate key error)
+✅ Multiple users can sign up without user_id
+✅ Production will use the sparse index fix
+
+================================================
+ALTERNATIVE: ONE-LINER DEPLOYMENT
+================================================
+
+ssh hrde@39.116.130.91 -p 2222 "cd /web/hrde/html/Live-solution && git pull origin master && npm install --legacy-peer-deps && npm run build && pm2 restart live-backend && pm2 logs live-backend --lines 30"
+
+================================================
+

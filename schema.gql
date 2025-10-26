@@ -587,6 +587,7 @@ type Mutation {
   rotateInviteCode(meetingId: ID!): MeetingWithHost!
   lockRoom(meetingId: ID!): MeetingWithHost!
   unlockRoom(meetingId: ID!): MeetingWithHost!
+  cleanupOrphanedMeetings: String!
   createLivekitToken(meetingId: String!): String!
   endLivekitRoom(meetingId: String!): String!
   kickLivekitParticipant(meetingId: String!, identity: String!): String!

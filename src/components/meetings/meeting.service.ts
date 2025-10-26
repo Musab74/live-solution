@@ -303,10 +303,11 @@ export class MeetingService {
       }
 
       // Transform the meeting object to ensure hostId is a string, not populated object
+      // ✅ FIX: Handle null hostId gracefully - sometimes hostId doesn't exist in DB
       const transformedMeeting = {
         ...meeting,
-        hostId: meeting.hostId._id.toString(),
-        host: meeting.hostId, // Keep the populated host object for the host field
+        hostId: meeting.hostId?._id?.toString() || meeting.hostId?.toString() || null,
+        host: meeting.hostId || null, // Keep the populated host object for the host field
       };
 
       return transformedMeeting;
@@ -337,6 +338,12 @@ export class MeetingService {
 
       // Check access permissions
       const user = await this.memberModel.findById(userId);
+      
+      // ✅ FIX: Handle null user gracefully
+      if (!user) {
+        this.logger.warn(`[GET_MEETING_BY_ID] User not found: ${userId}`);
+        throw new NotFoundException('User not found');
+      }
 
       // 🔧 FIX: Handle missing currentHostId for existing meetings
       if (!meeting.currentHostId) {
@@ -355,8 +362,8 @@ export class MeetingService {
       const isHost = isOriginalHost || isCurrentHost; // User is host if they are either original or current host
       const isAdmin = user.systemRole === SystemRole.ADMIN;
 
-      // Debug character codes to find hidden characters
-      const hostIdStr = meeting.hostId?._id?.toString() || '';
+      // ✅ FIX: Handle null hostId for safe comparison
+      const hostIdStr = meeting.hostId?._id?.toString() || meeting.hostId?.toString() || '';
       const userIdStr = String(userId || '');
 
       // Try different comparison methods
@@ -380,10 +387,11 @@ export class MeetingService {
       // Debug the meeting data before transformation
 
       // Transform the meeting object to ensure hostId is a string, not populated object
+      // ✅ FIX: Handle null hostId gracefully - sometimes hostId doesn't exist in DB
       const transformedMeeting = {
         ...meeting,
-        hostId: meeting.hostId._id.toString(),
-        host: meeting.hostId, // Keep the populated host object for the host field
+        hostId: meeting.hostId?._id?.toString() || meeting.hostId?.toString() || null,
+        host: meeting.hostId || null, // Keep the populated host object for the host field
       };
 
       // Debug the transformed data
@@ -455,14 +463,15 @@ export class MeetingService {
         participantCount: meeting.participantCount || 0,
         createdAt: meeting.createdAt?.toISOString() || new Date().toISOString(),
         updatedAt: meeting.updatedAt?.toISOString() || new Date().toISOString(),
-        hostId: (meeting.hostId as any)._id.toString(),
-        host: {
+        // ✅ FIX: Handle null hostId gracefully
+        hostId: (meeting.hostId as any)?._id?.toString() || meeting.hostId?.toString() || null,
+        host: meeting.hostId ? {
           _id: (meeting.hostId as any)._id.toString(),
           email: (meeting.hostId as any).email,
           displayName: (meeting.hostId as any).displayName,
           systemRole: (meeting.hostId as any).systemRole,
           avatarUrl: (meeting.hostId as any).avatarUrl || null,
-        },
+        } : null,
       };
 
       return {
@@ -1136,5 +1145,58 @@ export class MeetingService {
     }
 
     return code!;
+  }
+
+  // ✅ CLEANUP: Fix orphaned meetings in production
+  async cleanupOrphanedMeetings(): Promise<{ fixed: number; deleted: number }> {
+    try {
+      this.logger.log('[CLEANUP] Starting orphaned meetings cleanup...');
+      
+      // Find all meetings with hostId references
+      const meetings = await this.meetingModel.find({ hostId: { $exists: true } }).lean();
+      let fixed = 0;
+      let deleted = 0;
+      
+      for (const meeting of meetings) {
+        // Check if the referenced user exists
+        const userExists = await this.memberModel.exists({ _id: meeting.hostId });
+        
+        if (!userExists) {
+          this.logger.warn(`[CLEANUP] Orphaned meeting found: ${meeting._id} - Host ${meeting.hostId} doesn't exist`);
+          
+          // Check if meeting has any participants
+          const hasParticipants = await this.participantModel.exists({ 
+            meetingId: meeting._id 
+          });
+          
+          if (hasParticipants) {
+            // Has participants - assign first participant as new host
+            const participant = await this.participantModel.findOne({ 
+              meetingId: meeting._id 
+            }).sort({ createdAt: 1 });
+            
+            if (participant?.userId) {
+              await this.meetingModel.findByIdAndUpdate(meeting._id, {
+                hostId: participant.userId,
+                currentHostId: participant.userId
+              });
+              fixed++;
+              this.logger.log(`[CLEANUP] Fixed meeting ${meeting._id} - assigned new host ${participant.userId}`);
+            }
+          } else {
+            // No participants - safe to delete
+            await this.meetingModel.findByIdAndDelete(meeting._id);
+            deleted++;
+            this.logger.log(`[CLEANUP] Deleted orphaned meeting ${meeting._id}`);
+          }
+        }
+      }
+      
+      this.logger.log(`[CLEANUP] Cleanup complete - Fixed: ${fixed}, Deleted: ${deleted}`);
+      return { fixed, deleted };
+    } catch (error) {
+      this.logger.error(`[CLEANUP] Failed: ${error.message}`);
+      throw error;
+    }
   }
 }

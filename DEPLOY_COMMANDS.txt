@@ -1,0 +1,49 @@
+===========================================
+PRODUCTION DEPLOYMENT COMMANDS
+===========================================
+
+SSH into your production server and run these commands:
+
+ssh hrde@39.116.130.91 -p 2222
+
+cd /web/hrde/html/Live-solution
+
+git pull origin master
+
+npm install --legacy-peer-deps
+
+npm run build
+
+pm2 restart live-backend
+
+pm2 logs live-backend --lines 50
+
+===========================================
+WHAT THIS DOES:
+===========================================
+
+1. git pull origin master
+   → Gets the latest code with sparse index fix
+
+2. npm install --legacy-peer-deps
+   → Installs any new dependencies
+
+3. npm run build
+   → Compiles the new code
+
+4. pm2 restart live-backend
+   → Restarts with new code
+
+5. pm2 logs live-backend --lines 50
+   → Shows you logs to verify it's working
+
+===========================================
+WHY THIS WILL FIX IT:
+===========================================
+
+✅ Database index: ALREADY FIXED (sparse)
+✅ Code changes: ALREADY PUSHED to GitHub
+❌ Production server: STILL RUNNING OLD CODE
+
+After you run these commands, the production server will run the NEW code with the sparse index setting, and signups will work!
+
