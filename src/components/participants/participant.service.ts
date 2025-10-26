@@ -1082,18 +1082,33 @@ export class ParticipantService {
     meetingId: string,
     requesterId: string,
   ): Promise<any> {
+    console.log('📊 [ATTENDANCE] Starting getMeetingAttendance:', { meetingId, requesterId });
+    
     // Verify meeting exists
     const meeting = await this.meetingModel.findById(meetingId);
     if (!meeting) {
+      console.error('❌ [ATTENDANCE] Meeting not found:', meetingId);
       throw new NotFoundException('Meeting not found');
     }
+    console.log('✅ [ATTENDANCE] Meeting found:', { 
+      id: meeting._id, 
+      title: meeting.title, 
+      hostId: meeting.hostId,
+      status: meeting.status 
+    });
 
     // Verify requester has permission
     const requester = await this.memberModel.findById(requesterId);
     if (!requester) {
+      console.error('❌ [ATTENDANCE] User not found:', requesterId);
       throw new NotFoundException('User not found');
     }
-
+    console.log('✅ [ATTENDANCE] Requester found:', { 
+      id: requester._id, 
+      email: requester.email,
+      displayName: requester.displayName,
+      systemRole: requester.systemRole 
+    });
 
     // Check permissions:
     // 1. If requester is the host of the meeting (original host)
@@ -1106,7 +1121,7 @@ export class ParticipantService {
     const isAdmin = requester.systemRole === SystemRole.ADMIN;
 
     // Debug logging
-    console.log('🔍 Attendance Permission Check:', {
+    console.log('🔍 [ATTENDANCE] Permission Check:', {
       requesterId,
       requesterRole: requester.systemRole,
       meetingId: meeting._id,
@@ -1124,102 +1139,144 @@ export class ParticipantService {
     const isAuthenticatedUser = !!requesterId;
     
     if (!isOriginalHost && !isCurrentHost && !isTutor && !isAdmin && !isAuthenticatedUser) {
-      console.log('❌ Permission denied for attendance access');
+      console.log('❌ [ATTENDANCE] Permission denied for attendance access');
       throw new ForbiddenException(
         'Only meeting hosts and tutors can view attendance for their own courses',
       );
     }
     
     if (isAuthenticatedUser && !isOriginalHost && !isCurrentHost && !isTutor && !isAdmin) {
-      console.log('⚠️ TEMPORARY: Allowing attendance access for authenticated user (testing mode)');
+      console.log('⚠️ [ATTENDANCE] TEMPORARY: Allowing attendance access for authenticated user (testing mode)');
     }
 
     // Get all participants with their session data
+    console.log('🔍 [ATTENDANCE] Fetching participants for meeting:', meetingId);
+    
+    // Convert string meetingId to ObjectId if needed
+    const ObjectId = require('mongoose').Types.ObjectId;
+    const meetingIdObj = ObjectId.isValid(meetingId) ? new ObjectId(meetingId) : meetingId;
+    
     const participants = await this.participantModel
-      .find({ meetingId })
+      .find({ meetingId: meetingIdObj })
       .populate('userId', 'email displayName firstName lastName systemRole avatarUrl organization department')
       .sort({ createdAt: 1 })
       .lean();
+    
+    console.log(`📊 [ATTENDANCE] Found ${participants.length} participants:`, participants.map(p => ({
+      _id: p._id,
+      userId: p.userId,
+      displayName: p.displayName,
+      hasUserId: !!p.userId,
+      userIdType: typeof p.userId,
+      userIdObject: p.userId && typeof p.userId === 'object' ? 'object' : 'primitive',
+      sessionsCount: p.sessions?.length || 0,
+      firstSession: p.sessions?.[0] ? {
+        hasJoinedAt: !!p.sessions[0].joinedAt,
+        joinedAt: p.sessions[0].joinedAt,
+        hasLeftAt: !!p.sessions[0].leftAt,
+        leftAt: p.sessions[0].leftAt,
+        hasDuration: !!p.sessions[0].durationSec,
+        durationSec: p.sessions[0].durationSec
+      } : null
+    })));
 
 
     // Calculate attendance data
-    const attendanceData = participants.map((participant) => {
-      const sessions = participant.sessions || [];
-      
-      // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt)
-      const validSessions = sessions.filter(session => {
-        if (!session.joinedAt) return false;
-        if (!session.leftAt) return true; // Currently active session is valid
-        
-        const joinedTime = new Date(session.joinedAt).getTime();
-        const leftTime = new Date(session.leftAt).getTime();
-        return leftTime >= joinedTime; // Only keep sessions where leftAt >= joinedAt
-      });
-      
-      const totalDuration = validSessions.reduce((total, session) => {
-        const sessionDuration = session.leftAt
-          ? new Date(session.leftAt).getTime() -
-          new Date(session.joinedAt).getTime()
-          : Date.now() - new Date(session.joinedAt).getTime();
-        return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
-      }, 0);
+    const attendanceData = participants
+      .filter(participant => participant && participant._id) // Filter out null/undefined participants
+      .map((participant) => {
+        try {
+          const sessions = participant.sessions || [];
+          
+          // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt)
+          const validSessions = sessions.filter(session => {
+            if (!session || !session.joinedAt) return false;
+            if (!session.leftAt) return true; // Currently active session is valid
+            
+            const joinedTime = new Date(session.joinedAt).getTime();
+            const leftTime = new Date(session.leftAt).getTime();
+            return leftTime >= joinedTime; // Only keep sessions where leftAt >= joinedAt
+          });
+          
+          const totalDuration = validSessions.reduce((total, session) => {
+            if (!session || !session.joinedAt) return total;
+            const sessionDuration = session.leftAt && new Date(session.leftAt)
+              ? new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()
+              : Date.now() - new Date(session.joinedAt).getTime();
+            return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
+          }, 0);
 
-      const userData =
-        participant.userId && typeof participant.userId === 'object'
-          ? {
-            _id: (participant.userId as any)._id,
-            email: (participant.userId as any).email,
-            displayName: (participant.userId as any).displayName,
-            firstName: (participant.userId as any).firstName,
-            lastName: (participant.userId as any).lastName,
-            systemRole: (participant.userId as any).systemRole,
-            avatarUrl: (participant.userId as any).avatarUrl,
-            organization: (participant.userId as any).organization,
-            department: (participant.userId as any).department,
-          }
-          : null;
+          const userData =
+            participant.userId && typeof participant.userId === 'object'
+              ? {
+                _id: (participant.userId as any)?._id,
+                email: (participant.userId as any)?.email,
+                displayName: (participant.userId as any)?.displayName || 'Unknown User',
+                firstName: (participant.userId as any)?.firstName,
+                lastName: (participant.userId as any)?.lastName,
+                systemRole: (participant.userId as any)?.systemRole,
+                avatarUrl: (participant.userId as any)?.avatarUrl,
+                organization: (participant.userId as any)?.organization,
+                department: (participant.userId as any)?.department,
+              }
+              : null;
 
-      return {
-        _id: participant._id,
-        displayName: userData?.displayName || participant.displayName,
-        email: userData?.email,
-        firstName: userData?.firstName,
-        lastName: userData?.lastName,
-        systemRole: userData?.systemRole,
-        avatarUrl: userData?.avatarUrl,
-        organization: userData?.organization,
-        department: userData?.department,
-        role: participant.role,
-        status: participant.status,
-        joinedAt:
-          validSessions.length > 0 ? validSessions[0].joinedAt : participant.createdAt,
-        leftAt:
-          validSessions.length > 0 && validSessions[validSessions.length - 1].leftAt
-            ? sessions[sessions.length - 1].leftAt
-            : null,
-        totalTime: totalDuration,
-        sessionCount: validSessions.length,
-        isCurrentlyOnline:
-          validSessions.length > 0 && !validSessions[validSessions.length - 1].leftAt,
-        micState: participant.micState,
-        cameraState: participant.cameraState,
-        hasHandRaised: participant.hasHandRaised,
-        handRaisedAt: participant.handRaisedAt,
-        handLoweredAt: participant.handLoweredAt,
-        sessions: validSessions.map((session, index) => ({
-          joinedAt: session.joinedAt,
-          leftAt: session.leftAt,
-          durationSec: session.leftAt
-            ? Math.floor(
-              (new Date(session.leftAt).getTime() -
-                new Date(session.joinedAt).getTime()) /
-              1000,
-            )
-            : Math.floor(
-              (Date.now() - new Date(session.joinedAt).getTime()) / 1000,
-            ),
-        })),
-      };
+          // Get first join time from sessions or fallback to createdAt
+          const firstJoinedAt = validSessions.length > 0 && validSessions[0]?.joinedAt
+            ? (typeof validSessions[0].joinedAt === 'string' ? validSessions[0].joinedAt : new Date(validSessions[0].joinedAt).toISOString())
+            : (participant.createdAt ? (typeof participant.createdAt === 'string' ? participant.createdAt : new Date(participant.createdAt).toISOString()) : new Date().toISOString());
+
+          // Get last leave time
+          const lastLeftAt = validSessions.length > 0 && validSessions[validSessions.length - 1]?.leftAt
+            ? (typeof validSessions[validSessions.length - 1].leftAt === 'string' ? validSessions[validSessions.length - 1].leftAt : new Date(validSessions[validSessions.length - 1].leftAt).toISOString())
+            : null;
+
+          return {
+            _id: participant._id || 'unknown',
+            displayName: userData?.displayName || participant.displayName || 'Unknown User',
+            email: userData?.email || null,
+            firstName: userData?.firstName || null,
+            lastName: userData?.lastName || null,
+            systemRole: userData?.systemRole || null,
+            avatarUrl: userData?.avatarUrl || null,
+            organization: userData?.organization || null,
+            department: userData?.department || null,
+            role: participant.role || 'PARTICIPANT',
+            status: participant.status || 'UNKNOWN',
+            joinedAt: typeof firstJoinedAt === 'string' ? new Date(firstJoinedAt) : (firstJoinedAt || new Date()),
+            leftAt: lastLeftAt ? (typeof lastLeftAt === 'string' ? new Date(lastLeftAt) : lastLeftAt) : null,
+            totalTime: totalDuration,
+            sessionCount: validSessions.length,
+            isCurrentlyOnline: validSessions.length > 0 && !validSessions[validSessions.length - 1]?.leftAt,
+            micState: participant.micState || 'OFF',
+            cameraState: participant.cameraState || 'OFF',
+            hasHandRaised: participant.hasHandRaised || false,
+            handRaisedAt: participant.handRaisedAt ? (typeof participant.handRaisedAt === 'string' ? new Date(participant.handRaisedAt) : participant.handRaisedAt) : null,
+            handLoweredAt: participant.handLoweredAt ? (typeof participant.handLoweredAt === 'string' ? new Date(participant.handLoweredAt) : participant.handLoweredAt) : null,
+            sessions: validSessions.map((session) => {
+              if (!session || !session.joinedAt) return null;
+              // Convert to Date objects for GraphQL DateTime scalar
+              const joinedAt = typeof session.joinedAt === 'string' ? new Date(session.joinedAt) : session.joinedAt;
+              const leftAt = session.leftAt ? (typeof session.leftAt === 'string' ? new Date(session.leftAt) : session.leftAt) : null;
+              return {
+                joinedAt: joinedAt,
+                leftAt: leftAt,
+                durationSec: session.leftAt && new Date(session.leftAt)
+                  ? Math.floor((new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()) / 1000)
+                  : Math.floor((Date.now() - new Date(session.joinedAt).getTime()) / 1000),
+              };
+            }).filter(s => s !== null), // Remove null entries
+          };
+        } catch (error) {
+          console.error(`Error processing participant ${participant._id}:`, error);
+          return null;
+        }
+      })
+      .filter(p => p !== null); // Remove any null entries from errors
+
+    console.log(`✅ [ATTENDANCE] Processed ${attendanceData.length} attendance records`);
+    attendanceData.forEach((p, idx) => {
+      console.log(`  [${idx + 1}] ${p.displayName || 'Unknown'} - Role: ${p.role}, Status: ${p.status}, Time: ${p.totalTime}s`);
     });
 
     const presentParticipants = attendanceData.filter(p => p.status === ParticipantStatus.ADMITTED || p.status === ParticipantStatus.APPROVED).length;
@@ -1231,8 +1288,7 @@ export class ParticipantService {
       : 0;
     const attendanceRate = participants.length > 0 ? Math.round((presentParticipants / participants.length) * 100) : 0;
 
-
-    return {
+    const result = {
       meetingId,
       totalParticipants: participants.length,
       presentParticipants,
@@ -1241,6 +1297,19 @@ export class ParticipantService {
       attendanceRate,
       participants: attendanceData,
     };
+
+    console.log('📤 [ATTENDANCE] Returning result:', {
+      totalParticipants: result.totalParticipants,
+      participantsCount: result.participants.length,
+      averageTime: result.averageAttendanceTime
+    });
+    
+    // Log the first participant in detail
+    if (result.participants.length > 0) {
+      console.log('📋 [ATTENDANCE] First participant data:', JSON.stringify(result.participants[0], null, 2));
+    }
+
+    return result;
   }
 
   // ==================== SCREEN SHARING METHODS ====================

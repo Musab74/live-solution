@@ -19,6 +19,8 @@ export class Session {
 }
 
 const SessionSchema = SchemaFactory.createForClass(Session);
+// Disable _id for embedded subdocuments to prevent Mongoose from treating them as separate documents
+SessionSchema.set('_id', false);
 
 @Schema({ timestamps: true })
 @ObjectType()
