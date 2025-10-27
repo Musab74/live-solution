@@ -148,17 +148,28 @@ export class MeetingService {
         // Get meeting IDs where user is a participant (for both members and non-members)
         const participantMeetings = await this.participantModel.distinct('meetingId', {
           userId: userObjectId,
-          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED] }
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED, ParticipantStatus.LEFT] }
         });
 
         if (user && user.systemRole === 'MEMBER') {
-          // For members, ONLY show meetings where they have participated (are a participant)
+          // For members, show:
+          // 1. All LIVE meetings
+          // 2. All SCHEDULED meetings
+          // 3. Meetings they participated in (including CREATED and ENDED ones they joined)
+          const meetingIdsToInclude: Types.ObjectId[] = [];
+          
           if (participantMeetings && participantMeetings.length > 0) {
-            filter._id = { $in: participantMeetings };
-          } else {
-            // No meetings found where user is a participant, return empty result
-            filter._id = { $in: [] };
+            meetingIdsToInclude.push(...participantMeetings);
           }
+          
+          filter.$or = [
+            // All LIVE meetings
+            { status: MeetingStatus.LIVE },
+            // All SCHEDULED meetings
+            { status: MeetingStatus.SCHEDULED },
+            // Meetings they participated in (any status)
+            ...(meetingIdsToInclude.length > 0 ? [{ _id: { $in: meetingIdsToInclude } }] : [])
+          ];
         } else {
           // For non-members (tutors, admins), show meetings where they are host OR participant
           filter.$or = [
