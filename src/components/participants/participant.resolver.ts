@@ -3,9 +3,10 @@ import { ParticipantService } from './participant.service';
 import { MeetingService } from '../meetings/meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
-import { UseGuards, Logger } from '@nestjs/common';
+import { UseGuards, Logger, Inject, forwardRef } from '@nestjs/common';
 import { Member } from '../../schemas/Member.model';
 import { ParticipantStatus, Role } from '../../libs/enums/enums';
+import { SignalingGateway } from '../signaling/signaling.gateway';
 import {
   ParticipantWithLoginInfo,
   ParticipantStats,
@@ -59,12 +60,14 @@ import {
 
 @Resolver(() => ParticipantWithLoginInfo)
 export class ParticipantResolver {
-  private readonly logger = new Logger(ParticipantResolver.name);
+  private readonly logger = new Logger(ParticipantResolver.name)
 
   constructor(
     private readonly participantService: ParticipantService,
     private readonly meetingService: MeetingService,
-  ) { }
+    @Inject(forwardRef(() => SignalingGateway))
+    private readonly signalingGateway: SignalingGateway,
+  ) {}
 
   // Field resolver for loginInfo - calculates attendance data from sessions
   @Resolver(() => ParticipantWithLoginInfo)
@@ -707,6 +710,17 @@ export class ParticipantResolver {
         transferHostInput,
         user._id,
       );
+      
+      // ✅ Emit WebSocket event to notify new host with LiveKit token
+      if (result.newLiveKitToken && result.newHostId) {
+        this.logger.log(`[TRANSFER_HOST] Emitting host-transfer event to: ${result.newHostId}`);
+        this.signalingGateway.emitHostTransfer(
+          result.newHostId,
+          result.newLiveKitToken,
+          transferHostInput.meetingId
+        );
+      }
+      
       return result;
     } catch (error) {
       throw error;

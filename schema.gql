@@ -215,6 +215,9 @@ type MeetingAttendance {
 
 type ParticipantResponse {
   _id: ID!
+  newHostId: ID
+  newHostParticipantId: ID
+  newLiveKitToken: String
   meetingId: ID!
   userId: ID
   displayName: String!
@@ -588,7 +591,7 @@ type Mutation {
   lockRoom(meetingId: ID!): MeetingWithHost!
   unlockRoom(meetingId: ID!): MeetingWithHost!
   cleanupOrphanedMeetings: String!
-  createLivekitToken(meetingId: String!): String!
+  createLivekitToken(meetingId: String!, identity: String!): String!
   endLivekitRoom(meetingId: String!): String!
   kickLivekitParticipant(meetingId: String!, identity: String!): String!
   uploadVodFile(input: CreateVodFileInput!, file: String!): VodUploadResponse!

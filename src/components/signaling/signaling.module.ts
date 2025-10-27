@@ -33,7 +33,7 @@ import { Participant, ParticipantSchema } from '../../schemas/Participant.model'
     ]),
     AuthModule,
     MemberModule,
-    forwardRef(() => ParticipantModule),
+    forwardRef(() => ParticipantModule), // ✅ Handle circular dependency
   ],
   providers: [LivekitService, LivekitResolver, SignalingGateway, ChatService],
   exports: [LivekitService, SignalingGateway, ChatService],

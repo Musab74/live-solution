@@ -964,7 +964,7 @@ export class ParticipantService {
   async transferHost(
     input: TransferHostInput,
     currentHostId: string,
-  ): Promise<{ success: boolean; message: string; newHostId: string; newHostParticipantId: string }> {
+  ): Promise<{ success: boolean; message: string; newHostId: string; newHostParticipantId: string; newLiveKitToken?: string }> {
     const { meetingId, newHostParticipantId, reason } = input;
 
     const meeting = await this.meetingModel.findById(meetingId);
@@ -1068,13 +1068,28 @@ export class ParticipantService {
       currentHostId: newHostParticipant.userId 
     });
 
-    // (Optional) Publish a subscription event here so clients refresh the host badge
+    // ✅ Generate new LiveKit token for new host with elevated permissions
+    let newLiveKitToken = null;
+    try {
+      const token = await this.livekitService.generateAccessToken({
+        room: meetingId,
+        identity: newHostParticipant.userId?.toString() || newHostUser._id?.toString(),
+        name: newHostUser.displayName || newHostUser.email || 'Host',
+        meetingRole: 'HOST' as any,
+      });
+      newLiveKitToken = token;
+      this.logger.log(`[TRANSFER_HOST] Generated new LiveKit token for new host: ${newHostParticipant.userId}`);
+    } catch (error) {
+      this.logger.error(`[TRANSFER_HOST] Failed to generate LiveKit token: ${error.message}`);
+      // Continue with transfer even if token generation fails
+    }
 
     return {
       success: true,
       message: 'Host role transferred successfully',
       newHostId: newHostParticipant.userId?.toString(),
       newHostParticipantId: newHostParticipant._id.toString(),
+      newLiveKitToken, // ✅ Return token for WebSocket emission
     };
   }
 

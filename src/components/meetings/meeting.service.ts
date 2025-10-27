@@ -141,47 +141,36 @@ export class MeetingService {
       if (hostId) {
         filter.hostId = new Types.ObjectId(hostId);
       } else {
-        // 🔧 FIX: For members, show ALL meetings when no hostId filter is provided
-        // This allows members to see all meetings in the system
+        // Get user info to check their role
         const userObjectId = new Types.ObjectId(userId);
-        
-        
-        // Get user info to check if they are a member
         const user = await this.memberModel.findById(userId);
         
+        // Get meeting IDs where user is a participant (for both members and non-members)
+        const participantMeetings = await this.participantModel.distinct('meetingId', {
+          userId: userObjectId,
+          status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED] }
+        });
+
         if (user && user.systemRole === 'MEMBER') {
-          // For members, show all meetings (no filter)
-          // Don't add any filter - this will return all meetings
-          // Set a flag to indicate this is a member query
-          filter._isMemberQuery = true;
+          // For members, ONLY show meetings where they have participated (are a participant)
+          if (participantMeetings && participantMeetings.length > 0) {
+            filter._id = { $in: participantMeetings };
+          } else {
+            // No meetings found where user is a participant, return empty result
+            filter._id = { $in: [] };
+          }
         } else {
-          // For non-members (tutors, admins), show meetings where they are host or participant
-          
-          // Get meeting IDs where user is a participant
-          const participantMeetings = await this.participantModel.distinct('meetingId', {
-            userId: userObjectId,
-            status: { $in: [ParticipantStatus.WAITING, ParticipantStatus.APPROVED, ParticipantStatus.ADMITTED] }
-          });
-
-          // Also check what meetings exist where user is host
-          const hostMeetings = await this.meetingModel.find({
-            $or: [
-              { hostId: userObjectId },
-              { currentHostId: userObjectId }
-            ]
-          }).select('_id title hostId currentHostId');
-
+          // For non-members (tutors, admins), show meetings where they are host OR participant
           filter.$or = [
             { hostId: userObjectId }, // Original tutor/creator
             { currentHostId: userObjectId }, // Current host
             { _id: { $in: participantMeetings } } // Meetings where user is a participant
           ];
-          
         }
       }
 
       if (search) {
-        // Handle search filter without conflicting with host filter
+        // Handle search filter
         const searchFilter = {
           $or: [
             { title: { $regex: search, $options: 'i' } },
@@ -189,10 +178,13 @@ export class MeetingService {
           ]
         };
         
-        if (filter._isMemberQuery) {
-          // For member queries, just apply the search filter directly
-          delete filter._isMemberQuery; // Remove the flag
-          filter.$or = searchFilter.$or;
+        if (filter._id && filter._id.$in) {
+          // We have meeting IDs filter (member query), combine with search
+          filter.$and = [
+            { _id: filter._id },
+            searchFilter
+          ];
+          delete filter._id;
         } else if (filter.$or) {
           // If we already have host filter, combine them
           filter.$and = [
@@ -203,9 +195,6 @@ export class MeetingService {
         } else {
           filter.$or = searchFilter.$or;
         }
-      } else if (filter._isMemberQuery) {
-        // For member queries without search, remove the flag and don't add any filter
-        delete filter._isMemberQuery;
       }
       
       // Debug: Log the final filter before querying

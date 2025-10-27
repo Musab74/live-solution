@@ -11,6 +11,7 @@ import { Member, MemberSchema } from '../../schemas/Member.model';
 import { AuthModule } from '../auth/auth.module';
 import { MeetingModule } from '../meetings/meeting.module';
 import { LivekitModule } from '../signaling/livekit.module';
+import { SignalingModule } from '../signaling/signaling.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { LivekitModule } from '../signaling/livekit.module';
     AuthModule,
     forwardRef(() => MeetingModule),
     LivekitModule, // Import LiveKit module instead of duplicating service
+    forwardRef(() => SignalingModule), // ✅ Import signaling module for WebSocket
   ],
   providers: [ParticipantService, ParticipantResolver],
   exports: [ParticipantService],

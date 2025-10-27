@@ -30,6 +30,7 @@ export class LivekitResolver {
   @Mutation(() => String, { name: 'createLivekitToken' })
   async createLivekitToken(
     @Args('meetingId') meetingId: string,
+    @Args('identity') clientIdentity: string,
     @AuthMember() me: any,
   ) {
     this.logger.log(
@@ -41,12 +42,15 @@ export class LivekitResolver {
         throw new Error('User not authenticated or missing user ID');
       }
       
-      const userId = String(me._id);
+      // Use client-provided identity if available, otherwise use authenticated user ID
+      const userId = clientIdentity || String(me._id);
       const userName = me.displayName || me.email || `User_${userId}`;
       
       console.log('🔍 [CREATE_LIVEKIT_TOKEN] Validated user data:', {
         userId,
         userName,
+        clientIdentity,
+        originalMeId: me._id,
         originalMe: {
           _id: me._id,
           email: me.email,
@@ -58,15 +62,15 @@ export class LivekitResolver {
       let meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER' = 'PARTICIPANT';
       
       try {
-        // Check if user is the meeting host
+        // Check if user is the meeting host (using original authenticated user ID)
         const meeting = await this.meetingModel.findById(meetingId);
-        if (meeting && meeting.hostId && meeting.hostId.toString() === userId) {
+        if (meeting && meeting.hostId && meeting.hostId.toString() === String(me._id)) {
           meetingRole = 'HOST';
           console.log('🔍 [CREATE_LIVEKIT_TOKEN] User is meeting HOST');
         } else {
-          // Check participant record for role
+          // Check participant record for role (using original authenticated user ID)
           const participant = await this.participantModel
-            .findOne({ meetingId: meetingId, userId: userId, status: { $ne: 'LEFT' } })
+            .findOne({ meetingId: meetingId, userId: String(me._id), status: { $ne: 'LEFT' } })
             .exec();
           
           if (participant && participant.role) {
@@ -80,10 +84,15 @@ export class LivekitResolver {
       
       console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Final meeting role: ${meetingRole}`);
 
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Calling generateAccessToken...');
-      const token = await this.lk.generateAccessToken({
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Calling generateAccessToken...', {
         room: meetingId,
         identity: userId,
+        name: userName,
+        meetingRole
+      });
+      const token = await this.lk.generateAccessToken({
+        room: meetingId,
+        identity: userId, // ✅ Use the identity (client-provided or authenticated user ID)
         name: userName,
         meetingRole,
       });
@@ -106,7 +115,7 @@ export class LivekitResolver {
       console.log('🔍 [CREATE_LIVEKIT_TOKEN] Final JSON result:', result);
 
       this.logger.log(
-        `[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, User ID: ${me._id}, Meeting Role: ${meetingRole}, Token Length: ${token?.length || 0}`,
+        `[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, Identity: ${userId}, Original User ID: ${me._id}, Meeting Role: ${meetingRole}, Token Length: ${token?.length || 0}`,
       );
       return result;
     } catch (error) {

@@ -80,6 +80,27 @@ export class SignalingGateway
     this.server = server;
   }
 
+  // ✅ Public method to emit host-transfer event to specific user
+  emitHostTransfer(userId: string, token: string, meetingId: string): void {
+    console.log(`[SIGNALING_GATEWAY] Emitting host-transfer to user: ${userId}`);
+    
+    // Find socket for the specified user
+    for (const [socketId, socket] of this.connectedUsers.entries()) {
+      if (socket.user?._id === userId) {
+        console.log(`[SIGNALING_GATEWAY] Found socket ${socketId} for user ${userId}`);
+        socket.emit('host-transfer', {
+          userId,
+          token,
+          meetingId,
+          timestamp: new Date().toISOString()
+        });
+        return;
+      }
+    }
+    
+    console.warn(`[SIGNALING_GATEWAY] Could not find socket for user: ${userId}`);
+  }
+
   async handleConnection(client: AuthenticatedSocket) {
     console.log('🔌 WebSocket connection attempt from client:', client.id);
     console.log('🔌 Handshake auth:', client.handshake.auth);
