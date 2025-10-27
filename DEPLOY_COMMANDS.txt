@@ -47,3 +47,4 @@ WHY THIS WILL FIX IT:
 
 After you run these commands, the production server will run the NEW code with the sparse index setting, and signups will work!
 
+
