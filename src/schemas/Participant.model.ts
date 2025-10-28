@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import { MediaState, Role, ParticipantStatus } from 'src/libs/enums/enums';
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+import * as mongoose from 'mongoose';
 
 @ObjectType()
 export class Session {
@@ -18,12 +19,14 @@ export class Session {
   durationSec!: number;
 }
 
-const SessionSchema = SchemaFactory.createForClass(Session);
-// Disable _id for embedded subdocuments to prevent Mongoose from treating them as separate documents
-SessionSchema.set('_id', false);
+const SessionSchema = new mongoose.Schema({
+  joinedAt: { type: Date, required: true },
+  leftAt: { type: Date, required: false },
+  durationSec: { type: Number, default: 0 }
+}, { _id: false });
 
 // Add pre-save middleware to ensure joinedAt is always set
-SessionSchema.pre('validate', function(next) {
+SessionSchema.pre('save', function(next) {
   if (!this.joinedAt) {
     console.warn('[SESSION_SCHEMA] Session without joinedAt detected, setting to current time');
     this.joinedAt = new Date();

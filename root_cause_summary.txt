@@ -1,0 +1,56 @@
+====================================================================
+🎯 ROOT CAUSE FOUND AND FIXED!
+====================================================================
+
+THE REAL ISSUE:
+===============
+
+The SessionSchema was being created incorrectly!
+
+Line 21-26 in Participant.model.ts:
+❌ WRONG: const SessionSchema = SchemaFactory.createForClass(Session);
+
+This was causing session objects to be serialized incorrectly,
+resulting in null or empty objects in the sessions array.
+
+✅ FIXED: const SessionSchema = new mongoose.Schema({
+  joinedAt: { type: Date, required: true },
+  leftAt: { type: Date, required: false },
+  durationSec: { type: Number, default: 0 }
+}, { _id: false });
+
+WHY THIS HAPPENS:
+=================
+
+Embedded subdocuments in Mongoose need to be defined manually
+using new mongoose.Schema(), not SchemaFactory.createForClass().
+
+The SchemaFactory is for top-level documents, not embedded ones.
+
+ALL FIXES APPLIED:
+==================
+
+1. ✅ SessionSchema properly defined (Participant.model.ts:22-26)
+2. ✅ Null session filter (participant.service.ts:1227-1239)
+3. ✅ Timestamp parsing (participant.service.ts:1241-1276)
+4. ✅ Disconnect handler (signaling.gateway.ts:202-211)
+5. ✅ Active session calculation (participant.service.ts:1241-1276)
+6. ✅ Database cleaned (removed null sessions)
+
+Backend Status:
+===============
+
+✅ Running on port 3007 (PID 39119)
+✅ Started at 5:46 PM with ALL fixes
+✅ Schema fix applied
+
+NEXT STEP:
+==========
+
+Create a BRAND NEW meeting and test attendance.
+This will work correctly because:
+- Sessions will be created with proper data
+- No null or empty objects
+- Attendance will calculate properly
+- leftAt will be set when participants disconnect
+

@@ -469,11 +469,14 @@ export class ParticipantService {
         if (isHost) {
           // Host joins immediately
           existingParticipant.status = ParticipantStatus.ADMITTED;
-          existingParticipant.sessions.push({
+          const sessionToAdd = {
             joinedAt: new Date(),
             leftAt: undefined,
             durationSec: 0,
-          });
+          };
+          console.log(`[JOIN_MEETING] Adding session for host:`, JSON.stringify(sessionToAdd, null, 2));
+          existingParticipant.sessions.push(sessionToAdd);
+          console.log(`[JOIN_MEETING] Sessions after push:`, existingParticipant.sessions.length);
 
           // Increment count if they weren't already admitted
           if (prevStatus !== ParticipantStatus.ADMITTED) {
@@ -1223,9 +1226,14 @@ export class ParticipantService {
         try {
           const sessions = participant.sessions || [];
           
-          // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt)
+          // 🔧 FIX: Filter out invalid sessions (where leftAt < joinedAt, or null sessions)
           const validSessions = sessions.filter(session => {
-            if (!session || !session.joinedAt) return false;
+            // ✅ CRITICAL FIX: Remove null/undefined sessions
+            if (!session) {
+              console.warn(`[ATTENDANCE] Found null/undefined session in array`);
+              return false;
+            }
+            if (!session.joinedAt) return false;
             if (!session.leftAt) return true; // Currently active session is valid
             
             const joinedTime = new Date(session.joinedAt).getTime();
@@ -1235,9 +1243,43 @@ export class ParticipantService {
           
           const totalDuration = validSessions.reduce((total, session) => {
             if (!session || !session.joinedAt) return total;
-            const sessionDuration = session.leftAt && new Date(session.leftAt)
-              ? new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()
-              : Date.now() - new Date(session.joinedAt).getTime();
+            
+            let sessionDuration = 0;
+            
+            // ✅ CRITICAL FIX: Handle timestamp conversion properly
+            const getTimestamp = (dateValue: any): number => {
+              if (!dateValue) return 0;
+              // If it's already a number (milliseconds), return it
+              if (typeof dateValue === 'number') return dateValue;
+              // If it's a string that's a number, parse it
+              if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
+                return parseInt(dateValue, 10);
+              }
+              // Otherwise, try to convert it to a Date and get the timestamp
+              const date = new Date(dateValue);
+              return isNaN(date.getTime()) ? 0 : date.getTime();
+            };
+            
+            const joinedTime = getTimestamp(session.joinedAt);
+            
+            if (!joinedTime) {
+              console.error(`[ATTENDANCE] Invalid joinedAt for session:`, session.joinedAt);
+              return total;
+            }
+            
+            // ✅ FIX: Properly handle active sessions (leftAt is null or undefined)
+            if (session.leftAt) {
+              // Session is closed, use the recorded times
+              const leftTime = getTimestamp(session.leftAt);
+              if (leftTime && leftTime >= joinedTime) {
+                sessionDuration = leftTime - joinedTime;
+              }
+            } else {
+              // Session is still active, calculate current duration
+              const now = Date.now();
+              sessionDuration = now - joinedTime;
+            }
+            
             return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
           }, 0);
 
@@ -2300,6 +2342,80 @@ export class ParticipantService {
       this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Completed - Marked ${participants.length} participant(s) as LEFT for user ${userId} in meeting ${meetingId}`);
     } catch (error) {
       this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Error: ${error.message}`, error.stack);
+    }
+  }
+
+  /**
+   * Mark a participant as LEFT across ALL meetings (used when user disconnects)
+   * ✅ FIXES: Closes all open sessions across all meetings for a user
+   */
+  async markParticipantAsLeftAcrossAllMeetings(userId: string): Promise<void> {
+    try {
+      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Starting - user ${userId}`);
+      
+      // Find all active participants for this user across all meetings
+      const participants = await this.participantModel.find({
+        userId: new Types.ObjectId(userId),
+        status: { $ne: ParticipantStatus.LEFT }
+      });
+
+      if (participants.length === 0) {
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] No active participants found for user ${userId}`);
+        return;
+      }
+
+      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Found ${participants.length} active participant(s) for user ${userId}`);
+
+      const now = new Date();
+      const meetingIds = new Set<string>();
+      
+      // Process each participant and close their sessions
+      for (const participant of participants) {
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Processing participant ${participant._id} in meeting ${participant.meetingId}`);
+        
+        // ✅ CRITICAL FIX: Close any open sessions
+        const sessions = participant.sessions || [];
+        if (sessions.length > 0) {
+          const lastSession = sessions[sessions.length - 1];
+          
+          // Check if the last session is still open
+          if (!lastSession.leftAt && lastSession.joinedAt) {
+            // Close the session
+            lastSession.leftAt = now;
+            lastSession.durationSec = Math.floor(
+              (now.getTime() - lastSession.joinedAt.getTime()) / 1000
+            );
+            
+            // Update total duration
+            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
+          }
+        }
+        
+        // Mark as LEFT
+        participant.status = ParticipantStatus.LEFT;
+        
+        // Save the participant with closed session
+        await participant.save();
+        
+        // Track meeting IDs for count decrement
+        meetingIds.add(participant.meetingId.toString());
+      }
+      
+      // Decrement participant count for each affected meeting
+      for (const meetingId of meetingIds) {
+        await this.meetingModel.findByIdAndUpdate(
+          meetingId,
+          { $inc: { participantCount: -1 } }
+        );
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Decremented participant count for meeting ${meetingId}`);
+      }
+      
+      this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Completed - marked ${participants.length} participant(s) as LEFT across ${meetingIds.size} meeting(s)`);
+    } catch (error) {
+      this.logger.error(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Error: ${error.message}`);
+      throw error;
     }
   }
 

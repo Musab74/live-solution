@@ -199,21 +199,38 @@ export class SignalingGateway
       // Clean up heartbeat tracking
       this.lastHeartbeatUpdate.delete(client.user._id);
 
-      // FIXED: Don't immediately mark as LEFT on disconnect
-      // Let the heartbeat timeout system handle it (120 seconds grace period)
-      console.log(`[DISCONNECT] User ${client.user._id} disconnected - will be marked as LEFT after 120s if no reconnection`);
+      // ✅ CRITICAL FIX: Immediately mark as LEFT in all meetings and close sessions
+      console.log(`[DISCONNECT] User ${client.user._id} disconnected - marking as LEFT in all active meetings immediately`);
+      
+      try {
+        // Use the new method that queries DB for all active participants and marks them LEFT
+        await this.participantService.markParticipantAsLeftAcrossAllMeetings(client.user._id);
+        console.log(`[DISCONNECT] Successfully marked user ${client.user._id} as LEFT across all meetings`);
+      } catch (error) {
+        console.error(`[DISCONNECT] Error marking user ${client.user._id} as LEFT across all meetings:`, error);
+      }
 
-      // Remove from all rooms and notify others
+      // Get all meetings this user was in by checking room users
+      const activeMeetings = new Set<string>();
       for (const [roomName, users] of this.roomUsers.entries()) {
         if (users.has(client.id)) {
+          // roomName could be a meetingId or other room identifier
+          // Only process if it looks like a meetingId (ObjectId format)
+          if (/^[a-f\d]{24}$/i.test(roomName)) {
+            activeMeetings.add(roomName);
+          }
           users.delete(client.id);
-          this.server.to(roomName).emit('USER_LEFT', {
-            userId: client.user._id,
-            displayName: client.user.displayName,
-            socketId: client.id,
-            timestamp: new Date().toISOString()
-          });
         }
+      }
+
+      // Notify others in all rooms that user left
+      for (const meetingId of activeMeetings) {
+        this.server.to(meetingId).emit('USER_LEFT', {
+          userId: client.user._id,
+          displayName: client.user.displayName,
+          socketId: client.id,
+          timestamp: new Date().toISOString()
+        });
       }
 
       // Remove from connected users
@@ -1089,7 +1106,7 @@ export class SignalingGateway
 
   @SubscribeMessage('LOWER_HAND')
   async handleLowerHand(
-    @MessageBody() data: { meetingId: string; userId: string; displayName: string },
+    @MessageBody() data: { meetingId: string; participantId: string; userId?: string; displayName?: string; reason?: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
@@ -1098,38 +1115,59 @@ export class SignalingGateway
         return;
       }
 
-      const { meetingId, userId, displayName } = data;
-      const handKey = `${meetingId}:${userId}`;
+      // Support both old format (userId) and new format (participantId)
+      const { meetingId, participantId, userId, displayName, reason } = data;
+      const userIdToUse = participantId || userId || client.user._id;
+      const handKey = `${meetingId}:${userIdToUse}`;
 
-      console.log(`✋ Hand lowered: ${displayName} in meeting ${meetingId}`);
+      console.log(`✋ LOWER_HAND received: ${displayName || userIdToUse} in meeting ${meetingId}`, { participantId, userId: userIdToUse, reason });
+
+      // Check if hand is raised
+      const handInfo = this.raisedHands.get(handKey);
+      if (!handInfo) {
+        console.log(`✋ Hand not found for key: ${handKey}`);
+        // Still emit success to allow UI to update
+        client.emit('HAND_LOWER_SUCCESS', {
+          participantId: userIdToUse,
+          message: 'Hand successfully lowered'
+        });
+        return;
+      }
 
       // Remove from raised hands and clear timeout
-      const handInfo = this.raisedHands.get(handKey);
-      if (handInfo) {
-        clearTimeout(handInfo.timeoutId);
-        this.raisedHands.delete(handKey);
-      }
+      clearTimeout(handInfo.timeoutId);
+      this.raisedHands.delete(handKey);
 
       // Broadcast to all participants in the meeting room
       client.to(meetingId).emit('HAND_LOWERED', {
-        userId,
-        displayName,
+        participantId: userIdToUse,
+        userId: userIdToUse,
+        displayName: handInfo.displayName || displayName || 'Unknown',
         loweredAt: new Date(),
-        meetingId
+        meetingId,
+        reason
       });
 
-      // Also send to the person who lowered their hand
+      // Also emit to the sender
       client.emit('HAND_LOWERED', {
-        userId,
-        displayName,
+        participantId: userIdToUse,
+        userId: userIdToUse,
+        displayName: handInfo.displayName || displayName || 'Unknown',
         loweredAt: new Date(),
-        meetingId
+        meetingId,
+        reason
       });
 
-      console.log(`✋ Hand lower broadcasted for ${displayName}`);
+      // Emit success event
+      client.emit('HAND_LOWER_SUCCESS', {
+        participantId: userIdToUse,
+        message: 'Hand successfully lowered'
+      });
+
+      console.log(`✋ Hand lowered successfully for ${handInfo.displayName} in meeting ${meetingId}`);
     } catch (error) {
       console.error('Error handling hand lower:', error);
-      client.emit('ERROR', { message: 'Failed to lower hand' });
+      client.emit('HAND_LOWER_ERROR', { message: 'Failed to lower hand' });
     }
   }
 
