@@ -60,19 +60,31 @@ export class SSOService {
 
       return decoded;
     } catch (error) {
+      // Enhanced error logging
+      if (error.name === 'JsonWebTokenError' && error.message.includes('invalid signature')) {
+        this.logger.error(`❌ JWT verification failed: invalid signature`);
+        this.logger.error(`⚠️  This usually means JWT_SECRET_KEY in NestJS doesn't match the secret used by PHP website`);
+        this.logger.error(`⚠️  Current JWT_SECRET_KEY length: ${this.jwtSecretKey?.length || 0} characters`);
+        this.logger.error(`⚠️  Please ensure JWT_SECRET_KEY in .env matches exactly with PHP website's JWT secret`);
+        throw new UnauthorizedException(
+          'Invalid JWT token: Signature verification failed. ' +
+          'Please ensure JWT_SECRET_KEY in NestJS backend matches the secret used by PHP website.',
+        );
+      }
+      
       this.logger.error(`❌ JWT verification failed: ${error.message}`);
 
       if (error.name === 'TokenExpiredError') {
         throw new UnauthorizedException('JWT token has expired');
       }
       if (error.name === 'JsonWebTokenError') {
-        throw new UnauthorizedException('Invalid JWT token');
+        throw new UnauthorizedException(`Invalid JWT token: ${error.message}`);
       }
       if (error.name === 'NotBeforeError') {
         throw new UnauthorizedException('JWT token not yet valid');
       }
 
-      throw new UnauthorizedException('JWT verification failed');
+      throw new UnauthorizedException(`JWT verification failed: ${error.message}`);
     }
   }
 
