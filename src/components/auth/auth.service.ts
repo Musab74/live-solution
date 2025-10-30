@@ -37,6 +37,19 @@ export class AuthService {
         systemRole: claims.systemRole,
       } as any;
     } catch (error: any) {
+      // Enhanced error logging
+      if (error.message?.includes('invalid signature')) {
+        console.error('❌ JWT verification failed: invalid signature');
+        console.error('⚠️  This usually means:');
+        console.error('   1. The token was signed with a different JWT_SECRET');
+        console.error('   2. JWT_SECRET in .env was changed after token was generated');
+        console.error('   3. You might be using a PHP token instead of a NestJS token');
+        console.error('💡 Solution: Clear old tokens from localStorage and re-authenticate');
+      }
+      if (error.message?.includes('secret or public key must be provided')) {
+        console.error('❌ JWT verification failed: JWT_SECRET is not configured');
+        console.error('⚠️  Please set JWT_SECRET in your .env file');
+      }
       // Log the error for debugging
       console.error('❌ JWT verification failed:', error.message);
       throw new Error(`Token verification failed: ${error.message}`);
