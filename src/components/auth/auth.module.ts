@@ -17,19 +17,10 @@ import { Member, MemberSchema } from '../../schemas/Member.model';
     MongooseModule.forFeature([{ name: Member.name, schema: MemberSchema }]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => {
-        const secret = configService.get<string>('JWT_SECRET');
-        if (!secret || secret.trim().length === 0) {
-          throw new Error(
-            '❌ JWT_SECRET is not set or is empty in .env file! ' +
-            'Please set JWT_SECRET in your .env file with at least 32 characters.',
-          );
-        }
-        return {
-          secret: secret,
-          signOptions: { expiresIn: '24h' },
-        };
-      },
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get<string>('JWT_SECRET'),
+        signOptions: { expiresIn: '24h' },
+      }),
       inject: [ConfigService],
     }),
   ],
