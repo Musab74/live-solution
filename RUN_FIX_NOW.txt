@@ -1,0 +1,40 @@
+================================================
+🚨 RUN THIS FIX NOW ON PRODUCTION SERVER
+================================================
+
+The database index fix is ready to deploy. Run these commands:
+
+================================================
+STEP 1: PULL LATEST CODE
+================================================
+
+ssh hrde@39.116.130.91 -p 2222
+
+cd /web/hrde/html/Live-solution
+
+git pull origin master
+
+================================================
+STEP 2: BUILD AND RUN FIX
+================================================
+
+npm run build
+
+node dist/fix-user-id-index.js
+
+pm2 restart live-backend
+
+================================================
+STEP 3: CHECK LOGS
+================================================
+
+pm2 logs live-backend --lines 20
+
+================================================
+ONE-LINER COMMAND:
+================================================
+
+ssh hrde@39.116.130.91 -p 2222 "cd /web/hrde/html/Live-solution && git pull origin master && npm run build && node dist/fix-user-id-index.js && pm2 restart live-backend"
+
+================================================
+
