@@ -1,4 +1,16 @@
 import * as mongoose from 'mongoose';
+import * as dotenv from 'dotenv';
+import * as path from 'path';
+import * as fs from 'fs';
+
+// Load environment variables from .env file if it exists
+const envPath = path.join(process.cwd(), '.env');
+if (fs.existsSync(envPath)) {
+  console.log('Loading environment variables from .env file...');
+  dotenv.config({ path: envPath });
+} else {
+  console.warn('⚠️  No .env file found, using environment variables only');
+}
 
 async function fixUserIdIndex() {
   try {

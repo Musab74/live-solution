@@ -1,0 +1,76 @@
+================================================
+DATABASE INDEX FIX - RUN THIS NOW!
+================================================
+
+🚨 CRITICAL: The `email_1` unique index is still blocking SSO login!
+
+You must run the database fix script to drop the old unique email index
+and recreate it as non-unique.
+
+================================================
+STEP-BY-STEP DATABASE FIX
+================================================
+
+1. SSH into your production server:
+
+   ssh hrde@39.116.130.91 -p 2222
+
+2. Navigate to the backend directory:
+
+   cd /web/hrde/html/Live-solution
+
+3. Make sure you have the latest code:
+
+   git pull origin master
+
+4. **IMPORTANT: Build again to get the latest fix:**
+
+   npm run build
+
+5. **RUN THE DATABASE FIX SCRIPT:**
+
+   node dist/fix-user-id-index.js
+   
+   Note: The script will now automatically load .env file if it exists
+
+6. You should see output like:
+
+   Connecting to MongoDB (DEV)...
+   Connected to MongoDB
+   Dropping old unique email index...
+   ✅ Unique email index dropped successfully
+   Dropping old user_id index...
+   user_id index does not exist, skipping drop
+   Creating new sparse unique index on user_id...
+   New sparse unique index on user_id created successfully
+   Creating non-unique index on email...
+   Non-unique email index created successfully
+
+   Current indexes on members collection:
+   [ ... index info ... ]
+
+   Done! Database fixed successfully.
+
+7. Restart the backend:
+
+   pm2 restart live-backend
+
+8. Test SSO login - it should work now!
+
+================================================
+ONE-LINER COMMAND (after deployment):
+================================================
+
+ssh hrde@39.116.130.91 -p 2222 "cd /web/hrde/html/Live-solution && node dist/fix-user-id-index.js && pm2 restart live-backend"
+
+================================================
+WHAT THIS DOES:
+================================================
+
+1. Drops the unique constraint on `email_1` index
+2. Recreates `email` index as NON-UNIQUE (allows duplicates)
+3. Creates sparse unique index on `user_id` (allows null values)
+4. Fixes SSO login errors permanently
+
+================================================
+
