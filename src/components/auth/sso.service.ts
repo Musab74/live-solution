@@ -102,13 +102,19 @@ export class SSOService {
       // Map PHP member_type to NestJS SystemRole
       const systemRole = mapMemberType(member_type) as SystemRole;
       
-      // Check if user exists by user_id or email (since email might be encrypted)
-      const existingUser = await this.memberModel.findOne({
-        $or: [
-          { user_id: user_id },
-          { email: email }
-        ]
-      });
+      // CRITICAL FIX: Check user_id FIRST, then email as fallback
+      // This prevents one user from overwriting another when they share an email
+      let existingUser = null;
+      
+      if (user_id) {
+        // Try to find by user_id first (most reliable)
+        existingUser = await this.memberModel.findOne({ user_id: user_id });
+      }
+      
+      if (!existingUser && email) {
+        // Fallback to email search only if user_id search failed
+        existingUser = await this.memberModel.findOne({ email: email });
+      }
 
       const currentTime = new Date();
 
@@ -118,7 +124,11 @@ export class SSOService {
 
         existingUser.user_id = user_id;
         existingUser.displayName = name;
-        existingUser.email = email; // Update email in case it changed
+        // Only update email if it's actually different to avoid conflicts
+        if (existingUser.email !== email) {
+          this.logger.log(`⚠️ Email changed from ${existingUser.email} to ${email}`);
+          existingUser.email = email;
+        }
         existingUser.systemRole = systemRole;
         existingUser.lastSeenAt = currentTime;
         existingUser.isBlocked = false; // Default to not blocked
