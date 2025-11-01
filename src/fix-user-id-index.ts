@@ -2,10 +2,16 @@ import * as mongoose from 'mongoose';
 
 async function fixUserIdIndex() {
   try {
-    // Connect to MongoDB - USE PRODUCTION URI
-    const MONGODB_URI = process.env.MONGODB_PROD || 'mongodb://localhost:27017/LiveProd';
+    // Connect to MongoDB - Use same logic as database.module.ts
+    const isProd = process.env.NODE_ENV === 'production';
+    const MONGODB_URI = isProd ? process.env.MONGODB_PROD : process.env.MONGODB;
     
-    console.log('Connecting to MongoDB...');
+    if (!MONGODB_URI) {
+      throw new Error('MongoDB URI not found in environment variables. Set MONGODB or MONGODB_PROD');
+    }
+    
+    console.log(`Connecting to MongoDB (${isProd ? 'PROD' : 'DEV'})...`);
+    console.log(`URI: ${MONGODB_URI.replace(/\/\/[^@]*@/, '//***:***@')}`); // Hide credentials
     await mongoose.connect(MONGODB_URI);
     console.log('Connected to MongoDB');
 
