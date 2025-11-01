@@ -122,7 +122,13 @@ export class SSOService {
         // ✅ USER EXISTS - UPDATE
         this.logger.log(`🔄 Updating existing user: ${user_id} (${name})`);
 
-        existingUser.user_id = user_id;
+        // Only update user_id if it's missing or matches - prevent overwriting wrong user_id
+        if (!existingUser.user_id || existingUser.user_id === user_id) {
+          existingUser.user_id = user_id;
+        } else {
+          this.logger.warn(`⚠️ Skipping user_id update - existing: ${existingUser.user_id}, new: ${user_id}`);
+        }
+        
         existingUser.displayName = name;
         // Only update email if it's actually different to avoid conflicts
         if (existingUser.email !== email) {
