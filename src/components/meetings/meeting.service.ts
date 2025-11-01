@@ -49,6 +49,7 @@ export class MeetingService {
         scheduledFor,
         duration,
         maxParticipants,
+        courseCode,
       } = createInput;
 
       // Validate and parse scheduledFor date
@@ -75,6 +76,20 @@ export class MeetingService {
       // Generate unique invite code
       const inviteCode = await this.generateUniqueInviteCode();
 
+      // If courseCode is provided, check for conflicting meetings
+      if (courseCode && courseCode.trim()) {
+        const existingMeeting = await this.meetingModel.findOne({
+          courseCode: courseCode.trim(),
+          status: { $in: [MeetingStatus.CREATED, MeetingStatus.SCHEDULED, MeetingStatus.LIVE] }
+        });
+
+        if (existingMeeting) {
+          throw new ConflictException(
+            `A live or scheduled meeting already exists with course code: ${courseCode}`
+          );
+        }
+      }
+
       // Create new meeting
       const newMeeting = new this.meetingModel({
         title,
@@ -86,6 +101,7 @@ export class MeetingService {
         hostId: new Types.ObjectId(userId), // Original tutor/creator (never changes)
         currentHostId: new Types.ObjectId(userId), // Initially same as hostId
         inviteCode,
+        courseCode: courseCode?.trim() || undefined,
         status: parsedScheduledFor
           ? MeetingStatus.SCHEDULED
           : MeetingStatus.CREATED,
@@ -103,6 +119,7 @@ export class MeetingService {
         _id: savedMeeting._id,
         title: savedMeeting.title,
         inviteCode: savedMeeting.inviteCode,
+        courseCode: savedMeeting.courseCode,
         status: savedMeeting.status,
         isPrivate: savedMeeting.isPrivate,
         isLocked: savedMeeting.isLocked || false,

@@ -43,6 +43,12 @@ export class CreateMeetingInput {
   @IsInt()
   @Min(1)
   maxParticipants?: number;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  courseCode?: string;
 }
 
 @InputType()

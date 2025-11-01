@@ -35,6 +35,10 @@ export class Meeting {
   inviteCode?: string;
 
   @Field({ nullable: true })
+  @Prop({ required: false, trim: true })
+  courseCode?: string;
+
+  @Field({ nullable: true })
   @Prop()
   passcodeHash?: string; // if you protect rooms
 

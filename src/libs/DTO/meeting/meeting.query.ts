@@ -47,6 +47,9 @@ export class MeetingWithHost {
   inviteCode?: string;
 
   @Field({ nullable: true })
+  courseCode?: string;
+
+  @Field({ nullable: true })
   isPrivate?: boolean;
 
   @Field({ nullable: true })

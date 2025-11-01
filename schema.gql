@@ -145,6 +145,7 @@ type MeetingWithHost {
   hostId: ID!
   currentHostId: ID
   inviteCode: String
+  courseCode: String
   isPrivate: Boolean
   isLocked: Boolean
   scheduledFor: DateTime
@@ -755,6 +756,7 @@ input CreateMeetingInput {
   scheduledFor: String
   duration: Float
   maxParticipants: Float
+  courseCode: String
 }
 
 input UpdateMeetingInput {
