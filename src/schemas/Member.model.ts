@@ -15,7 +15,6 @@ export class Member {
 
   @Prop({
     required: true,
-    unique: true,
     index: true,
     lowercase: true,
     trim: true,
@@ -94,4 +93,4 @@ export class Member {
 
 export type MemberDocument = HydratedDocument<Member>;
 export const MemberSchema = SchemaFactory.createForClass(Member);
-MemberSchema.index({ email: 1 }, { unique: true });
+// Note: email is indexed but NOT unique - multiple users can share same email
