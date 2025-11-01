@@ -119,33 +119,35 @@ export class SSOService {
       const currentTime = new Date();
 
       if (existingUser) {
-        // ✅ USER EXISTS - UPDATE
-        this.logger.log(`🔄 Updating existing user: ${user_id} (${name})`);
+        // ✅ USER EXISTS - ONLY UPDATE user_id and email
+        this.logger.log(`🔄 Found existing user in DB for SSO: ${user_id} (${name})`);
 
-        // Only update user_id if it's missing or matches - prevent overwriting wrong user_id
-        if (!existingUser.user_id || existingUser.user_id === user_id) {
-          existingUser.user_id = user_id;
-        } else {
-          this.logger.warn(`⚠️ Skipping user_id update - existing: ${existingUser.user_id}, new: ${user_id}`);
+        // CRITICAL: If existing user has a different user_id, this is a conflict
+        // This happens when PHP sends different user_id but same email
+        if (existingUser.user_id && existingUser.user_id !== user_id) {
+          this.logger.error(`❌ User conflict: Existing user has user_id='${existingUser.user_id}' but PHP sent user_id='${user_id}' for email='${email}'`);
+          throw new BadRequestException(
+            `Cannot update user: A user with email '${email}' already exists with user_id '${existingUser.user_id}'. ` +
+            `The PHP system is trying to login with user_id '${user_id}' which conflicts.`
+          );
         }
         
-        existingUser.displayName = name;
-        // Only update email if it's actually different to avoid conflicts
+        // ONLY UPDATE: user_id and email - nothing else
+        if (!existingUser.user_id) {
+          existingUser.user_id = user_id;
+        }
         if (existingUser.email !== email) {
           this.logger.log(`⚠️ Email changed from ${existingUser.email} to ${email}`);
           existingUser.email = email;
         }
-        existingUser.systemRole = systemRole;
-        existingUser.lastSeenAt = currentTime;
-        existingUser.isBlocked = false; // Default to not blocked
+        
         // updatedAt is automatically managed by Mongoose timestamps
-
         const updatedUser = await existingUser.save();
 
         return {
           existed: true,
           user: updatedUser,
-          message: `User ${user_id} (${name}) updated successfully via SSO`,
+          message: `User ${user_id} (${name}) verified successfully via SSO`,
         };
       } else {
         // ✅ USER DOESN'T EXIST - CREATE
