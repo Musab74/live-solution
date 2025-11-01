@@ -102,40 +102,22 @@ export class SSOService {
       // Map PHP member_type to NestJS SystemRole
       const systemRole = mapMemberType(member_type) as SystemRole;
       
-      // CRITICAL FIX: Check user_id FIRST, then email as fallback
-      // This prevents one user from overwriting another when they share an email
+      // CRITICAL FIX: Only check by user_id - NEVER use email fallback
+      // This prevents conflicts when multiple users share the same email
       let existingUser = null;
       
       if (user_id) {
-        // Try to find by user_id first (most reliable)
+        // ONLY find by user_id - no email fallback
         existingUser = await this.memberModel.findOne({ user_id: user_id });
-      }
-      
-      if (!existingUser && email) {
-        // Fallback to email search only if user_id search failed
-        existingUser = await this.memberModel.findOne({ email: email });
       }
 
       const currentTime = new Date();
 
       if (existingUser) {
-        // ✅ USER EXISTS - ONLY UPDATE user_id and email
+        // ✅ USER EXISTS - ONLY UPDATE email if different
         this.logger.log(`🔄 Found existing user in DB for SSO: ${user_id} (${name})`);
-
-        // CRITICAL: If existing user has a different user_id, this is a conflict
-        // This happens when PHP sends different user_id but same email
-        if (existingUser.user_id && existingUser.user_id !== user_id) {
-          this.logger.error(`❌ User conflict: Existing user has user_id='${existingUser.user_id}' but PHP sent user_id='${user_id}' for email='${email}'`);
-          throw new BadRequestException(
-            `Cannot update user: A user with email '${email}' already exists with user_id '${existingUser.user_id}'. ` +
-            `The PHP system is trying to login with user_id '${user_id}' which conflicts.`
-          );
-        }
         
-        // ONLY UPDATE: user_id and email - nothing else
-        if (!existingUser.user_id) {
-          existingUser.user_id = user_id;
-        }
+        // ONLY UPDATE: email if it's different - nothing else
         if (existingUser.email !== email) {
           this.logger.log(`⚠️ Email changed from ${existingUser.email} to ${email}`);
           existingUser.email = email;
