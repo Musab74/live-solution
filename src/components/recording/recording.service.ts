@@ -56,54 +56,25 @@ export class RecordingService {
       if (!meeting) {
         throw new NotFoundException('Meeting not found');
       }
-      
-      // DEBUG LOGGING - Meeting data
-      this.logger.log(`[DEBUG] Meeting ID: ${input.meetingId}`);
-      this.logger.log(`[DEBUG] Meeting found: ${meeting ? 'YES' : 'NO'}`);
-      if (meeting) {
-        this.logger.log(`[DEBUG] Meeting title: ${meeting.title}`);
-        this.logger.log(`[DEBUG] Meeting hostId: ${meeting.hostId} (type: ${typeof meeting.hostId})`);
-        this.logger.log(`[DEBUG] Meeting status: ${meeting.status}`);
-        this.logger.log(`[DEBUG] Meeting isRecording: ${meeting.isRecording}`);
-      }
 
       // Check if meeting is active FIRST
       if (meeting.status === 'ENDED') {
-        this.logger.error(`[MEETING_ENDED] Cannot start recording for ended meeting: ${meeting._id}`);
         throw new BadRequestException(
           'Cannot start recording for a meeting that has ended',
         );
       }
-      
-      this.logger.log(`[MEETING_ACTIVE] Meeting ${meeting._id} is active, checking permissions...`);
 
       // Check permissions AFTER confirming meeting is active
       const user = await this.memberModel.findById(userId);
-      
-      // DEBUG LOGGING - Check all values
-      this.logger.log(`[DEBUG] User ID: ${userId} (type: ${typeof userId})`);
-      this.logger.log(`[DEBUG] User found: ${user ? 'YES' : 'NO'}`);
-      if (user) {
-        this.logger.log(`[DEBUG] User systemRole: ${user.systemRole}`);
-        this.logger.log(`[DEBUG] User _id: ${user._id} (type: ${typeof user._id})`);
-      }
-      this.logger.log(`[DEBUG] Meeting hostId: ${meeting.hostId} (type: ${typeof meeting.hostId})`);
-      this.logger.log(`[DEBUG] Meeting hostId.toString(): ${meeting.hostId.toString()}`);
-      this.logger.log(`[DEBUG] userId.toString(): ${userId.toString()}`);
-      this.logger.log(`[DEBUG] Comparison: ${meeting.hostId.toString()} !== ${userId.toString()} = ${meeting.hostId.toString() !== userId.toString()}`);
-      this.logger.log(`[DEBUG] Is Admin: ${user?.systemRole === SystemRole.ADMIN}`);
       
       if (
         user.systemRole !== SystemRole.ADMIN &&
         meeting.hostId.toString() !== userId.toString()
       ) {
-        this.logger.error(`[PERMISSION_DENIED] User ${userId} is not the host ${meeting.hostId.toString()}`);
         throw new ForbiddenException(
           'Only the meeting host can start recording',
         );
       }
-      
-      this.logger.log(`[PERMISSION_GRANTED] User ${userId} can start recording`);
 
       // Check if already recording
       if (meeting.isRecording) {
@@ -123,15 +94,7 @@ export class RecordingService {
       // Ensure recordings directory exists
       if (!fs.existsSync(recordingsDir)) {
         fs.mkdirSync(recordingsDir, { recursive: true });
-        this.logger.log(`[START_RECORDING] Created recordings directory: ${recordingsDir}`);
       }
-      
-      this.logger.log(`[START_RECORDING] Recording will be saved to: ${filePath}`);
-      
-      // Client-side recording - no server-side egress needed
-      this.logger.log(`[START_RECORDING] Client-side recording enabled for meeting: ${meeting._id}`);
-      this.logger.log(`[START_RECORDING] Users can record using the frontend recording component`);
-      this.logger.log(`[START_RECORDING] Recordings will be uploaded to: https://i-vod1.hrdeedu.co.kr/recordings/`);
 
       // Start recording
       const now = new Date();
@@ -146,8 +109,6 @@ export class RecordingService {
       // Recording will be saved to VOD server
       const vodServerUrl = this.livekitService.getVodRecordingsUrl();
       meeting.recordingUrl = `${vodServerUrl}/${fileName}`;
-      this.logger.log(`[START_RECORDING] 📹 Recording URL: ${meeting.recordingUrl}`);
-      this.logger.log(`[START_RECORDING] 💾 Recording will be saved to VOD server: /mnt/vod-server/recordings/${fileName}`);
 
       // Set quality and format defaults
       const quality = input.quality || '720p';
@@ -216,9 +177,6 @@ export class RecordingService {
         );
       }
 
-      // Client-side recording - no server-side egress to stop
-      this.logger.log(`[STOP_RECORDING] Client-side recording stopped for meeting: ${meeting._id}`);
-
       // Stop recording
       const now = new Date();
       meeting.isRecording = false;
@@ -260,15 +218,12 @@ export class RecordingService {
         if (fs.existsSync(vodServerPath)) {
           const stats = fs.statSync(vodServerPath);
           fileSize = stats.size;
-          this.logger.log(`[STOP_RECORDING] 💾 VOD server recording found, size: ${fileSize} bytes`);
         } else if (fs.existsSync(localFilePath)) {
           const stats = fs.statSync(localFilePath);
           fileSize = stats.size;
-          this.logger.log(`[STOP_RECORDING] 💾 Local recording, size: ${fileSize} bytes`);
         } else {
           // Estimate size based on duration if file doesn't exist yet
           fileSize = Math.round(meeting.recordingDuration * 312500); // ~2.5 Mbps = 312.5 KB/s
-          this.logger.log(`[STOP_RECORDING] ⚠️ File not found, estimated size: ${fileSize} bytes`);
         }
 
         const newVod = new this.vodModel({
@@ -283,9 +238,7 @@ export class RecordingService {
         });
 
         await newVod.save();
-        this.logger.log(`[STOP_RECORDING] ✅ VOD entry created: ${newVod._id} for meeting ${meeting._id}`);
       } catch (vodError) {
-        this.logger.error(`[STOP_RECORDING] ❌ Failed to create VOD entry: ${vodError.message}`);
         // Don't fail the recording stop if VOD creation fails
       }
 
