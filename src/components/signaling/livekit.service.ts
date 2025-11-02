@@ -11,24 +11,68 @@ export class LivekitService {
   private readonly apiSecret: string;
   private readonly httpUrl: string;
   private readonly wsUrl: string;
-  private readonly rooms: RoomServiceClient;
+  // Server 2 configuration
+  private readonly httpUrl2: string;
+  private readonly wsUrl2: string;
 
   constructor(config: ConfigService) {
     this.apiKey = config.get<string>('LIVEKIT_API_KEY')!;
     this.apiSecret = config.get<string>('LIVEKIT_API_SECRET')!;
+    
+    // Server 1 configuration
     const base = config.get<string>('LIVEKIT_URL')!; // https://...
     this.httpUrl = base.replace(/\/$/, '');
     this.wsUrl = this.httpUrl.replace('http', 'ws'); // wss://...
     
-    this.rooms = new RoomServiceClient(
-      this.httpUrl,
-      this.apiKey,
-      this.apiSecret,
-    );
+    // Server 2 configuration
+    const base2 = config.get<string>('LIVEKIT2_URL')!; // https://...
+    this.httpUrl2 = base2.replace(/\/$/, '');
+    this.wsUrl2 = this.httpUrl2.replace('http', 'ws'); // wss://...
+    
+    // Log configuration on startup
+    console.log('🚀 [LOAD_BALANCER] Two-server configuration loaded:');
+    console.log(`   Server 1 (Even): ${this.wsUrl}`);
+    console.log(`   Server 2 (Odd):  ${this.wsUrl2}`);
   }
 
-  getWsUrl() {
-    return this.wsUrl;
+  /**
+   * Get WebSocket URL for the appropriate server based on room ID
+   * Even rooms (last digit 0,2,4,6,8) → Server 1
+   * Odd rooms (last digit 1,3,5,7,9) → Server 2
+   */
+  getWsUrl(roomId?: string): string {
+    if (!roomId) return this.wsUrl; // Fallback to Server 1 for backwards compatibility
+    
+    const lastChar = roomId.slice(-1);
+    const isEven = parseInt(lastChar) % 2 === 0;
+    const selectedServer = isEven ? 'Server 1' : 'Server 2';
+    const selectedUrl = isEven ? this.wsUrl : this.wsUrl2;
+    
+    console.log(`🔄 [LOAD_BALANCER] Room ${roomId} → Last digit: ${lastChar} → ${selectedServer} → ${selectedUrl}`);
+    
+    return selectedUrl;
+  }
+  
+  /**
+   * Get HTTP URL for the appropriate server based on room ID
+   */
+  private getHttpUrl(roomId: string): string {
+    const lastChar = roomId.slice(-1);
+    const isEven = parseInt(lastChar) % 2 === 0;
+    const selectedServer = isEven ? 'Server 1' : 'Server 2';
+    const selectedUrl = isEven ? this.httpUrl : this.httpUrl2;
+    
+    console.log(`🔄 [LOAD_BALANCER] HTTP - Room ${roomId} → Last digit: ${lastChar} → ${selectedServer} → ${selectedUrl}`);
+    
+    return selectedUrl;
+  }
+  
+  /**
+   * Get appropriate RoomServiceClient for the room
+   */
+  private getRoomServiceClient(roomId: string): RoomServiceClient {
+    const httpUrl = this.getHttpUrl(roomId);
+    return new RoomServiceClient(httpUrl, this.apiKey, this.apiSecret);
   }
 
   generateAccessToken(opts: {
@@ -76,27 +120,34 @@ export class LivekitService {
 
   // Admin ops
   createRoom(name: string, maxParticipants = 50) {
-    return this.rooms.createRoom({ name, maxParticipants, emptyTimeout: 600 });
+    const roomsClient = this.getRoomServiceClient(name);
+    return roomsClient.createRoom({ name, maxParticipants, emptyTimeout: 600 });
   }
   deleteRoom(name: string) {
-    return this.rooms.deleteRoom(name);
+    const roomsClient = this.getRoomServiceClient(name);
+    return roomsClient.deleteRoom(name);
   }
   getRoom(name: string) {
-    return this.rooms
+    const roomsClient = this.getRoomServiceClient(name);
+    return roomsClient
       .listRooms()
       .then((rooms) => rooms.find((r) => r.name === name));
   }
   listParticipants(room: string) {
-    return this.rooms.listParticipants(room);
+    const roomsClient = this.getRoomServiceClient(room);
+    return roomsClient.listParticipants(room);
   }
   removeParticipant(room: string, identity: string) {
-    return this.rooms.removeParticipant(room, identity);
+    const roomsClient = this.getRoomServiceClient(room);
+    return roomsClient.removeParticipant(room, identity);
   }
   muteTrack(room: string, identity: string, trackSid: string, muted: boolean) {
-    return this.rooms.mutePublishedTrack(room, identity, trackSid, muted);
+    const roomsClient = this.getRoomServiceClient(room);
+    return roomsClient.mutePublishedTrack(room, identity, trackSid, muted);
   }
   updateParticipantMetadata(room: string, identity: string, metadata: string) {
-    return this.rooms.updateParticipant(room, identity, { metadata });
+    const roomsClient = this.getRoomServiceClient(room);
+    return roomsClient.updateParticipant(room, identity, { metadata });
   }
 
   // Client-side recording support (no server-side egress needed)

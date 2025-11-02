@@ -17,11 +17,16 @@ PORT=3007
 NODE_ENV=development
 
 # LiveKit Configuration
-# LiveKit is running on server .91
+# LiveKit Server 1 is running on server .91
 LIVEKIT_URL=https://livekit1.hrdeedu.co.kr
 # Default development keys (replace with actual production keys from .91 server)
 LIVEKIT_API_KEY=devkey
 LIVEKIT_API_SECRET=secret
+
+# LiveKit Server 2 Configuration
+# LiveKit Server 2 - even rooms go to Server 1, odd rooms to Server 2
+LIVEKIT2_URL=https://livekit2.hrdeedu.co.kr
+# Using same keys for both servers
 
 # CORS Configuration for Cross-Domain SSO
 # ⚠️ IMPORTANT: These domains must match your actual deployment URLs

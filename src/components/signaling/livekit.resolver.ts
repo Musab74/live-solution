@@ -117,11 +117,14 @@ export class LivekitResolver {
         isObject: typeof token === 'object',
       });
 
-      const wsUrl = this.lk.getWsUrl();
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] WebSocket URL:', wsUrl);
+      const wsUrl = this.lk.getWsUrl(meetingId);
+      console.log('🔍 [CREATE_LIVEKIT_TOKEN] WebSocket URL selected:', wsUrl);
 
       const tokenData = { wsUrl, token };
       console.log('🔍 [CREATE_LIVEKIT_TOKEN] Token data to stringify:', tokenData);
+      
+      // Log server selection for debugging
+      this.logger.log(`✅ [LOAD_BALANCER] Meeting ${meetingId} assigned to: ${wsUrl}`);
 
       const result = JSON.stringify(tokenData);
       console.log('🔍 [CREATE_LIVEKIT_TOKEN] Final JSON result:', result);
