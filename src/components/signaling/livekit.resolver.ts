@@ -1,5 +1,5 @@
 import { Resolver, Mutation, Args, Query } from '@nestjs/graphql';
-import { UseGuards, Logger } from '@nestjs/common';
+import { UseGuards, Logger, ForbiddenException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { LivekitService } from './livekit.service';
@@ -64,13 +64,24 @@ export class LivekitResolver {
       try {
         // Check if user is the meeting host (using original authenticated user ID)
         const meeting = await this.meetingModel.findById(meetingId);
-        if (meeting && meeting.hostId && meeting.hostId.toString() === String(me._id)) {
+        if (!meeting) {
+          throw new Error('Meeting not found');
+        }
+        
+        // Check if user is banned from this meeting
+        const userId = String(me._id);
+        if (meeting.bannedUserIds && meeting.bannedUserIds.includes(userId)) {
+          this.logger.warn(`[CREATE_LIVEKIT_TOKEN] Banned user ${userId} attempted to get token for meeting ${meetingId}`);
+          throw new ForbiddenException('You have been removed from this meeting and cannot rejoin');
+        }
+        
+        if (meeting && meeting.hostId && meeting.hostId.toString() === userId) {
           meetingRole = 'HOST';
           console.log('🔍 [CREATE_LIVEKIT_TOKEN] User is meeting HOST');
         } else {
           // Check participant record for role (using original authenticated user ID)
           const participant = await this.participantModel
-            .findOne({ meetingId: meetingId, userId: String(me._id), status: { $ne: 'LEFT' } })
+            .findOne({ meetingId: meetingId, userId: userId, status: { $ne: 'LEFT' } })
             .exec();
           
           if (participant && participant.role) {
@@ -80,6 +91,7 @@ export class LivekitResolver {
         }
       } catch (roleError) {
         console.error('🔍 [CREATE_LIVEKIT_TOKEN] Error determining role, using PARTICIPANT:', roleError.message);
+        throw roleError; // Re-throw to prevent token generation on error
       }
       
       console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Final meeting role: ${meetingRole}`);

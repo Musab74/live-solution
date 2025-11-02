@@ -325,6 +325,19 @@ export class ParticipantService {
       }
     }
 
+    // Force disconnect from LiveKit BEFORE removing from database
+    try {
+      const roomName = participant.meetingId.toString(); // Use meetingId directly as room name (matches token generation)
+      const identity = participant.userId?.toString() || participant.displayName;
+      
+      this.logger.log(`Attempting to disconnect participant ${identity} from LiveKit room ${roomName}`);
+      await this.livekitService.removeParticipant(roomName, identity);
+      this.logger.log(`Successfully disconnected participant ${identity} from LiveKit room ${roomName}`);
+    } catch (livekitError) {
+      // Log error but don't fail the removal - participant might not be in LiveKit room
+      this.logger.warn(`Failed to disconnect participant from LiveKit: ${livekitError.message}`);
+    }
+
     // Remove the participant
     await this.participantModel.findByIdAndDelete(participantId);
 

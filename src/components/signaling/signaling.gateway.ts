@@ -747,7 +747,7 @@ export class SignalingGateway
     );
 
     if (targetSocket) {
-      targetSocket.emit('KICKED', { reason });
+      targetSocket.emit('KICKED', { userId: targetUserId, reason });
       targetSocket.disconnect();
 
       client.to(roomName).emit('USER_KICKED', {
