@@ -1096,6 +1096,13 @@ export class SignalingGateway
       // Also send to the person who raised their hand
       console.log('✋ Sending HAND_RAISED to sender:', broadcastData);
       client.emit('HAND_RAISED', broadcastData);
+      
+      // ✅ FIX: Also emit success event for the sender
+      client.emit('HAND_RAISE_SUCCESS', {
+        participantId: userId,
+        userId: userId,
+        message: 'Hand raised successfully'
+      });
 
       console.log(`✋ Hand raise broadcasted for ${displayName}`);
     } catch (error) {
@@ -1117,18 +1124,34 @@ export class SignalingGateway
 
       // Support both old format (userId) and new format (participantId)
       const { meetingId, participantId, userId, displayName, reason } = data;
-      const userIdToUse = participantId || userId || client.user._id;
+      // ✅ FIX: Prefer userId over participantId to match the key used when raising
+      // When raising, we use: `${meetingId}:${userId}`, so we should use the same format
+      const userIdToUse = userId || participantId || client.user._id;
       const handKey = `${meetingId}:${userIdToUse}`;
 
-      console.log(`✋ LOWER_HAND received: ${displayName || userIdToUse} in meeting ${meetingId}`, { participantId, userId: userIdToUse, reason });
+      console.log(`✋ LOWER_HAND received: ${displayName || userIdToUse} in meeting ${meetingId}`, { participantId, userId, userIdToUse, reason });
 
-      // Check if hand is raised
-      const handInfo = this.raisedHands.get(handKey);
+      // Check if hand is raised - try both userId and participantId if they differ
+      let handInfo = this.raisedHands.get(handKey);
+      
+      // ✅ FIX: If not found with userId, try with participantId
+      if (!handInfo && participantId && participantId !== userIdToUse) {
+        const altKey = `${meetingId}:${participantId}`;
+        handInfo = this.raisedHands.get(altKey);
+        if (handInfo) {
+          console.log(`✋ Hand found with alternate key: ${altKey}`);
+          // Update the key to use userId for consistency
+          this.raisedHands.delete(altKey);
+          this.raisedHands.set(handKey, handInfo);
+        }
+      }
+      
       if (!handInfo) {
-        console.log(`✋ Hand not found for key: ${handKey}`);
-        // Still emit success to allow UI to update
+        console.log(`✋ Hand not found for key: ${handKey} (tried userId: ${userId}, participantId: ${participantId})`);
+        // Still emit success to allow UI to update - include both IDs
         client.emit('HAND_LOWER_SUCCESS', {
           participantId: userIdToUse,
+          userId: userIdToUse,
           message: 'Hand successfully lowered'
         });
         return;
@@ -1158,9 +1181,10 @@ export class SignalingGateway
         reason
       });
 
-      // Emit success event
+      // Emit success event - include both IDs for consistency
       client.emit('HAND_LOWER_SUCCESS', {
         participantId: userIdToUse,
+        userId: userIdToUse,
         message: 'Hand successfully lowered'
       });
 
