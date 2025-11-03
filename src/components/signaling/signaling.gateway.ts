@@ -504,9 +504,13 @@ export class SignalingGateway
 
       // Check permissions
       const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
-      const isOwner = message.userId === client.user._id;
+      // Convert both to strings for reliable comparison (ObjectId vs string)
+      const messageUserId = String(message.userId || '');
+      const clientUserId = String(client.user._id || '');
+      const isOwner = messageUserId === clientUserId;
 
       if (!isHost && !isOwner) {
+        console.log(`[DELETE_CHAT_MESSAGE] Permission denied - isHost: ${isHost}, isOwner: ${isOwner}, messageUserId: ${messageUserId}, clientUserId: ${clientUserId}`);
         client.emit('ERROR', { message: 'Insufficient permissions to delete message' });
         return;
       }
