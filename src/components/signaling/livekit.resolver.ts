@@ -87,8 +87,13 @@ export class LivekitResolver {
       });
 
       const wsUrl = this.lk.getWsUrl(meetingId);
+      
+      // Determine server number (1 or 2) based on room ID
+      const lastChar = meetingId.slice(-1);
+      const isEven = parseInt(lastChar) % 2 === 0;
+      const serverNumber = isEven ? 1 : 2;
 
-      const tokenData = { wsUrl, token };
+      const tokenData = { wsUrl, token, serverNumber };
 
       const result = JSON.stringify(tokenData);
 
