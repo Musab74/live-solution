@@ -1046,6 +1046,25 @@ export class SignalingGateway
     }
   }
 
+  // ===== MEETING END NOTIFICATION =====
+  
+  // Public method to notify all participants when meeting ends
+  async notifyMeetingEnded(meetingId: string) {
+    try {
+      console.log(`[MEETING_ENDED] Notifying all participants for meeting ${meetingId}`);
+      
+      // Emit to all participants in the meeting room
+      this.server.to(meetingId).emit('MEETING_ENDED', {
+        meetingId,
+        message: 'Meeting has ended',
+      });
+
+      console.log(`[MEETING_ENDED] Successfully notified participants for meeting ${meetingId}`);
+    } catch (error) {
+      console.error(`[MEETING_ENDED] Error notifying participants:`, error);
+    }
+  }
+
   // ===== REAL-TIME HAND RAISE SYSTEM (WebSocket-based, no DB) =====
 
   @SubscribeMessage('RAISE_HAND')

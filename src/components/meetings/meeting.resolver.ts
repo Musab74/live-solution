@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
-import { UseGuards, Logger } from '@nestjs/common';
+import { UseGuards, Logger, Inject, forwardRef } from '@nestjs/common';
 import { MeetingService } from './meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -20,6 +20,7 @@ import {
   MeetingStats,
   MeetingResponse,
 } from '../../libs/DTO/meeting/meeting.query';
+import { SignalingGateway } from '../signaling/signaling.gateway';
 
 // MeetingResponse is now imported from DTO
 
@@ -108,7 +109,11 @@ export class SimpleJoinMeetingResponse {
 export class MeetingResolver {
   private readonly logger = new Logger(MeetingResolver.name);
 
-  constructor(private readonly meetingService: MeetingService) {}
+  constructor(
+    private readonly meetingService: MeetingService,
+    @Inject(forwardRef(() => SignalingGateway))
+    private readonly signalingGateway: SignalingGateway,
+  ) {}
 
   // ==================== QUERIES ====================
 
@@ -298,6 +303,15 @@ export class MeetingResolver {
   ) {
     try {
       const result = await this.meetingService.endMeeting(meetingId, user._id);
+      
+      // Emit WebSocket event to notify all participants immediately
+      try {
+        await this.signalingGateway.notifyMeetingEnded(meetingId);
+      } catch (wsError) {
+        this.logger.warn(`[END_MEETING] Failed to emit WebSocket event: ${wsError.message}`);
+        // Don't fail the meeting end if WebSocket fails
+      }
+      
       return result;
     } catch (error) {
       this.logger.error(

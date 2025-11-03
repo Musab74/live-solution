@@ -8,6 +8,7 @@ import { Participant, ParticipantSchema } from '../../schemas/Participant.model'
 import { AuthModule } from '../auth/auth.module';
 import { LivekitService } from '../signaling/livekit.service';
 import { ParticipantModule } from '../participants/participant.module';
+import { SignalingModule } from '../signaling/signaling.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ParticipantModule } from '../participants/participant.module';
     ]),
     AuthModule,
     forwardRef(() => ParticipantModule),
+    forwardRef(() => SignalingModule),
   ],
   providers: [MeetingService, MeetingResolver, LivekitService],
   exports: [MeetingService],
