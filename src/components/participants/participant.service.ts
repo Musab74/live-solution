@@ -596,11 +596,16 @@ export class ParticipantService {
     }
 
 
-    // Update the last session with leave time
+    // ✅ FIX BUG #5: Update the last session with leave time, prevent double counting
     const sessions = participant.sessions || [];
     if (sessions.length > 0) {
       const lastSession = sessions[sessions.length - 1];
-      if (!lastSession.leftAt && lastSession.joinedAt) {
+      
+      // ✅ FIX: Check if session is already closed to prevent double counting
+      if (lastSession.leftAt) {
+        console.log(`[LEAVE_MEETING] Session already closed for participant ${participantId}, skipping duration update`);
+        // Session already closed, don't process again
+      } else if (lastSession.joinedAt) {
         const now = new Date();
         const durationSec = Math.floor(
           (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
@@ -610,7 +615,25 @@ export class ParticipantService {
         if (durationSec >= 0) {
           lastSession.leftAt = now;
           lastSession.durationSec = durationSec;
-          participant.totalDurationSec += lastSession.durationSec;
+          
+          // ✅ FIX BUG #4: Prevent double counting - only add if not already counted
+          // Check if this duration was already added to totalDurationSec
+          const previousTotal = participant.totalDurationSec || 0;
+          // Count all closed sessions including those with durationSec = 0
+          const sessionSum = sessions
+            .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+            .reduce((sum, s) => sum + (s.durationSec || 0), 0);
+          
+          // Only add if this session's duration wasn't already counted
+          // Note: We compare sessionSum (sum of all closed sessions) with previousTotal (stored total)
+          // If they're equal or previousTotal is less, the new duration wasn't counted yet
+          if (sessionSum <= previousTotal) {
+            participant.totalDurationSec = previousTotal + durationSec;
+            console.log(`[LEAVE_MEETING] Added ${durationSec}s to totalDurationSec (new total: ${participant.totalDurationSec}s)`);
+          } else {
+            // Duration already counted, just update the session but don't add to total
+            console.warn(`[LEAVE_MEETING] Session duration already counted (sessionSum: ${sessionSum}, previousTotal: ${previousTotal}), skipping totalDurationSec update`);
+          }
         } else {
           // If duration would be negative, remove this invalid session
           console.warn(`[LEAVE_MEETING] Removing invalid session with negative duration for participant ${participantId}`);
@@ -665,15 +688,28 @@ export class ParticipantService {
         durationSec: 0,
       });
     } else if (action === 'leave') {
-      // Update last session
+      // ✅ FIX: Update last session with double-counting prevention
       if (sessions.length > 0) {
         const lastSession = sessions[sessions.length - 1];
-        if (!lastSession.leftAt && lastSession.joinedAt) {
+        // ✅ Check if session already closed to prevent double counting
+        if (lastSession.leftAt) {
+          console.log(`[UPDATE_SESSION] Session already closed, skipping duration update`);
+        } else if (lastSession.joinedAt) {
           lastSession.leftAt = now;
-          lastSession.durationSec = Math.floor(
+          const durationSec = Math.floor(
             (now.getTime() - lastSession.joinedAt.getTime()) / 1000,
           );
-          participant.totalDurationSec += lastSession.durationSec;
+          lastSession.durationSec = durationSec;
+          
+          // ✅ Prevent double counting - include sessions with durationSec = 0
+          const previousTotal = participant.totalDurationSec || 0;
+          const sessionSum = sessions
+            .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+            .reduce((sum, s) => sum + (s.durationSec || 0), 0);
+          
+          if (sessionSum <= previousTotal) {
+            participant.totalDurationSec = previousTotal + durationSec;
+          }
         }
       }
     } else {
@@ -1254,47 +1290,66 @@ export class ParticipantService {
             return leftTime >= joinedTime; // Only keep sessions where leftAt >= joinedAt
           });
           
+          // ✅ FIX BUG #1: Use saved durationSec first, recalculate only if missing or invalid
           const totalDuration = validSessions.reduce((total, session) => {
             if (!session || !session.joinedAt) return total;
             
-            let sessionDuration = 0;
+            let sessionDurationSec = 0;
             
-            // ✅ CRITICAL FIX: Handle timestamp conversion properly
-            const getTimestamp = (dateValue: any): number => {
-              if (!dateValue) return 0;
-              // If it's already a number (milliseconds), return it
-              if (typeof dateValue === 'number') return dateValue;
-              // If it's a string that's a number, parse it
-              if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
-                return parseInt(dateValue, 10);
-              }
-              // Otherwise, try to convert it to a Date and get the timestamp
-              const date = new Date(dateValue);
-              return isNaN(date.getTime()) ? 0 : date.getTime();
-            };
-            
-            const joinedTime = getTimestamp(session.joinedAt);
-            
-            if (!joinedTime) {
-              console.error(`[ATTENDANCE] Invalid joinedAt for session:`, session.joinedAt);
-              return total;
-            }
-            
-            // ✅ FIX: Properly handle active sessions (leftAt is null or undefined)
-            if (session.leftAt) {
-              // Session is closed, use the recorded times
-              const leftTime = getTimestamp(session.leftAt);
-              if (leftTime && leftTime >= joinedTime) {
-                sessionDuration = leftTime - joinedTime;
-              }
+            // ✅ PRIORITY 1: Use saved durationSec if it exists (>= 0, can be 0 for instant leaves) and session is closed
+            if (session.durationSec !== undefined && session.durationSec !== null && session.durationSec >= 0 && session.leftAt) {
+              // Session is closed and has a saved duration - use it (most accurate)
+              // Note: durationSec can be 0 if participant left immediately
+              sessionDurationSec = session.durationSec;
+              console.log(`[ATTENDANCE] Using saved durationSec: ${sessionDurationSec}s for session`);
             } else {
-              // Session is still active, calculate current duration
-              const now = Date.now();
-              sessionDuration = now - joinedTime;
+              // ✅ PRIORITY 2: Recalculate only if durationSec is missing or invalid
+              const getTimestamp = (dateValue: any): number => {
+                if (!dateValue) return 0;
+                if (typeof dateValue === 'number') return dateValue;
+                if (typeof dateValue === 'string' && /^\d+$/.test(dateValue)) {
+                  return parseInt(dateValue, 10);
+                }
+                const date = new Date(dateValue);
+                return isNaN(date.getTime()) ? 0 : date.getTime();
+              };
+              
+              const joinedTime = getTimestamp(session.joinedAt);
+              
+              if (!joinedTime) {
+                console.error(`[ATTENDANCE] Invalid joinedAt for session:`, session.joinedAt);
+                return total;
+              }
+              
+              if (session.leftAt) {
+                // Session is closed but durationSec missing - recalculate from timestamps
+                const leftTime = getTimestamp(session.leftAt);
+                if (leftTime && leftTime >= joinedTime) {
+                  sessionDurationSec = Math.floor((leftTime - joinedTime) / 1000);
+                  console.log(`[ATTENDANCE] Recalculated durationSec: ${sessionDurationSec}s (saved value was missing/invalid)`);
+                }
+              } else {
+                // ✅ FIX BUG #3: Session still active - calculate current duration
+                // Only for truly active sessions (participant hasn't left)
+                const now = Date.now();
+                sessionDurationSec = Math.floor((now - joinedTime) / 1000);
+                console.log(`[ATTENDANCE] Active session - current duration: ${sessionDurationSec}s`);
+              }
             }
             
-            return total + Math.max(0, Math.floor(sessionDuration / 1000)); // Ensure non-negative
+            return total + Math.max(0, sessionDurationSec); // Ensure non-negative
           }, 0);
+
+          // ✅ FIX BUG #4: Validation - Verify totalDuration matches calculated sum (for debugging)
+          // If totalDurationSec exists but doesn't match calculated sum, log warning but use calculated value
+          if (participant.totalDurationSec && participant.totalDurationSec !== totalDuration) {
+            const diff = Math.abs(participant.totalDurationSec - totalDuration);
+            if (diff > 5) { // Only warn if difference is significant (> 5 seconds)
+              console.warn(`[ATTENDANCE] Duration mismatch for participant ${participant._id}: stored=${participant.totalDurationSec}s, calculated=${totalDuration}s (diff: ${diff}s)`);
+              // Use calculated value as it's more accurate (sums from session.durationSec)
+              // Don't update participant.totalDurationSec here to avoid race conditions
+            }
+          }
 
           // ✅ SAFER: Handle case where populate failed (user deleted)
           let userData = null;
@@ -1351,17 +1406,32 @@ export class ParticipantService {
             hasHandRaised: participant.hasHandRaised || false,
             handRaisedAt: participant.handRaisedAt ? (typeof participant.handRaisedAt === 'string' ? new Date(participant.handRaisedAt) : participant.handRaisedAt) : null,
             handLoweredAt: participant.handLoweredAt ? (typeof participant.handLoweredAt === 'string' ? new Date(participant.handLoweredAt) : participant.handLoweredAt) : null,
+            // ✅ FIX BUG #2: Use saved durationSec in session mapping, recalculate only if missing
             sessions: validSessions.map((session) => {
               if (!session || !session.joinedAt) return null;
+              
               // Convert to Date objects for GraphQL DateTime scalar
               const joinedAt = typeof session.joinedAt === 'string' ? new Date(session.joinedAt) : session.joinedAt;
               const leftAt = session.leftAt ? (typeof session.leftAt === 'string' ? new Date(session.leftAt) : session.leftAt) : null;
+              
+              // Use saved durationSec if available (can be 0 for instant leaves), otherwise recalculate
+              let durationSec = session.durationSec;
+              if (durationSec === undefined || durationSec === null || durationSec < 0) {
+                // Only recalculate if durationSec is missing or invalid (negative)
+                // durationSec = 0 is valid (participant left immediately)
+                if (leftAt) {
+                  // Closed session - recalculate from timestamps
+                  durationSec = Math.floor((new Date(leftAt).getTime() - new Date(joinedAt).getTime()) / 1000);
+                } else {
+                  // Active session - calculate current duration
+                  durationSec = Math.floor((Date.now() - new Date(joinedAt).getTime()) / 1000);
+                }
+              }
+              
               return {
                 joinedAt: joinedAt,
                 leftAt: leftAt,
-                durationSec: session.leftAt && new Date(session.leftAt)
-                  ? Math.floor((new Date(session.leftAt).getTime() - new Date(session.joinedAt).getTime()) / 1000)
-                  : Math.floor((Date.now() - new Date(session.joinedAt).getTime()) / 1000),
+                durationSec: Math.max(0, durationSec), // Ensure non-negative
               };
             }).filter(s => s !== null), // Remove null entries
           };
@@ -2238,18 +2308,29 @@ export class ParticipantService {
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
           
-          // Check if the last session is still open
-          if (!lastSession.leftAt && lastSession.joinedAt) {
+          // ✅ FIX: Check if the last session is still open (prevent double counting)
+          if (lastSession.leftAt) {
+            this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Session already closed for participant ${participant._id}`);
+          } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
-            lastSession.durationSec = Math.floor(
+            const durationSec = Math.floor(
               (now.getTime() - new Date(lastSession.joinedAt).getTime()) / 1000
             );
+            lastSession.durationSec = durationSec;
             
-            // Update total duration
-            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
+            const previousTotal = participant.totalDurationSec || 0;
+            const sessionSum = participant.sessions
+              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .reduce((sum, s) => sum + (s.durationSec || 0), 0);
             
-            this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
+            if (sessionSum <= previousTotal) {
+              participant.totalDurationSec = previousTotal + durationSec;
+              this.logger.log(`[CLEANUP_STALE_PARTICIPANTS] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+            } else {
+              this.logger.warn(`[CLEANUP_STALE_PARTICIPANTS] Session duration already counted for participant ${participant._id}`);
+            }
           }
         }
         
@@ -2318,20 +2399,29 @@ export class ParticipantService {
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
           
-          // Check if the last session is still open
-          if (!lastSession.leftAt && lastSession.joinedAt) {
+          // ✅ FIX: Check if the last session is still open (prevent double counting)
+          if (lastSession.leftAt) {
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Last session already closed for participant ${participant._id}`);
+          } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
-            lastSession.durationSec = Math.floor(
+            const durationSec = Math.floor(
               (now.getTime() - lastSession.joinedAt.getTime()) / 1000
             );
+            lastSession.durationSec = durationSec;
             
-            // Update total duration
-            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
+            const previousTotal = participant.totalDurationSec || 0;
+            const sessionSum = participant.sessions
+              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .reduce((sum, s) => sum + (s.durationSec || 0), 0);
             
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
-          } else {
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Last session already closed for participant ${participant._id}`);
+            if (sessionSum <= previousTotal) {
+              participant.totalDurationSec = previousTotal + durationSec;
+              this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+            } else {
+              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Session duration already counted for participant ${participant._id}`);
+            }
           }
         } else {
           this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] No sessions found for participant ${participant._id}`);
@@ -2391,18 +2481,29 @@ export class ParticipantService {
         if (sessions.length > 0) {
           const lastSession = sessions[sessions.length - 1];
           
-          // Check if the last session is still open
-          if (!lastSession.leftAt && lastSession.joinedAt) {
+          // ✅ FIX: Check if the last session is still open (prevent double counting)
+          if (lastSession.leftAt) {
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session already closed for participant ${participant._id}`);
+          } else if (lastSession.joinedAt) {
             // Close the session
             lastSession.leftAt = now;
-            lastSession.durationSec = Math.floor(
+            const durationSec = Math.floor(
               (now.getTime() - lastSession.joinedAt.getTime()) / 1000
             );
+            lastSession.durationSec = durationSec;
             
-            // Update total duration
-            participant.totalDurationSec = (participant.totalDurationSec || 0) + lastSession.durationSec;
+            // ✅ FIX: Update total duration with double-counting prevention - include sessions with durationSec = 0
+            const previousTotal = participant.totalDurationSec || 0;
+            const sessionSum = participant.sessions
+              .filter(s => s.leftAt && (s.durationSec !== undefined && s.durationSec !== null))
+              .reduce((sum, s) => sum + (s.durationSec || 0), 0);
             
-            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Closed session for participant ${participant._id} - Duration: ${lastSession.durationSec}s`);
+            if (sessionSum <= previousTotal) {
+              participant.totalDurationSec = previousTotal + durationSec;
+              this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Closed session for participant ${participant._id} - Duration: ${durationSec}s (new total: ${participant.totalDurationSec}s)`);
+            } else {
+              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Session duration already counted for participant ${participant._id}`);
+            }
           }
         }
         
