@@ -37,13 +37,12 @@ async function bootstrap() {
       
       // Allow localhost and 127.0.0.1 for development
       if (origin && (origin.includes('localhost') || origin.includes('127.0.0.1'))) {
-        return callback(null, true);
+        return         callback(null, true);
       }
       
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
-        console.warn(`⚠️  CORS blocked request from origin: ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     },
@@ -110,17 +109,5 @@ async function bootstrap() {
   const port = process.env.PORT ?? 3007;
   await app.listen(port);
 
-  console.log('\n' + '='.repeat(80));
-  console.log('🚀 NestJS Live Solution Server Started');
-  console.log('='.repeat(80));
-  console.log(`📡 Server running on: http://localhost:${port}`);
-  console.log(`🔐 SSO Endpoint: http://localhost:${port}/auth/sso-login`);
-  console.log(`🏥 Health Check: http://localhost:${port}/health`);
-  console.log(`📊 GraphQL Playground: http://localhost:${port}/graphql`);
-  console.log('\n🌐 CORS Configuration:');
-  console.log(`   ✅ PHP Website: ${process.env.PHP_WEBSITE_URL || 'https://livekit1.hrdeedu.com'}`);
-  console.log(`   ✅ Frontend: ${process.env.NESTJS_FRONTEND_URL || 'https://live.hrdeedu.co.kr'}`);
-  console.log(`   ✅ Credentials: Enabled`);
-  console.log('='.repeat(80) + '\n');
 }
 bootstrap();

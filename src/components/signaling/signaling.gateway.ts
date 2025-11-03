@@ -60,34 +60,22 @@ export class SignalingGateway
     private participantService: ParticipantService,
     private chatService: ChatService,
   ) {
-    console.log('🔌 [SIGNALING_GATEWAY] Constructor called - Gateway initializing...');
-    
     // Listen for global meeting start events
     if ((global as any).meetingStartEmitter) {
       (global as any).meetingStartEmitter.on('meetingStarted', (meetingId: string) => {
-        console.log(`[SIGNALING_GATEWAY] Received meeting started event for meeting ${meetingId}`);
         this.notifyMeetingStarted(meetingId);
       });
-      console.log('[SIGNALING_GATEWAY] Registered global meeting start event listener');
     }
-    
-    console.log('✅ [SIGNALING_GATEWAY] Gateway constructor completed');
   }
 
   afterInit(server: Server) {
-    console.log('🚀 [SIGNALING_GATEWAY] Gateway afterInit called - WebSocket server ready');
-    console.log('🚀 [SIGNALING_GATEWAY] Namespace /signaling is now active');
     this.server = server;
   }
 
-  // ✅ Public method to emit host-transfer event to specific user
   emitHostTransfer(userId: string, token: string, meetingId: string): void {
-    console.log(`[SIGNALING_GATEWAY] Emitting host-transfer to user: ${userId}`);
-    
     // Find socket for the specified user
     for (const [socketId, socket] of this.connectedUsers.entries()) {
       if (socket.user?._id === userId) {
-        console.log(`[SIGNALING_GATEWAY] Found socket ${socketId} for user ${userId}`);
         socket.emit('host-transfer', {
           userId,
           token,
@@ -97,67 +85,41 @@ export class SignalingGateway
         return;
       }
     }
-    
-    console.warn(`[SIGNALING_GATEWAY] Could not find socket for user: ${userId}`);
   }
 
   async handleConnection(client: AuthenticatedSocket) {
-    console.log('🔌 WebSocket connection attempt from client:', client.id);
-    console.log('🔌 Handshake auth:', client.handshake.auth);
-    console.log('🔌 Handshake headers:', client.handshake.headers);
-    
-    // Add catch-all event listener for debugging
-    client.onAny((eventName, ...args) => {
-      console.log(`🔍 [CATCH_ALL] Event received: ${eventName}`, args);
-    });
-    
     try {
-      
       // Extract token from handshake
       const token =
         client.handshake.auth?.token ||
         client.handshake.headers?.authorization?.replace('Bearer ', '');
 
-      console.log('🔌 Extracted token:', token ? 'Present' : 'Missing');
-      console.log('🔌 Token preview:', token ? token.substring(0, 20) + '...' : 'None');
-
       if (!token) {
-        console.log('❌ No token provided, disconnecting client');
         client.emit('ERROR', { message: 'No authentication token provided' });
         client.disconnect();
         return;
       }
 
       // Verify JWT token
-      console.log('🔌 Verifying JWT token...');
       let payload;
       try {
         payload = this.jwtService.verify(token);
-        console.log('🔌 JWT payload:', payload);
       } catch (jwtError) {
-        console.error('❌ JWT verification failed:', jwtError.message);
         client.emit('ERROR', { message: 'Invalid authentication token' });
         client.disconnect();
         return;
       }
       
-      console.log('🔌 Getting user profile for ID:', payload.sub);
       const user = await this.memberService.getProfile(payload.sub);
 
       if (!user) {
-        console.log('❌ User not found, disconnecting client');
         client.emit('ERROR', { message: 'User not found' });
         client.disconnect();
         return;
       }
 
-      console.log('✅ User found:', user.displayName, user.email);
       client.user = user;
       this.connectedUsers.set(client.id, client);
-
-      console.log(
-        `✅ User ${user.displayName} connected with socket ${client.id}`,
-      );
       
       // Send success message to client
       client.emit('CONNECTION_SUCCESS', { 
@@ -171,12 +133,6 @@ export class SignalingGateway
       });
       
     } catch (error) {
-      console.error('❌ Connection error:', error);
-      console.error('❌ Error details:', {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      });
       client.emit('ERROR', { message: 'Connection failed: ' + error.message });
       client.disconnect();
     }
@@ -184,8 +140,6 @@ export class SignalingGateway
 
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
-      console.log(`[DISCONNECT] User ${client.user.displayName} disconnected`);
-
       // Clean up raised hands for this user
       this.cleanupUserHands(client.user._id);
 
@@ -199,15 +153,10 @@ export class SignalingGateway
       // Clean up heartbeat tracking
       this.lastHeartbeatUpdate.delete(client.user._id);
 
-      // ✅ CRITICAL FIX: Immediately mark as LEFT in all meetings and close sessions
-      console.log(`[DISCONNECT] User ${client.user._id} disconnected - marking as LEFT in all active meetings immediately`);
-      
       try {
-        // Use the new method that queries DB for all active participants and marks them LEFT
         await this.participantService.markParticipantAsLeftAcrossAllMeetings(client.user._id);
-        console.log(`[DISCONNECT] Successfully marked user ${client.user._id} as LEFT across all meetings`);
       } catch (error) {
-        console.error(`[DISCONNECT] Error marking user ${client.user._id} as LEFT across all meetings:`, error);
+        // Error silently handled
       }
 
       // Get all meetings this user was in by checking room users
@@ -284,8 +233,6 @@ export class SignalingGateway
         displayName: client.user.displayName,
         socketId: client.id,
       });
-
-      console.log(`User ${client.user.displayName} joined room ${roomName}`);
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to join room' });
     }
@@ -315,8 +262,6 @@ export class SignalingGateway
       displayName: client.user.displayName,
       socketId: client.id,
     });
-
-    console.log(`User ${client.user.displayName} left room ${roomName}`);
   }
 
   // WebRTC events removed - LiveKit handles media signaling
@@ -366,12 +311,7 @@ export class SignalingGateway
 
       // Broadcast to room
       this.server.to(roomName).emit('CHAT_MESSAGE', messageData);
-
-      console.log(
-        `Chat message from ${client.user.displayName} in room ${roomName} saved with ID: ${savedMessage._id}`,
-      );
     } catch (error) {
-      console.error('Error sending chat message:', error);
       client.emit('ERROR', { message: 'Failed to send chat message' });
     }
   }
@@ -381,16 +321,11 @@ export class SignalingGateway
     @MessageBody() data: { meetingId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    console.log('📤 JOIN_CHAT_ROOM received:', data);
-    console.log('📤 Client user:', client.user ? 'Present' : 'Missing');
-    
     if (!client.user) {
-      console.log('❌ No client user, returning');
       return;
     }
 
     const { meetingId } = data;
-    console.log('📤 Processing meeting ID:', meetingId);
 
     try {
       // Check if user has access to this meeting
@@ -415,15 +350,10 @@ export class SignalingGateway
       this.roomUsers.get(meetingId)!.add(client.id);
 
       // Load existing messages from database
-      console.log(`Loading existing messages for meeting ${meetingId}`);
       const existingMessages = await this.chatService.getMessagesByMeeting(meetingId);
-      console.log(`Found ${existingMessages.length} existing messages`);
 
       // Send existing messages to the joining user
       client.emit('CHAT_MESSAGES_LOADED', { messages: existingMessages });
-      console.log(
-        `Sent ${existingMessages.length} existing messages to ${client.user.displayName}`
-      );
 
       // Get current participants in room
       const roomParticipants = Array.from(this.roomUsers.get(meetingId) || [])
@@ -448,10 +378,7 @@ export class SignalingGateway
         displayName: client.user.displayName,
         socketId: client.id,
       });
-
-      console.log(`User ${client.user.displayName} joined chat room ${meetingId}`);
     } catch (error) {
-      console.error('Error joining chat room:', error);
       client.emit('ERROR', { message: 'Failed to join chat room' });
     }
   }
@@ -480,8 +407,6 @@ export class SignalingGateway
       displayName: client.user.displayName,
       socketId: client.id,
     });
-
-    console.log(`User ${client.user.displayName} left chat room ${meetingId}`);
   }
 
   @SubscribeMessage('DELETE_CHAT_MESSAGE')
@@ -510,7 +435,6 @@ export class SignalingGateway
       const isOwner = messageUserId === clientUserId;
 
       if (!isHost && !isOwner) {
-        console.log(`[DELETE_CHAT_MESSAGE] Permission denied - isHost: ${isHost}, isOwner: ${isOwner}, messageUserId: ${messageUserId}, clientUserId: ${clientUserId}`);
         client.emit('ERROR', { message: 'Insufficient permissions to delete message' });
         return;
       }
@@ -523,12 +447,7 @@ export class SignalingGateway
         messageId,
         deletedBy: client.user._id,
       });
-
-      console.log(
-        `Chat message ${messageId} deleted by ${client.user.displayName}`,
-      );
     } catch (error) {
-      console.error('Error deleting chat message:', error);
       client.emit('ERROR', { message: 'Failed to delete chat message' });
     }
   }
@@ -548,7 +467,6 @@ export class SignalingGateway
     if (!client.user) return;
 
     const { meetingId, participantId, reason } = data;
-    console.log('✋ HOST_LOWER_HAND received:', { meetingId, participantId, reason, hostId: client.user._id });
 
     try {
       // Use the new WebSocket-only system
@@ -556,7 +474,6 @@ export class SignalingGateway
       
       // Check if hand is raised in our in-memory system
       if (!this.raisedHands.has(handKey)) {
-        console.log(`✋ Hand not found in raised hands: ${handKey}`);
         client.emit('HOST_LOWER_HAND_ERROR', { 
           message: 'Participant\'s hand is not currently raised',
           participantId 
@@ -592,10 +509,7 @@ export class SignalingGateway
         handLoweredAt: new Date(),
         reason,
       });
-
-      console.log(`✋ Hand lowered by host ${client.user.displayName} for participant ${participantId} (${displayName}) in meeting ${meetingId}`);
     } catch (error) {
-      console.error('❌ Error lowering hand as host:', error);
       client.emit('HOST_LOWER_HAND_ERROR', { 
         message: error.message || 'Failed to lower hand as host',
         participantId 
@@ -611,7 +525,6 @@ export class SignalingGateway
     if (!client.user) return;
 
     const { meetingId, reason } = data;
-    console.log('✋ LOWER_ALL_HANDS received:', { meetingId, reason, hostId: client.user._id });
 
     try {
       // Use the new WebSocket-only system
@@ -650,8 +563,6 @@ export class SignalingGateway
         loweredHands
       });
 
-      console.log(`✋ All hands lowered by host ${client.user.displayName} in meeting ${meetingId} (${loweredHands.length} hands lowered)`);
-
       // Send confirmation to the host
       client.emit('LOWER_ALL_HANDS_SUCCESS', { 
         success: true,
@@ -659,7 +570,6 @@ export class SignalingGateway
         loweredCount: loweredHands.length 
       });
     } catch (error) {
-      console.error('❌ Error lowering all hands:', error);
       client.emit('LOWER_ALL_HANDS_ERROR', { 
         message: error.message || 'Failed to lower all hands',
         meetingId 
@@ -827,9 +737,7 @@ export class SignalingGateway
     try {
       const { meetingId, participantId } = data;
 
-      // FIXED: Update participant status to LEFT in database
       if (client.user?._id) {
-        console.log(`[LEAVE_WAITING_ROOM] Marking participant ${client.user._id} as LEFT in meeting ${meetingId}`);
         await this.participantService.markParticipantAsLeftInMeeting(client.user._id, meetingId);
       }
 
@@ -848,7 +756,6 @@ export class SignalingGateway
         participantId,
       });
     } catch (error) {
-      console.error('❌ [LEAVE_WAITING_ROOM] Error:', error);
       client.emit('ERROR', { message: 'Failed to leave waiting room' });
     }
   }
@@ -865,7 +772,6 @@ export class SignalingGateway
       }
 
       const { meetingId } = data;
-      console.log(`✋ Host ${client.user.displayName} joining meeting room ${meetingId}`);
 
       // Join host room
       await client.join(`host_${meetingId}`);
@@ -883,8 +789,6 @@ export class SignalingGateway
         message: 'Successfully joined as host',
         meetingId,
       });
-      
-      console.log(`✋ Host ${client.user.displayName} joined meeting room ${meetingId}`);
     } catch (error) {
       client.emit('ERROR', { message: 'Failed to join as host' });
     }
@@ -943,7 +847,6 @@ export class SignalingGateway
       }
 
       const { meetingId, participantId } = data;
-      console.log(`✋ Participant ${client.user.displayName} joining meeting room ${meetingId}`);
 
       // Join the main meeting room for hand raise events
       await client.join(meetingId);
@@ -958,10 +861,7 @@ export class SignalingGateway
         userId: client.user._id,
         meetingId,
       });
-
-      console.log(`✋ Participant ${client.user.displayName} joined meeting room ${meetingId}`);
     } catch (error) {
-      console.error('Error joining meeting room:', error);
       client.emit('ERROR', { message: 'Failed to join meeting room' });
     }
   }
@@ -1025,8 +925,6 @@ export class SignalingGateway
   // Public method to notify all waiting participants when meeting starts
   async notifyMeetingStarted(meetingId: string) {
     try {
-      console.log(`[MEETING_STARTED] Notifying all waiting participants for meeting ${meetingId}`);
-      
       // Emit to all waiting participants
       this.server.to(`waiting_${meetingId}`).emit('MEETING_STATUS_CHANGED', {
         status: 'LIVE',
@@ -1039,10 +937,8 @@ export class SignalingGateway
         meetingId,
         message: 'All participants have been admitted - redirecting to live room',
       });
-
-      console.log(`[MEETING_STARTED] Successfully notified waiting participants for meeting ${meetingId}`);
     } catch (error) {
-      console.error(`[MEETING_STARTED] Error notifying waiting participants:`, error);
+      // Error silently handled
     }
   }
 
@@ -1051,17 +947,13 @@ export class SignalingGateway
   // Public method to notify all participants when meeting ends
   async notifyMeetingEnded(meetingId: string) {
     try {
-      console.log(`[MEETING_ENDED] Notifying all participants for meeting ${meetingId}`);
-      
       // Emit to all participants in the meeting room
       this.server.to(meetingId).emit('MEETING_ENDED', {
         meetingId,
         message: 'Meeting has ended',
       });
-
-      console.log(`[MEETING_ENDED] Successfully notified participants for meeting ${meetingId}`);
     } catch (error) {
-      console.error(`[MEETING_ENDED] Error notifying participants:`, error);
+      // Error silently handled
     }
   }
 
@@ -1073,10 +965,7 @@ export class SignalingGateway
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
     try {
-      console.log('✋ RAISE_HAND event received:', data);
-      
       if (!client.user) {
-        console.log('✋ No user found in client');
         client.emit('ERROR', { message: 'Authentication required' });
         return;
       }
@@ -1084,11 +973,8 @@ export class SignalingGateway
       const { meetingId, userId, displayName } = data;
       const handKey = `${meetingId}:${userId}`;
 
-      console.log(`✋ Hand raised: ${displayName} in meeting ${meetingId}`);
-
       // Check if hand is already raised
       if (this.raisedHands.has(handKey)) {
-        console.log(`✋ Hand already raised for ${displayName}, ignoring`);
         return;
       }
 
@@ -1113,23 +999,18 @@ export class SignalingGateway
         meetingId
       };
       
-      console.log('✋ Broadcasting HAND_RAISED to meeting room:', meetingId, broadcastData);
       client.to(meetingId).emit('HAND_RAISED', broadcastData);
 
       // Also send to the person who raised their hand
-      console.log('✋ Sending HAND_RAISED to sender:', broadcastData);
       client.emit('HAND_RAISED', broadcastData);
       
-      // ✅ FIX: Also emit success event for the sender
+      // Also emit success event for the sender
       client.emit('HAND_RAISE_SUCCESS', {
         participantId: userId,
         userId: userId,
         message: 'Hand raised successfully'
       });
-
-      console.log(`✋ Hand raise broadcasted for ${displayName}`);
     } catch (error) {
-      console.error('Error handling hand raise:', error);
       client.emit('ERROR', { message: 'Failed to raise hand' });
     }
   }
@@ -1152,17 +1033,14 @@ export class SignalingGateway
       const userIdToUse = userId || participantId || client.user._id;
       const handKey = `${meetingId}:${userIdToUse}`;
 
-      console.log(`✋ LOWER_HAND received: ${displayName || userIdToUse} in meeting ${meetingId}`, { participantId, userId, userIdToUse, reason });
-
       // Check if hand is raised - try both userId and participantId if they differ
       let handInfo = this.raisedHands.get(handKey);
       
-      // ✅ FIX: If not found with userId, try with participantId
+      // If not found with userId, try with participantId
       if (!handInfo && participantId && participantId !== userIdToUse) {
         const altKey = `${meetingId}:${participantId}`;
         handInfo = this.raisedHands.get(altKey);
         if (handInfo) {
-          console.log(`✋ Hand found with alternate key: ${altKey}`);
           // Update the key to use userId for consistency
           this.raisedHands.delete(altKey);
           this.raisedHands.set(handKey, handInfo);
@@ -1170,7 +1048,6 @@ export class SignalingGateway
       }
       
       if (!handInfo) {
-        console.log(`✋ Hand not found for key: ${handKey} (tried userId: ${userId}, participantId: ${participantId})`);
         // Still emit success to allow UI to update - include both IDs
         client.emit('HAND_LOWER_SUCCESS', {
           participantId: userIdToUse,
@@ -1210,10 +1087,7 @@ export class SignalingGateway
         userId: userIdToUse,
         message: 'Hand successfully lowered'
       });
-
-      console.log(`✋ Hand lowered successfully for ${handInfo.displayName} in meeting ${meetingId}`);
     } catch (error) {
-      console.error('Error handling hand lower:', error);
       client.emit('HAND_LOWER_ERROR', { message: 'Failed to lower hand' });
     }
   }
@@ -1244,10 +1118,7 @@ export class SignalingGateway
         raisedHands,
         timestamp: new Date()
       });
-
-      console.log(`✋ Sent raised hands list for meeting ${meetingId}:`, raisedHands.length);
     } catch (error) {
-      console.error('Error getting raised hands:', error);
       client.emit('ERROR', { message: 'Failed to get raised hands' });
     }
   }
@@ -1258,8 +1129,6 @@ export class SignalingGateway
     const handInfo = this.raisedHands.get(handKey);
     
     if (handInfo) {
-      console.log(`✋ Auto-lowering hand for ${displayName} after 1 minute`);
-      
       // Remove from raised hands
       this.raisedHands.delete(handKey);
       
@@ -1295,38 +1164,12 @@ export class SignalingGateway
 
   // ==================== PRESENCE SYSTEM ====================
 
-  @SubscribeMessage('TEST_EVENT')
-  async handleTestEvent(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: AuthenticatedSocket,
-  ) {
-    console.log(`🧪 [TEST_EVENT] Event received:`, { 
-      data, 
-      userId: client.user?._id, 
-      displayName: client.user?.displayName,
-      socketId: client.id,
-      timestamp: new Date().toISOString()
-    });
-  }
-
   @SubscribeMessage('JOIN_MEETING')
   async handleJoinMeeting(
     @MessageBody() data: { meetingId: string },
     @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    console.log(`🚨 [JOIN_MEETING] Event received:`, { 
-      data, 
-      userId: client.user?._id, 
-      displayName: client.user?.displayName,
-      socketId: client.id,
-      timestamp: new Date().toISOString(),
-      userExists: !!client.user,
-      dataType: typeof data,
-      dataKeys: data ? Object.keys(data) : 'no data'
-    });
-    
     if (!client.user) {
-      console.log(`[JOIN_MEETING] No user found, returning`);
       client.emit('ERROR', { message: 'User not authenticated' });
       return;
     }
@@ -1334,13 +1177,11 @@ export class SignalingGateway
     const { meetingId } = data;
     
     if (!meetingId) {
-      console.log(`[JOIN_MEETING] No meetingId provided`);
       client.emit('ERROR', { message: 'Meeting ID is required' });
       return;
     }
 
     try {
-      console.log(`[PRESENCE] User ${client.user.displayName} joining meeting ${meetingId}`);
 
       // Update participant's lastSeenAt and socketId
       await this.participantService.updateParticipantPresence(
@@ -1358,10 +1199,7 @@ export class SignalingGateway
         userId: client.user._id,
         message: 'Successfully joined meeting'
       });
-
-      console.log(`✅ [PRESENCE] User ${client.user.displayName} presence updated for meeting ${meetingId}`);
     } catch (error) {
-      console.error('❌ [PRESENCE] Error joining meeting:', error);
       client.emit('ERROR', { message: 'Failed to join meeting' });
     }
   }
@@ -1376,14 +1214,7 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
-      console.log(`[HEARTBEAT] Received heartbeat for ${client.user.displayName} in meeting ${meetingId}`, {
-        userId: client.user._id,
-        meetingId,
-        socketId: client.id,
-        timestamp: new Date().toISOString()
-      });
-      
-      // FIXED: Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
+      // Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;
       const shouldUpdateDB = (now - lastUpdate) > 30000; // Update DB every 30 seconds (3 heartbeats at 10s intervals)
@@ -1391,7 +1222,6 @@ export class SignalingGateway
       let dbUpdateSuccess = false;
       
       if (shouldUpdateDB) {
-        console.log(`[HEARTBEAT] Updating database for user ${client.user._id} in meeting ${meetingId}`);
         try {
           // Update participant's lastSeenAt timestamp in database
           await this.participantService.updateParticipantHeartbeat(
@@ -1400,17 +1230,9 @@ export class SignalingGateway
           );
           this.lastHeartbeatUpdate.set(client.user._id, now);
           dbUpdateSuccess = true;
-          console.log(`[HEARTBEAT] Database update completed successfully for user ${client.user._id}`);
         } catch (error) {
-          console.error(`[HEARTBEAT] Database update failed for user ${client.user._id}:`, error);
           dbUpdateSuccess = false;
         }
-      } else {
-        console.log(`[HEARTBEAT] Database update throttled for user ${client.user._id} (optimization: last update ${Math.round((now - lastUpdate) / 1000)}s ago)`);
-        
-        // FIXED: Still update lastSeenAt in memory tracking even when DB is throttled
-        // This ensures the timeout system works correctly
-        console.log(`[HEARTBEAT] Heartbeat received but DB update throttled - user ${client.user._id} is still active`);
       }
 
       // Always restart heartbeat timeout (lightweight operation)
@@ -1439,7 +1261,7 @@ export class SignalingGateway
         });
       }
     } catch (error) {
-      console.error('❌ [PRESENCE] Error updating heartbeat:', error);
+      // Error silently handled
     }
   }
 
@@ -1451,8 +1273,6 @@ export class SignalingGateway
     if (!client.user) return;
 
     try {
-      console.log(`[CHAT] User ${client.user.displayName} sending message to meeting ${data.meetingId}`);
-      
       // Save message to database
       const chatMessage = await this.chatService.createMessage({
         meetingId: data.meetingId,
@@ -1470,10 +1290,7 @@ export class SignalingGateway
         message: data.message.trim(),
         timestamp: new Date().toISOString()
       });
-
-      console.log(`[CHAT] Message broadcasted to meeting ${data.meetingId}`);
     } catch (error) {
-      console.error('[CHAT] Error sending message:', error);
       client.emit('CHAT_ERROR', { message: 'Failed to send message' });
     }
   }
@@ -1518,8 +1335,6 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
-      console.log(`[PRESENCE] User ${client.user.displayName} leaving meeting ${meetingId}`);
-
       // Mark participant as LEFT
       await this.participantService.markParticipantAsLeftInMeeting(
         client.user._id,
@@ -1539,10 +1354,7 @@ export class SignalingGateway
         userId: client.user._id,
         message: 'Successfully left meeting'
       });
-
-      console.log(`✅ [PRESENCE] User ${client.user.displayName} marked as LEFT for meeting ${meetingId}`);
     } catch (error) {
-      console.error('❌ [PRESENCE] Error leaving meeting:', error);
       client.emit('ERROR', { message: 'Failed to leave meeting' });
     }
   }
@@ -1557,16 +1369,15 @@ export class SignalingGateway
 
     // Create a new timeout (45 seconds grace period) - OPTIMIZED for 10s heartbeat intervals
     const timeout = setTimeout(async () => {
-      console.log(`[PRESENCE] Heartbeat timeout for user ${userId} in meeting ${meetingId} - 45s grace period expired, marking as LEFT and closing session`);
       try {
         // IMPORTANT: mark as LEFT only for this specific meeting
-        // ✅ This now properly closes active sessions to prevent ghost member attendance
+        // This now properly closes active sessions to prevent ghost member attendance
         await this.participantService.markParticipantAsLeftInMeeting(userId, meetingId);
 
         this.participantHeartbeats.delete(userId);
         this.lastHeartbeatUpdate.delete(userId);
       } catch (error) {
-        console.error('❌ [PRESENCE] Error marking participant as LEFT due to timeout:', error);
+        // Error silently handled
       }
     }, 45000); // 45 seconds - User can stay 45s after losing connection before session closes
 

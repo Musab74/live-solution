@@ -46,18 +46,6 @@ export class LivekitResolver {
       const userId = clientIdentity || String(me._id);
       const userName = me.displayName || me.email || `User_${userId}`;
       
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Validated user data:', {
-        userId,
-        userName,
-        clientIdentity,
-        originalMeId: me._id,
-        originalMe: {
-          _id: me._id,
-          email: me.email,
-          displayName: me.displayName
-        }
-      });
-      
       // 1) verify member can join the meeting & load meetingRole (HOST/CO_HOST/…)
       let meetingRole: 'HOST' | 'CO_HOST' | 'PRESENTER' | 'PARTICIPANT' | 'VIEWER' = 'PARTICIPANT';
       
@@ -77,7 +65,6 @@ export class LivekitResolver {
         
         if (meeting && meeting.hostId && meeting.hostId.toString() === userId) {
           meetingRole = 'HOST';
-          console.log('🔍 [CREATE_LIVEKIT_TOKEN] User is meeting HOST');
         } else {
           // Check participant record for role (using original authenticated user ID)
           const participant = await this.participantModel
@@ -86,48 +73,24 @@ export class LivekitResolver {
           
           if (participant && participant.role) {
             meetingRole = participant.role as any;
-            console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Participant role from DB: ${participant.role}`);
           }
         }
       } catch (roleError) {
-        console.error('🔍 [CREATE_LIVEKIT_TOKEN] Error determining role, using PARTICIPANT:', roleError.message);
-        throw roleError; // Re-throw to prevent token generation on error
+        throw roleError;
       }
       
-      console.log(`🔍 [CREATE_LIVEKIT_TOKEN] Final meeting role: ${meetingRole}`);
-
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Calling generateAccessToken...', {
-        room: meetingId,
-        identity: userId,
-        name: userName,
-        meetingRole
-      });
       const token = await this.lk.generateAccessToken({
         room: meetingId,
-        identity: userId, // ✅ Use the identity (client-provided or authenticated user ID)
+        identity: userId,
         name: userName,
         meetingRole,
       });
 
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Token generated:', {
-        tokenType: typeof token,
-        tokenLength: token?.length || 'no length',
-        tokenPreview: token ? token.substring(0, 50) + '...' : 'EMPTY',
-        isString: typeof token === 'string',
-        isObject: typeof token === 'object',
-      });
-
       const wsUrl = this.lk.getWsUrl(meetingId);
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] WebSocket URL selected:', wsUrl);
 
       const tokenData = { wsUrl, token };
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Token data to stringify:', tokenData);
-      
-      // Log server selection for debugging
-      this.logger.log(`✅ [LOAD_BALANCER] Meeting ${meetingId} assigned to: ${wsUrl}`);
 
       const result = JSON.stringify(tokenData);
-      console.log('🔍 [CREATE_LIVEKIT_TOKEN] Final JSON result:', result);
 
       this.logger.log(
         `[CREATE_LIVEKIT_TOKEN] Success - Meeting ID: ${meetingId}, Identity: ${userId}, Original User ID: ${me._id}, Meeting Role: ${meetingRole}, Token Length: ${token?.length || 0}`,

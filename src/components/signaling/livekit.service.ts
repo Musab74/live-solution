@@ -30,9 +30,6 @@ export class LivekitService {
     this.wsUrl2 = this.httpUrl2.replace('http', 'ws'); // wss://...
     
     // Log configuration on startup
-    console.log('🚀 [LOAD_BALANCER] Two-server configuration loaded:');
-    console.log(`   Server 1 (Even): ${this.wsUrl}`);
-    console.log(`   Server 2 (Odd):  ${this.wsUrl2}`);
   }
 
   /**
@@ -48,7 +45,6 @@ export class LivekitService {
     const selectedServer = isEven ? 'Server 1' : 'Server 2';
     const selectedUrl = isEven ? this.wsUrl : this.wsUrl2;
     
-    console.log(`🔄 [LOAD_BALANCER] Room ${roomId} → Last digit: ${lastChar} → ${selectedServer} → ${selectedUrl}`);
     
     return selectedUrl;
   }
@@ -62,7 +58,6 @@ export class LivekitService {
     const selectedServer = isEven ? 'Server 1' : 'Server 2';
     const selectedUrl = isEven ? this.httpUrl : this.httpUrl2;
     
-    console.log(`🔄 [LOAD_BALANCER] HTTP - Room ${roomId} → Last digit: ${lastChar} → ${selectedServer} → ${selectedUrl}`);
     
     return selectedUrl;
   }

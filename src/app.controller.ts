@@ -58,7 +58,6 @@ export class AppController {
       const fileStream = fs.createReadStream(filePath);
       fileStream.pipe(res);
     } catch (error) {
-      console.error(`[APP_CONTROLLER] Error serving recording: ${error.message}`);
       return res.status(500).json({ error: 'Internal server error' });
     }
   }

@@ -104,42 +104,36 @@ export const extractWaitingParticipants = (waitingData: any): any[] => {
 
 export const safeMap = <T>(data: any, mapper: (item: T, index: number) => any): any[] => {
   if (!Array.isArray(data)) {
-    console.warn('safeMap: data is not an array', data);
     return [];
   }
   
   try {
     return data.map(mapper);
   } catch (error) {
-    console.error('safeMap: error during mapping', error);
     return [];
   }
 };
 
 export const safeFilter = <T>(data: any, predicate: (item: T) => boolean): T[] => {
   if (!Array.isArray(data)) {
-    console.warn('safeFilter: data is not an array', data);
     return [];
   }
   
   try {
     return data.filter(predicate);
   } catch (error) {
-    console.error('safeFilter: error during filtering', error);
     return [];
   }
 };
 
 export const safeFind = <T>(data: any, predicate: (item: T) => boolean): T | undefined => {
   if (!Array.isArray(data)) {
-    console.warn('safeFind: data is not an array', data);
     return undefined;
   }
   
   try {
     return data.find(predicate);
   } catch (error) {
-    console.error('safeFind: error during finding', error);
     return undefined;
   }
 };
@@ -149,16 +143,6 @@ export const safeFind = <T>(data: any, predicate: (item: T) => boolean): T | und
 // ========================================
 
 export const handleGraphQLError = (error: any, fallback: any = null) => {
-  console.error('GraphQL Error:', error);
-  
-  if (error?.graphQLErrors?.length > 0) {
-    console.error('GraphQL Errors:', error.graphQLErrors);
-  }
-  
-  if (error?.networkError) {
-    console.error('Network Error:', error.networkError);
-  }
-  
   return fallback;
 };
 
@@ -166,10 +150,3 @@ export const isGraphQLError = (error: any): boolean => {
   return error?.graphQLErrors?.length > 0 || error?.networkError;
 };
 
-// ========================================
-// DEBUG HELPERS
-// ========================================
-
-export const debugDataStructure = (data: any, label: string = 'Data') => {
-  // Debug helper - disabled in production
-};

@@ -6,7 +6,6 @@ import { Meeting } from '../schemas/Meeting.model';
 import { Types } from 'mongoose';
 
 async function migrateMeetings() {
-  console.log('🔄 Starting meeting migration...');
   
   const app = await NestFactory.createApplicationContext(AppModule);
   const meetingModel = app.get<Model<Meeting>>(getModelToken(Meeting.name));
@@ -17,7 +16,6 @@ async function migrateMeetings() {
       currentHostId: { $exists: false }
     });
     
-    console.log(`📊 Found ${meetingsWithoutCurrentHost.length} meetings without currentHostId`);
     
     let updatedCount = 0;
     
@@ -28,13 +26,10 @@ async function migrateMeetings() {
       });
       
       updatedCount++;
-      console.log(`✅ Updated meeting ${meeting._id}: currentHostId = hostId`);
     }
     
-    console.log(`🎉 Migration completed! Updated ${updatedCount} meetings`);
     
   } catch (error) {
-    console.error('❌ Migration failed:', error);
   } finally {
     await app.close();
   }
@@ -42,7 +37,6 @@ async function migrateMeetings() {
 
 // Run migration if this file is executed directly
 if (require.main === module) {
-  migrateMeetings().catch(console.error);
 }
 
 export { migrateMeetings };

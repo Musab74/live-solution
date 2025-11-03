@@ -73,7 +73,6 @@ export class ChatService {
         createdAt: message.createdAt.toISOString(),
       }));
     } catch (error) {
-      console.error('Error fetching messages by meeting:', error);
       return [];
     }
   }
@@ -101,7 +100,6 @@ export class ChatService {
 
       return !!isParticipant;
     } catch (error) {
-      console.error('Error checking meeting access:', error);
       return false;
     }
   }

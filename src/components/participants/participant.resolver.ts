@@ -341,7 +341,6 @@ export class ParticipantResolver {
       
       // Return null if no participation found (instead of throwing error)
       if (!result) {
-        console.log(`[GET_PARTICIPANT_BY_USER_MEETING] No participation found for user ${user._id} in meeting ${meetingId}`);
         return null;
       }
 
@@ -375,17 +374,9 @@ export class ParticipantResolver {
         }
       }
 
-      // Debug: Log the raw sessions from database
-      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Raw sessions from DB:`, JSON.stringify(sessions, null, 2));
-      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Total sessions: ${sessions.length}`);
-      
       const sessionInfos = sessions
         .filter(session => {
-          const hasJoinedAt = !!session.joinedAt;
-          if (!hasJoinedAt) {
-            console.warn(`[GET_PARTICIPANT_BY_USER_MEETING] Filtering out session without joinedAt:`, session);
-          }
-          return hasJoinedAt;
+          return !!session.joinedAt;
         })
         .map(session => {
           // If session is active (no leftAt), calculate current duration
@@ -401,8 +392,6 @@ export class ParticipantResolver {
             durationMinutes: Math.floor(durationSec / 60)
           };
         });
-      
-      console.log(`[GET_PARTICIPANT_BY_USER_MEETING] Valid sessions after filtering: ${sessionInfos.length}`);
 
       return {
         _id: result._id.toString(),
@@ -436,7 +425,6 @@ export class ParticipantResolver {
         }
       };
     } catch (error) {
-      console.error(`[GET_PARTICIPANT_BY_USER_MEETING] Error:`, error);
       throw error;
     }
   }

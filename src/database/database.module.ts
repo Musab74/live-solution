@@ -26,7 +26,5 @@ import { Connection } from 'mongoose';
 })
 export class DatabaseModule {
   constructor(@InjectConnection() conn: Connection) {
-    conn.on('connected', () => console.log('Mongo connected'));
-    conn.on('error', (e) => console.error('Mongo error:', e.message));
   }
 }

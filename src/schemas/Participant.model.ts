@@ -28,7 +28,6 @@ const SessionSchema = new mongoose.Schema({
 // Add pre-save middleware to ensure joinedAt is always set
 SessionSchema.pre('save', function(next) {
   if (!this.joinedAt) {
-    console.warn('[SESSION_SCHEMA] Session without joinedAt detected, setting to current time');
     this.joinedAt = new Date();
   }
   next();
