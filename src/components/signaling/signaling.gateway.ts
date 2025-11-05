@@ -1383,4 +1383,54 @@ export class SignalingGateway
 
     this.participantHeartbeats.set(userId, timeout);
   }
+
+  @SubscribeMessage('WHITEBOARD_STARTED')
+  async handleWhiteboardStarted(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    // Check if user is host (only hosts can start whiteboard)
+    const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+    if (!isHost) {
+      client.emit('ERROR', { message: 'Only the host can start the whiteboard' });
+      return;
+    }
+
+    // Broadcast to all participants in the meeting
+    client.to(meetingId).emit('WHITEBOARD_STARTED', {
+      meetingId,
+      hostId: client.user._id,
+      hostName: client.user.displayName,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
+  @SubscribeMessage('WHITEBOARD_STOPPED')
+  async handleWhiteboardStopped(
+    @MessageBody() data: { meetingId: string },
+    @ConnectedSocket() client: AuthenticatedSocket,
+  ) {
+    if (!client.user) return;
+
+    const { meetingId } = data;
+
+    // Check if user is host (only hosts can stop whiteboard)
+    const isHost = client.user.systemRole === SystemRole.ADMIN || client.user.systemRole === SystemRole.TUTOR;
+    if (!isHost) {
+      client.emit('ERROR', { message: 'Only the host can stop the whiteboard' });
+      return;
+    }
+
+    // Broadcast to all participants in the meeting
+    client.to(meetingId).emit('WHITEBOARD_STOPPED', {
+      meetingId,
+      hostId: client.user._id,
+      hostName: client.user.displayName,
+      timestamp: new Date().toISOString(),
+    });
+  }
 }
