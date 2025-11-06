@@ -595,6 +595,29 @@ export class ParticipantService {
 
     await participant.save();
 
+    // Decrement meeting participant count and check for auto-end
+    const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
+      participant.meetingId,
+      { $inc: { participantCount: -1 } },
+      { new: true } // Return updated document
+    );
+    
+    // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
+    if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
+      this.logger.log(`[LEAVE_MEETING] Participant count reached 0 - Auto-ending meeting ${participant.meetingId}`);
+      updatedMeeting.status = MeetingStatus.ENDED;
+      updatedMeeting.endedAt = new Date();
+      
+      if (updatedMeeting.actualStartAt) {
+        const durationMin = Math.floor(
+          (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
+        );
+        updatedMeeting.durationMin = durationMin;
+      }
+      
+      await updatedMeeting.save();
+      this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} auto-ended due to zero participants`);
+    }
     
     // 🔧 DEBUG: Verify the status was actually saved
     const updatedParticipant = await this.participantModel.findById(participantId);
@@ -2276,10 +2299,28 @@ export class ParticipantService {
       }
       
       // Decrement meeting participant count
-      await this.meetingModel.findByIdAndUpdate(
+      const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
         meetingId,
-        { $inc: { participantCount: -participants.length } }
+        { $inc: { participantCount: -participants.length } },
+        { new: true } // Return updated document
       );
+      
+      // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
+      if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
+        updatedMeeting.status = MeetingStatus.ENDED;
+        updatedMeeting.endedAt = new Date();
+        
+        if (updatedMeeting.actualStartAt) {
+          const durationMin = Math.floor(
+            (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
+          );
+          updatedMeeting.durationMin = durationMin;
+        }
+        
+        await updatedMeeting.save();
+        this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Meeting ${meetingId} auto-ended due to zero participants`);
+      }
       
       this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_IN_MEETING] Completed - Marked ${participants.length} participant(s) as LEFT for user ${userId} in meeting ${meetingId}`);
     } catch (error) {
@@ -2356,12 +2397,31 @@ export class ParticipantService {
         meetingIds.add(participant.meetingId.toString());
       }
       
-      // Decrement participant count for each affected meeting
+      // Decrement participant count for each affected meeting and check for auto-end
       for (const meetingId of meetingIds) {
-        await this.meetingModel.findByIdAndUpdate(
+        const updatedMeeting = await this.meetingModel.findByIdAndUpdate(
           meetingId,
-          { $inc: { participantCount: -1 } }
+          { $inc: { participantCount: -1 } },
+          { new: true } // Return updated document
         );
+        
+        // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
+        if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
+          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
+          updatedMeeting.status = MeetingStatus.ENDED;
+          updatedMeeting.endedAt = new Date();
+          
+          if (updatedMeeting.actualStartAt) {
+            const durationMin = Math.floor(
+              (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
+            );
+            updatedMeeting.durationMin = durationMin;
+          }
+          
+          await updatedMeeting.save();
+          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} auto-ended due to zero participants`);
+        }
+        
         this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Decremented participant count for meeting ${meetingId}`);
       }
       
