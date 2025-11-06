@@ -39,3 +39,4 @@ These events will be added to `signaling.gateway.ts` when implementing the featu
 - `ParticipantModule` - For participant validation
 - `SignalingModule` - For WebSocket events
 
+
