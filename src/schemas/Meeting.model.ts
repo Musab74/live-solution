@@ -39,6 +39,30 @@ export class Meeting {
   courseCode?: string;
 
   @Field({ nullable: true })
+  @Prop({ required: false })
+  materialOriginalName?: string;
+
+  @Field({ nullable: true })
+  @Prop({ required: false })
+  materialStoredName?: string;
+
+  @Field({ nullable: true })
+  @Prop({ required: false })
+  materialMimeType?: string;
+
+  @Field({ nullable: true })
+  @Prop({ required: false })
+  materialSize?: number;
+
+  @Field({ nullable: true })
+  @Prop({ required: false })
+  materialUrl?: string;
+
+  @Field({ nullable: true })
+  @Prop({ required: false })
+  materialUploadedAt?: Date;
+
+  @Field({ nullable: true })
   @Prop()
   passcodeHash?: string; // if you protect rooms
 

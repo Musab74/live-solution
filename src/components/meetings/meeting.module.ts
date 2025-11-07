@@ -9,6 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 import { LivekitService } from '../signaling/livekit.service';
 import { ParticipantModule } from '../participants/participant.module';
 import { SignalingModule } from '../signaling/signaling.module';
+import { MeetingMaterialController } from './meeting-material.controller';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { SignalingModule } from '../signaling/signaling.module';
     forwardRef(() => ParticipantModule),
     forwardRef(() => SignalingModule),
   ],
+  controllers: [MeetingMaterialController],
   providers: [MeetingService, MeetingResolver, LivekitService],
   exports: [MeetingService],
 })
