@@ -89,6 +89,10 @@ export class Participant {
   @Prop()
   screenShareInfo?: string; // Store screen/window name being shared
 
+  @Field({ nullable: true })
+  @Prop({ trim: true })
+  ipAddress?: string;
+
   @Field()
   @Prop({ default: false })
   hasHandRaised!: boolean; // Is participant's hand raised

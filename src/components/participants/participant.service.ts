@@ -381,7 +381,7 @@ export class ParticipantService {
     return participant;
   }
 
-  async joinMeeting(joinInput: JoinParticipantInput, userId?: string) {
+  async joinMeeting(joinInput: JoinParticipantInput, userId?: string, clientIp?: string) {
 
     const { meetingId, displayName, inviteCode } = joinInput;
 
@@ -432,6 +432,8 @@ export class ParticipantService {
 
     // Check if user is already a participant
     // Check if user is already a participant
+    const normalizedClientIp = clientIp?.split(',')[0]?.trim();
+
     if (userId) {
       const existingParticipant = await this.participantModel.findOne({
         meetingId: new Types.ObjectId(meetingId),
@@ -481,6 +483,10 @@ export class ParticipantService {
           }
         }
 
+        if (normalizedClientIp) {
+          existingParticipant.ipAddress = normalizedClientIp;
+        }
+
         await existingParticipant.save();
         return existingParticipant;
       }
@@ -502,6 +508,7 @@ export class ParticipantService {
       displayName: realDisplayName,
       role: participantRole,
       status: initialStatus,
+      ipAddress: normalizedClientIp,
       sessions: initialStatus === ParticipantStatus.ADMITTED ? [{
         joinedAt: new Date(),
         leftAt: undefined,
@@ -1307,6 +1314,7 @@ export class ParticipantService {
             avatarUrl: userData?.avatarUrl || null,
             organization: userData?.organization || null,
             department: userData?.department || null,
+            ipAddress: participant.ipAddress || null,
             role: participant.role || 'PARTICIPANT',
             status: participant.status || 'UNKNOWN',
             joinedAt: typeof firstJoinedAt === 'string' ? new Date(firstJoinedAt) : (firstJoinedAt || new Date()),

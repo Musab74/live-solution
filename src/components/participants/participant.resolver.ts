@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, ID, Parent } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, Parent, Context } from '@nestjs/graphql';
 import { ParticipantService } from './participant.service';
 import { MeetingService } from '../meetings/meeting.service';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -68,6 +68,55 @@ export class ParticipantResolver {
     @Inject(forwardRef(() => SignalingGateway))
     private readonly signalingGateway: SignalingGateway,
   ) {}
+
+  private extractClientIp(context: any): string | null {
+    const req = context?.req || context?.request;
+    if (!req) {
+      return null;
+    }
+
+    const xForwardedFor = req.headers?.['x-forwarded-for'];
+    const remoteAddresses: string[] = [];
+
+    if (Array.isArray(xForwardedFor)) {
+      remoteAddresses.push(...xForwardedFor);
+    } else if (typeof xForwardedFor === 'string') {
+      remoteAddresses.push(...xForwardedFor.split(','));
+    }
+
+    if (req.headers?.['x-real-ip']) {
+      remoteAddresses.push(req.headers['x-real-ip']);
+    }
+
+    if (req.ip) {
+      remoteAddresses.push(req.ip);
+    }
+
+    if (req.connection?.remoteAddress) {
+      remoteAddresses.push(req.connection.remoteAddress);
+    }
+
+    if (req.socket?.remoteAddress) {
+      remoteAddresses.push(req.socket.remoteAddress);
+    }
+
+    if (req.connection?.socket?.remoteAddress) {
+      remoteAddresses.push(req.connection.socket.remoteAddress);
+    }
+
+    const normalizedIp = remoteAddresses
+      .map((ip: string) => (ip || '').trim())
+      .filter(Boolean)
+      .map((ip: string) => {
+        // Remove IPv6 prefix for IPv4-mapped addresses (::ffff:1.2.3.4)
+        if (ip.startsWith('::ffff:')) {
+          return ip.substring(7);
+        }
+        return ip;
+      })[0];
+
+    return normalizedIp || null;
+  }
 
   // Field resolver for loginInfo - calculates attendance data from sessions
   @Resolver(() => ParticipantWithLoginInfo)
@@ -159,6 +208,7 @@ export class ParticipantResolver {
         displayName: p.displayName,
         role: p.role,
         status: p.status, // 🔧 FIX: Include status field for frontend filtering
+        ipAddress: p.ipAddress || null,
         micState: p.micState,
         cameraState: p.cameraState,
         socketId: p.socketId,
@@ -239,10 +289,12 @@ export class ParticipantResolver {
   async joinMeeting(
     @Args('input') joinInput: JoinParticipantInput,
     @AuthMember() user: Member,
+    @Context() context: any,
   ) {
 
     try {
-      const result = await this.participantService.joinMeeting(joinInput, user._id);
+      const clientIp = this.extractClientIp(context);
+      const result = await this.participantService.joinMeeting(joinInput, user._id, clientIp || undefined);
       return result;
     } catch (error) {
       throw error;
@@ -409,6 +461,7 @@ export class ParticipantResolver {
         status: result.status,
         micState: result.micState,
         cameraState: result.cameraState,
+        ipAddress: result.ipAddress || null,
         socketId: result.socketId,
         hasHandRaised: result.hasHandRaised,
         handRaisedAt: result.handRaisedAt,

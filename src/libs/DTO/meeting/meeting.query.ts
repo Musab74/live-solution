@@ -187,6 +187,9 @@ export class ParticipantAttendance {
   @Field({ nullable: true })
   department?: string;
 
+@Field({ nullable: true })
+ipAddress?: string;
+
   @Field()
   role: string;
 

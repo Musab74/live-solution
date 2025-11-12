@@ -104,6 +104,7 @@ type ParticipantWithLoginInfo {
   displayName: String!
   role: String!
   status: String!
+  ipAddress: String
   micState: String!
   cameraState: String!
   socketId: String
@@ -189,6 +190,7 @@ type ParticipantAttendance {
   avatarUrl: String
   organization: String
   department: String
+  ipAddress: String
   role: String!
   joinedAt: String!
   leftAt: String
