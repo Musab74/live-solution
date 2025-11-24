@@ -79,6 +79,38 @@ export class SignalingGateway
     (global as any).meetingEndEmitter.on('meetingEnded', (meetingId: string) => {
       this.notifyMeetingEnded(meetingId);
     });
+    
+    // ✅ CRITICAL FIX: Listen for heartbeat events from ParticipantService
+    // This handles cases where heartbeats come via HTTP/GraphQL (not WebSocket)
+    if (!(global as any).heartbeatEmitter) {
+      const EventEmitter = require('events');
+      (global as any).heartbeatEmitter = new EventEmitter();
+    }
+    (global as any).heartbeatEmitter.on('heartbeatReceived', ({ userId, meetingId }: { userId: string; meetingId: string }) => {
+      this.handleHeartbeatReceived(userId, meetingId);
+    });
+  }
+  
+  /**
+   * ✅ CRITICAL FIX: Handle heartbeat received from ParticipantService (HTTP/GraphQL heartbeats)
+   * This cancels grace period if user is in disconnectedUsers, preventing false LEFT status
+   */
+  private handleHeartbeatReceived(userId: string, meetingId: string): void {
+    if (this.disconnectedUsers.has(userId)) {
+      const gracePeriod = this.disconnectedUsers.get(userId);
+      if (gracePeriod) {
+        clearTimeout(gracePeriod.timeoutId);
+        this.disconnectedUsers.delete(userId);
+        console.log(`[SignalingGateway] User ${userId} sent HTTP heartbeat while in grace period, canceling LEFT status`);
+        
+        // Notify that user is still active
+        this.server.to(meetingId).emit('USER_RECONNECTED', {
+          userId: userId,
+          socketId: null, // No socket ID since this is HTTP heartbeat
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
   }
 
   afterInit(server: Server) {
@@ -205,11 +237,26 @@ export class SignalingGateway
       // Set grace period timeout - mark as LEFT only after grace period expires
       const timeoutId = setTimeout(async () => {
         try {
-          // Check if user reconnected (if they did, they won't be in disconnectedUsers anymore)
+          // ✅ CRITICAL FIX: Check if user reconnected OR is still sending heartbeats
           if (this.disconnectedUsers.has(userId)) {
-            console.log(`[SignalingGateway] Grace period expired for user ${userId}, marking as LEFT`);
-            await this.participantService.markParticipantAsLeftAcrossAllMeetings(userId);
-            this.disconnectedUsers.delete(userId);
+            // Check if user is still sending heartbeats (they might be connected via HTTP even if WebSocket disconnected)
+            const hasRecentHeartbeat = await this.participantService.checkRecentHeartbeat(userId, 120000); // Check last 2 minutes
+            
+            if (hasRecentHeartbeat) {
+              // User is still active (sending heartbeats), cancel grace period
+              console.log(`[SignalingGateway] User ${userId} is still sending heartbeats, canceling LEFT status`);
+              this.disconnectedUsers.delete(userId);
+              return;
+            }
+            
+            // Check if user reconnected via WebSocket (if they did, they won't be in disconnectedUsers anymore)
+            // Double-check: user might have reconnected but we missed it
+            const stillDisconnected = this.disconnectedUsers.has(userId);
+            if (stillDisconnected) {
+              console.log(`[SignalingGateway] Grace period expired for user ${userId}, marking as LEFT`);
+              await this.participantService.markParticipantAsLeftAcrossAllMeetings(userId);
+              this.disconnectedUsers.delete(userId);
+            }
           }
         } catch (error) {
           console.error(`[SignalingGateway] Error marking user as LEFT after grace period:`, error);
@@ -1280,6 +1327,26 @@ export class SignalingGateway
     const { meetingId } = data;
 
     try {
+      // ✅ CRITICAL FIX: Cancel grace period if user is in disconnectedUsers but sending heartbeats
+      // This prevents marking active users as LEFT when WebSocket disconnects but HTTP heartbeats continue
+      const userId = client.user._id;
+      if (this.disconnectedUsers.has(userId)) {
+        const gracePeriod = this.disconnectedUsers.get(userId);
+        if (gracePeriod) {
+          clearTimeout(gracePeriod.timeoutId);
+          this.disconnectedUsers.delete(userId);
+          console.log(`[SignalingGateway] User ${userId} sending heartbeat while in grace period, canceling LEFT status`);
+          
+          // Notify that user is still active
+          this.server.to(meetingId).emit('USER_RECONNECTED', {
+            userId: userId,
+            displayName: client.user.displayName,
+            socketId: client.id,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+      
       // Update database every 3rd heartbeat (30 seconds) to prevent cleanup conflicts
       const now = Date.now();
       const lastUpdate = this.lastHeartbeatUpdate.get(client.user._id) || 0;

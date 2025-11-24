@@ -2542,6 +2542,8 @@ export class ParticipantService {
 
   /**
    * Update participant heartbeat (lastSeenAt timestamp)
+   * ✅ CRITICAL FIX: This method is called from WebSocket heartbeats AND potentially other sources
+   * If user is in grace period (WebSocket disconnected), receiving a heartbeat means they're still active
    */
   async updateParticipantHeartbeat(userId: string, meetingId: string): Promise<void> {
     try {
@@ -2579,8 +2581,39 @@ export class ParticipantService {
       });
       
       this.logger.log(`[UPDATE_PARTICIPANT_HEARTBEAT] Updated heartbeat for user ${userId} in meeting ${meetingId}, modified: ${updateResult.modifiedCount}`);
+      
+      // ✅ CRITICAL FIX: Notify SignalingGateway to cancel grace period if user is in disconnectedUsers
+      // This prevents marking active users as LEFT when WebSocket disconnects but HTTP heartbeats continue
+      // Use global event emitter pattern (same as meeting start/end events)
+      if (!(global as any).heartbeatEmitter) {
+        const EventEmitter = require('events');
+        (global as any).heartbeatEmitter = new EventEmitter();
+      }
+      (global as any).heartbeatEmitter.emit('heartbeatReceived', { userId, meetingId });
+      
     } catch (error) {
       this.logger.error(`[UPDATE_PARTICIPANT_HEARTBEAT] Error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Check if user has sent a heartbeat recently (within threshold milliseconds)
+   * This prevents marking users as LEFT if they're still active via HTTP even if WebSocket disconnected
+   */
+  async checkRecentHeartbeat(userId: string, thresholdMs: number): Promise<boolean> {
+    try {
+      const threshold = new Date(Date.now() - thresholdMs);
+      
+      const participants = await this.participantModel.find({
+        userId: new Types.ObjectId(userId),
+        lastSeenAt: { $gte: threshold },
+        status: { $ne: ParticipantStatus.LEFT }
+      });
+      
+      return participants.length > 0;
+    } catch (error) {
+      this.logger.error(`[CHECK_RECENT_HEARTBEAT] Error: ${error.message}`);
+      return false;
     }
   }
 
