@@ -53,6 +53,10 @@ export class SignalingGateway
   
   // OPTIMIZED: Track last DB update time to reduce database load
   private lastHeartbeatUpdate = new Map<string, number>();
+  
+  // ✅ FIX: Track disconnected users with grace period for reconnection
+  private disconnectedUsers = new Map<string, { disconnectedAt: number; timeoutId: NodeJS.Timeout }>();
+  private readonly RECONNECTION_GRACE_PERIOD_MS = 60000; // 60 seconds grace period
 
   constructor(
     private jwtService: JwtService,
@@ -66,6 +70,15 @@ export class SignalingGateway
         this.notifyMeetingStarted(meetingId);
       });
     }
+    
+    // ✅ FIX: Listen for meeting end events
+    if (!(global as any).meetingEndEmitter) {
+      const EventEmitter = require('events');
+      (global as any).meetingEndEmitter = new EventEmitter();
+    }
+    (global as any).meetingEndEmitter.on('meetingEnded', (meetingId: string) => {
+      this.notifyMeetingEnded(meetingId);
+    });
   }
 
   afterInit(server: Server) {
@@ -121,6 +134,33 @@ export class SignalingGateway
       client.user = user;
       this.connectedUsers.set(client.id, client);
       
+      // ✅ FIX: If user was in grace period, cancel it (they reconnected!)
+      const userId = user._id;
+      const gracePeriod = this.disconnectedUsers.get(userId);
+      if (gracePeriod) {
+        clearTimeout(gracePeriod.timeoutId);
+        this.disconnectedUsers.delete(userId);
+        console.log(`[SignalingGateway] User ${userId} reconnected within grace period, canceling LEFT status`);
+        
+        // Notify that user reconnected
+        // Get all meetings this user might be in
+        const activeMeetings = new Set<string>();
+        for (const [roomName, users] of this.roomUsers.entries()) {
+          if (/^[a-f\d]{24}$/i.test(roomName)) {
+            activeMeetings.add(roomName);
+          }
+        }
+        
+        for (const meetingId of activeMeetings) {
+          this.server.to(meetingId).emit('USER_RECONNECTED', {
+            userId: userId,
+            displayName: user.displayName,
+            socketId: client.id,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+      
       // Send success message to client
       client.emit('CONNECTION_SUCCESS', { 
         message: 'Successfully connected to chat server',
@@ -140,24 +180,49 @@ export class SignalingGateway
 
   async handleDisconnect(client: AuthenticatedSocket) {
     if (client.user) {
+      const userId = client.user._id;
+      
       // Clean up raised hands for this user
-      this.cleanupUserHands(client.user._id);
+      this.cleanupUserHands(userId);
 
       // Clean up heartbeat timeout for this user
-      const heartbeatTimeout = this.participantHeartbeats.get(client.user._id);
+      const heartbeatTimeout = this.participantHeartbeats.get(userId);
       if (heartbeatTimeout) {
         clearTimeout(heartbeatTimeout);
-        this.participantHeartbeats.delete(client.user._id);
+        this.participantHeartbeats.delete(userId);
       }
       
       // Clean up heartbeat tracking
-      this.lastHeartbeatUpdate.delete(client.user._id);
+      this.lastHeartbeatUpdate.delete(userId);
 
-      try {
-        await this.participantService.markParticipantAsLeftAcrossAllMeetings(client.user._id);
-      } catch (error) {
-        // Error silently handled
+      // ✅ FIX: Don't mark as LEFT immediately - add grace period for reconnection
+      // Clear any existing grace period timeout
+      const existingGracePeriod = this.disconnectedUsers.get(userId);
+      if (existingGracePeriod) {
+        clearTimeout(existingGracePeriod.timeoutId);
       }
+
+      // Set grace period timeout - mark as LEFT only after grace period expires
+      const timeoutId = setTimeout(async () => {
+        try {
+          // Check if user reconnected (if they did, they won't be in disconnectedUsers anymore)
+          if (this.disconnectedUsers.has(userId)) {
+            console.log(`[SignalingGateway] Grace period expired for user ${userId}, marking as LEFT`);
+            await this.participantService.markParticipantAsLeftAcrossAllMeetings(userId);
+            this.disconnectedUsers.delete(userId);
+          }
+        } catch (error) {
+          console.error(`[SignalingGateway] Error marking user as LEFT after grace period:`, error);
+        }
+      }, this.RECONNECTION_GRACE_PERIOD_MS);
+
+      // Track disconnected user with grace period
+      this.disconnectedUsers.set(userId, {
+        disconnectedAt: Date.now(),
+        timeoutId
+      });
+
+      console.log(`[SignalingGateway] User ${userId} disconnected, grace period started (${this.RECONNECTION_GRACE_PERIOD_MS}ms)`);
 
       // Get all meetings this user was in by checking room users
       const activeMeetings = new Set<string>();
@@ -172,13 +237,14 @@ export class SignalingGateway
         }
       }
 
-      // Notify others in all rooms that user left
+      // Notify others in all rooms that user disconnected (but not LEFT yet)
       for (const meetingId of activeMeetings) {
-        this.server.to(meetingId).emit('USER_LEFT', {
-          userId: client.user._id,
+        this.server.to(meetingId).emit('USER_DISCONNECTED', {
+          userId: userId,
           displayName: client.user.displayName,
           socketId: client.id,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          reconnecting: true // Indicate user might reconnect
         });
       }
 

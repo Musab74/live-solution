@@ -610,20 +610,35 @@ export class ParticipantService {
     );
     
     // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
+    // ✅ FIX: Add delay to allow for reconnections before auto-ending
     if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
-      this.logger.log(`[LEAVE_MEETING] Participant count reached 0 - Auto-ending meeting ${participant.meetingId}`);
-      updatedMeeting.status = MeetingStatus.ENDED;
-      updatedMeeting.endedAt = new Date();
+      // Wait 5 seconds to allow reconnections
+      await new Promise(resolve => setTimeout(resolve, 5000));
       
-      if (updatedMeeting.actualStartAt) {
-        const durationMin = Math.floor(
-          (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
-        );
-        updatedMeeting.durationMin = durationMin;
+      // Re-check after delay
+      const recheckMeeting = await this.meetingModel.findById(participant.meetingId);
+      if (recheckMeeting && recheckMeeting.participantCount <= 0 && recheckMeeting.status === MeetingStatus.LIVE) {
+        this.logger.log(`[LEAVE_MEETING] Participant count reached 0 - Auto-ending meeting ${participant.meetingId}`);
+        recheckMeeting.status = MeetingStatus.ENDED;
+        recheckMeeting.endedAt = new Date();
+        
+        if (recheckMeeting.actualStartAt) {
+          const durationMin = Math.floor(
+            (recheckMeeting.endedAt.getTime() - recheckMeeting.actualStartAt.getTime()) / 60000
+          );
+          recheckMeeting.durationMin = durationMin;
+        }
+        
+        await recheckMeeting.save();
+        this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} auto-ended due to zero participants`);
+        
+        // ✅ FIX: Notify frontend via event emitter
+        if ((global as any).meetingEndEmitter) {
+          (global as any).meetingEndEmitter.emit('meetingEnded', participant.meetingId);
+        }
+      } else {
+        this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} participant count recovered, not ending`);
       }
-      
-      await updatedMeeting.save();
-      this.logger.log(`[LEAVE_MEETING] Meeting ${participant.meetingId} auto-ended due to zero participants`);
     }
     
     // 🔧 DEBUG: Verify the status was actually saved
@@ -2414,20 +2429,38 @@ export class ParticipantService {
         );
         
         // ✅ AUTO-END: If participant count reaches 0, automatically end the meeting
+        // ✅ FIX: Only auto-end if meeting is LIVE and count is actually 0 (not just temporarily disconnected)
         if (updatedMeeting && updatedMeeting.participantCount <= 0 && updatedMeeting.status === MeetingStatus.LIVE) {
-          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
-          updatedMeeting.status = MeetingStatus.ENDED;
-          updatedMeeting.endedAt = new Date();
+          // ✅ ADDITIONAL CHECK: Wait a bit to ensure no reconnections are happening
+          // This prevents auto-end during temporary disconnections
+          await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
           
-          if (updatedMeeting.actualStartAt) {
-            const durationMin = Math.floor(
-              (updatedMeeting.endedAt.getTime() - updatedMeeting.actualStartAt.getTime()) / 60000
-            );
-            updatedMeeting.durationMin = durationMin;
+          // Re-check participant count after waiting (in case users reconnected)
+          const recheckMeeting = await this.meetingModel.findById(meetingId);
+          if (recheckMeeting && recheckMeeting.participantCount <= 0 && recheckMeeting.status === MeetingStatus.LIVE) {
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Participant count reached 0 - Auto-ending meeting ${meetingId}`);
+            recheckMeeting.status = MeetingStatus.ENDED;
+            recheckMeeting.endedAt = new Date();
+            
+            if (recheckMeeting.actualStartAt) {
+              const durationMin = Math.floor(
+                (recheckMeeting.endedAt.getTime() - recheckMeeting.actualStartAt.getTime()) / 60000
+              );
+              recheckMeeting.durationMin = durationMin;
+            }
+            
+            await recheckMeeting.save();
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} auto-ended due to zero participants`);
+            
+            // ✅ FIX: Notify frontend via WebSocket that meeting ended
+            if ((global as any).meetingEndEmitter) {
+              (global as any).meetingEndEmitter.emit('meetingEnded', meetingId);
+            } else {
+              this.logger.warn(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} ended but event emitter not available`);
+            }
+          } else {
+            this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} participant count recovered, not ending`);
           }
-          
-          await updatedMeeting.save();
-          this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Meeting ${meetingId} auto-ended due to zero participants`);
         }
         
         this.logger.log(`[MARK_PARTICIPANT_AS_LEFT_ACROSS_ALL] Decremented participant count for meeting ${meetingId}`);
