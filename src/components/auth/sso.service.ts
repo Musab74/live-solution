@@ -9,7 +9,7 @@ import { Model } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
 import * as jwt from 'jsonwebtoken';
 import { Member, MemberDocument } from '../../schemas/Member.model';
-import { PHPJwtPayload, UserSyncResult, mapMemberType } from '../../libs/DTO/auth/sso.input';
+import { PHPJwtPayload, UserSyncResult, mapMemberType, extractMemberType } from '../../libs/DTO/auth/sso.input';
 import { SystemRole } from '../../libs/enums/enums';
 import { AuthService } from './auth.service';
 
@@ -52,13 +52,30 @@ export class SSOService {
       this.logger.log(`✅ JWT verified for user: ${decoded.user_id} (${decoded.name})`);
 
       // Validate required fields for PHP JWT structure
-      if (!decoded.user_id || !decoded.name || !decoded.member_type) {
+      if (!decoded.user_id || !decoded.name) {
         throw new BadRequestException(
-          'JWT payload missing required fields (user_id, name, or member_type)',
+          'JWT payload missing required fields (user_id or name)',
         );
       }
 
-      return decoded;
+      // Extract member_type from various possible fields (backward compatibility)
+      const memberType = extractMemberType(decoded);
+      if (!memberType) {
+        throw new BadRequestException(
+          'JWT payload missing member_type information (member_type, role, or dept)',
+        );
+      }
+
+      // Normalize the payload to always have member_type
+      const normalizedPayload: PHPJwtPayload = {
+        ...decoded,
+        member_type: memberType,
+        platform: decoded.platform || 'hrde_archive', // Default platform if not provided
+      };
+
+      this.logger.log(`✅ Extracted member_type: ${memberType} from JWT payload`);
+
+      return normalizedPayload;
     } catch (error) {
       // Enhanced error logging
       if (error.name === 'JsonWebTokenError' && error.message.includes('invalid signature')) {
@@ -114,13 +131,20 @@ export class SSOService {
       const currentTime = new Date();
 
       if (existingUser) {
-        // ✅ USER EXISTS - ONLY UPDATE email if different
+        // ✅ USER EXISTS - UPDATE email and systemRole if different
         this.logger.log(`🔄 Found existing user in DB for SSO: ${user_id} (${name})`);
         
-        // ONLY UPDATE: email if it's different - nothing else
+        // UPDATE: email if it's different
         if (existingUser.email !== email) {
           this.logger.log(`⚠️ Email changed from ${existingUser.email} to ${email}`);
           existingUser.email = email;
+        }
+        
+        // ✅ CRITICAL FIX: Update systemRole if it's different from JWT
+        // This ensures admin users always have correct role even if database was wrong
+        if (existingUser.systemRole !== systemRole) {
+          this.logger.log(`⚠️ SystemRole changed from ${existingUser.systemRole} to ${systemRole} for user ${user_id}`);
+          existingUser.systemRole = systemRole;
         }
         
         // updatedAt is automatically managed by Mongoose timestamps
