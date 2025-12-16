@@ -182,6 +182,7 @@ type MeetingListResponse {
 
 type ParticipantAttendance {
   _id: String!
+  userId: String
   displayName: String!
   email: String
   firstName: String

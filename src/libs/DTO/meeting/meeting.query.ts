@@ -163,6 +163,9 @@ export class ParticipantAttendance {
   @Field()
   _id: string;
 
+  @Field({ nullable: true })
+  userId?: string;
+
   @Field()
   displayName: string;
 

@@ -1206,11 +1206,9 @@ export class ParticipantService {
     // Calculate attendance data
     const attendanceData = participants
       .filter(participant => {
-        // ✅ FIX: Filter out participants with null userId (deleted users)
+        // Only filter out completely invalid participants
         if (!participant || !participant._id) return false;
-        if (!participant.userId) {
-          return false;
-        }
+        // Keep all participants including those without userId (guests, deleted users)
         return true;
       })
       .map((participant) => {
@@ -1319,8 +1317,22 @@ export class ParticipantService {
             ? (typeof validSessions[validSessions.length - 1].leftAt === 'string' ? validSessions[validSessions.length - 1].leftAt : new Date(validSessions[validSessions.length - 1].leftAt).toISOString())
             : null;
 
+          // Extract userId - handle both populated and unpopulated cases
+          let userIdString: string | null = null;
+          if (participant.userId) {
+            if (typeof participant.userId === 'object') {
+              // Populated user object
+              const userIdObj = participant.userId as any;
+              userIdString = userIdObj._id?.toString() || userIdObj.toString();
+            } else {
+              // String or ObjectId - convert to string
+              userIdString = String(participant.userId);
+            }
+          }
+
           return {
             _id: participant._id || 'unknown',
+            userId: userIdString,
             displayName: userData?.displayName || participant.displayName || 'Unknown User',
             email: userData?.email || null,
             firstName: userData?.firstName || null,
